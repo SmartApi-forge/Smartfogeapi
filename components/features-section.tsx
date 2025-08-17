@@ -38,11 +38,11 @@ export default function FeaturesSection() {
   return (
     <div className="relative z-20 py-10 lg:py-20 max-w-7xl mx-auto">
       <div className="px-8">
-        <h4 className="text-3xl lg:text-5xl lg:leading-tight max-w-5xl mx-auto text-center tracking-tight font-medium text-foreground">
+        <h4 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl lg:leading-tight max-w-5xl mx-auto text-center tracking-tight font-semibold text-foreground">
           Everything you need to build APIs
         </h4>
 
-        <p className="text-sm lg:text-base max-w-2xl my-4 mx-auto text-muted-foreground text-center font-normal">
+        <p className="text-base sm:text-lg max-w-2xl my-3 sm:my-4 mx-auto text-muted-foreground text-center font-normal leading-relaxed">
           From natural language processing to automated deployment, SmartAPIForge provides all the tools you need to
           create production-ready APIs in seconds.
         </p>
@@ -75,7 +75,7 @@ const FeatureCard = ({
 
 const FeatureTitle = ({ children }: { children?: React.ReactNode }) => {
   return (
-    <p className="max-w-5xl mx-auto text-left tracking-tight text-foreground text-xl md:text-2xl md:leading-snug">
+    <p className="max-w-5xl mx-auto text-left tracking-tight text-foreground text-lg sm:text-xl md:text-2xl leading-tight sm:leading-snug">
       {children}
     </p>
   )
@@ -85,9 +85,9 @@ const FeatureDescription = ({ children }: { children?: React.ReactNode }) => {
   return (
     <p
       className={cn(
-        "text-sm md:text-base max-w-4xl text-left mx-auto",
-        "text-muted-foreground text-center font-normal",
-        "text-left max-w-sm mx-0 md:text-sm my-2",
+        "text-sm sm:text-base max-w-4xl text-left mx-auto",
+        "text-muted-foreground font-normal leading-relaxed",
+        "text-left max-w-sm mx-0 my-2 sm:my-3",
       )}
     >
       {children}

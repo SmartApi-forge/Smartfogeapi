@@ -51,10 +51,10 @@ export default function FAQSection() {
         <section className="py-16 md:py-32" id="faq">
             <div className="mx-auto max-w-5xl px-4 md:px-6">
                 <div className="mx-auto max-w-xl text-center">
-                    <h2 className="text-balance text-3xl font-bold md:text-4xl lg:text-5xl">
+                    <h2 className="text-balance text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-semibold leading-tight">
                         Frequently Asked Questions
                     </h2>
-                    <p className="text-muted-foreground mt-4 text-balance">
+                    <p className="text-muted-foreground mt-3 sm:mt-4 text-base sm:text-lg text-balance leading-relaxed">
                         Get answers to common questions about SmartAPIForge's AI-powered API generation platform.
                     </p>
                 </div>
@@ -69,11 +69,11 @@ export default function FAQSection() {
                                 key={item.id}
                                 value={item.id}
                                 className="border-dashed">
-                                <AccordionTrigger className="cursor-pointer text-base hover:no-underline text-left">
+                                <AccordionTrigger className="cursor-pointer text-sm sm:text-base hover:no-underline text-left font-medium">
                                     {item.question}
                                 </AccordionTrigger>
                                 <AccordionContent>
-                                    <p className="text-base text-gray-600 dark:text-gray-300">
+                                    <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
                                         {item.answer}
                                     </p>
                                 </AccordionContent>
@@ -81,7 +81,7 @@ export default function FAQSection() {
                         ))}
                     </Accordion>
 
-                    <p className="text-muted-foreground mt-6 px-8 text-center">
+                    <p className="text-muted-foreground mt-6 px-8 text-center text-sm sm:text-base">
                         Still have questions? Contact our{' '}
                         <Link
                             href="/contact"

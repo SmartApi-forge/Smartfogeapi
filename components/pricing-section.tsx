@@ -62,10 +62,10 @@ export default function PricingSection() {
     <section className="py-16 md:py-32" id="pricing">
       <div className="mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-2xl space-y-6 text-center">
-          <h1 className="text-center text-4xl font-semibold lg:text-5xl text-foreground">
+          <h1 className="text-center text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-semibold text-foreground leading-tight">
             Pricing that Scales with You
           </h1>
-          <p className="text-lg text-muted-foreground">
+          <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
             Choose the perfect plan for your API development needs. From individual developers to enterprise teams.
           </p>
           <div>
@@ -92,9 +92,9 @@ export default function PricingSection() {
               )}
 
               <CardHeader>
-                <CardTitle className="font-medium text-lg text-foreground">{plan.title}</CardTitle>
-                <span className="my-3 block text-2xl font-semibold text-foreground">{plan.price}</span>
-                <CardDescription className="text-sm text-muted-foreground">
+                <CardTitle className="font-semibold text-lg sm:text-xl text-foreground">{plan.title}</CardTitle>
+                <span className="my-3 block text-2xl sm:text-3xl font-semibold text-foreground">{plan.price}</span>
+                <CardDescription className="text-sm sm:text-base text-muted-foreground">
                   {plan.billed}
                 </CardDescription>
               </CardHeader>
@@ -102,11 +102,11 @@ export default function PricingSection() {
               <CardContent className="space-y-4 flex-1">
                 <hr className="border-dashed border-border" />
                 
-                <ul className="list-outside space-y-3 text-sm">
+                <ul className="list-outside space-y-3 text-sm sm:text-base">
                   {plan.features.map((feature, index) => (
-                    <li key={index} className="flex items-center gap-2">
-                      <Check className="size-4 text-primary flex-shrink-0" />
-                      <span className="text-muted-foreground">{feature}</span>
+                    <li key={index} className="flex items-start gap-2">
+                      <Check className="size-4 text-primary flex-shrink-0 mt-0.5" />
+                      <span className="text-muted-foreground leading-relaxed">{feature}</span>
                     </li>
                   ))}
                 </ul>

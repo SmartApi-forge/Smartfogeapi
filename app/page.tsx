@@ -1,6 +1,9 @@
 import { HeroHeader } from "@/components/header"
+import AuthDialog from "@/components/auth-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { AiInput } from "@/components/ui/ai-input"
+import { Badge } from "@/components/ui/badge"
 import FeaturesSection from "@/components/features-section"
 import IntegrationsSection from "@/components/integrations-section"
 import ContentSection from "@/components/content-section"
@@ -15,14 +18,17 @@ export default function HomePage() {
     <div className="min-h-screen bg-background overflow-x-clip">
       <HeroHeader />
 
-      <main className="pt-4">
-        <section className="relative border-b border-border/50 px-3 sm:px-0">
+      <main className="pt-0">
+        <section className="relative border-b border-border/50 px-3 sm:px-0 hero-section-bg bg-background">
           {/* Background grid with vertical borders */}
           <div className="absolute inset-0 z-0 hero-grid hidden sm:grid">
             <div></div>
             <div className="border-x border-border/50"></div>
             <div></div>
           </div>
+
+          {/* Background Image */}
+          <div className="absolute inset-0 z-0 hero-background-image"></div>
 
           {/* Gradient Background Effects */}
           <figure className="hero-gradient-main" />
@@ -34,20 +40,17 @@ export default function HomePage() {
             <div className="hidden sm:block" />
             <div className="mx-auto w-full max-w-5xl px-3 sm:px-4 flex flex-col items-center divide-y divide-border/50 h-full">
               {/* Trust signal section */}
-              <div className="flex w-full flex-col md:flex-row items-center justify-center gap-2 text-center md:text-left text-xs sm:text-sm text-muted-foreground py-1 mt-2 sm:mt-3 mb-3 sm:mb-4 md:mb-6">
-                <div className="flex -space-x-1 mb-1 md:mb-0">
-                  <div className="h-6 w-6 rounded-full bg-blue-500 border-2 border-background"></div>
-                  <div className="h-6 w-6 rounded-full bg-green-500 border-2 border-background"></div>
-                  <div className="h-6 w-6 rounded-full bg-purple-500 border-2 border-background"></div>
-                </div>
-                <span className="block">Trusted by developers and non-developers alike</span>
+              <div className="flex w-full items-center justify-center py-1 mt-1 sm:mt-3 md:mt-6 mb-2 sm:mb-4 md:mb-6">
+                <Badge variant="default" shiny={true} className="px-2 py-1 text-xs sm:text-sm">
+                  Trusted by developers and non-developers alike
+                </Badge>
               </div>
 
               {/* Main content area */}
-              <div className="flex flex-col items-center justify-center py-4 sm:py-6 md:py-8 text-center space-y-4 sm:space-y-6 flex-1 w-full">
+              <div className="flex flex-col items-center justify-center py-2 sm:py-6 md:py-8 text-center space-y-3 sm:space-y-6 flex-1 w-full">
                 {/* Hero headline with responsive clamp and single semantic H1 */}
-                <div className="max-w-5xl mx-auto px-2 sm:px-4 md:px-6 text-center">
-                  <h1 className="hero-text mx-auto max-w-[20ch] sm:max-w-[24ch] md:max-w-none text-foreground leading-tight tracking-tight text-balance mb-1 sm:mb-2">
+                <div className="max-w-5xl mx-auto px-1 sm:px-4 md:px-6 text-center">
+                  <h1 className="hero-text mx-auto max-w-[22ch] sm:max-w-[24ch] md:max-w-none text-foreground leading-[1.1] sm:leading-tight tracking-tight text-balance mb-0 sm:mb-2">
                     <span className="md:whitespace-nowrap">Instantly Build and Deploy Secure</span>
                     <br className="hidden md:block" />
                     <span className="md:hidden"> </span>
@@ -57,42 +60,34 @@ export default function HomePage() {
 
                 {/* AI Input Box */}
                 <div className="w-full max-w-2xl mx-auto px-0">
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
-                    <Input
-                      className="flex-1 rounded-lg border border-border bg-background px-3 sm:px-4 py-3 sm:py-4 h-11 sm:h-12 input-text input-placeholder focus:ring-2 focus:ring-ring focus:border-transparent text-sm sm:text-base"
-                      placeholder="Describe your API: e.g. 'CRUD for a product catalog'"
-                    />
-                    <Button
-                      variant="default"
-                      className="rounded-lg px-4 sm:px-6 h-11 sm:h-12 sm:w-auto w-full text-sm sm:text-base"
-                    >
-                      Generate API
-                    </Button>
-                  </div>
+                  <AiInput />
                 </div>
 
                 {/* Supporting text with precise line breaks */}
-                <div className="max-w-3xl mx-auto space-y-1 mt-1 px-2 sm:px-0">
-                  <p className="text-muted-foreground text-sm sm:text-base md:text-lg text-balance">
-                    Go from user story to production-ready, documented API in seconds. No setup, no coding,
+                <div className="max-w-3xl mx-auto mt-0 px-1 sm:px-0">
+                  <p className="text-muted-foreground text-sm sm:text-base md:text-lg text-balance leading-relaxed">
+                    Go from user story to production-ready, documented API in seconds. No setup, no coding, no hassle.
                   </p>
-                  <p className="text-muted-foreground text-sm sm:text-base md:text-lg text-balance">no hassle.</p>
                 </div>
 
-                {/* CTA Buttons with sophisticated styling */}
-                <div className="hero-button-container">
-                  <div className="hero-button-wrapper">
-                    <div className="flex w-full flex-col gap-3">
-                      <Button className="hero-primary-button">Get Started Free</Button>
-                      <Button className="hero-secondary-button">View Demo</Button>
-                    </div>
-
-                    {/* Footer text */}
-                    <p className="text-xs sm:text-sm text-center text-muted-foreground mt-2 sm:mt-3 mb-1 sm:mb-2 px-2">
-                      No signup required to try - Always free for students and hobbyists
-                    </p>
-                  </div>
+                {/* CTA Buttons - simplified */}
+                <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
+                  <Button
+                    size="lg"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 h-12 rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl w-full sm:w-auto"
+                  >
+                    Get Started Free
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="border-border/50 text-foreground hover:bg-accent px-8 py-3 h-12 rounded-xl font-medium transition-all duration-200 w-full sm:w-auto"
+                  >
+                    View Demo
+                  </Button>
                 </div>
+
+                {/* Footer text removed as requested */}
               </div>
             </div>
             <div className="hidden sm:block" />
@@ -109,6 +104,7 @@ export default function HomePage() {
         <FAQSection />
         <NewsletterCTA />
         <Footer />
+        <AuthDialog />
       </main>
     </div>
   )

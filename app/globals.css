@@ -466,3 +466,58 @@
     @apply block;
   }
 }
+
+/* Hero Section Background Image - Extended to cover navbar area */
+.hero-background-image {
+  @apply absolute inset-0 z-0 opacity-15;
+  background-image: url('/LightGlow2001.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  top: 0;
+}
+
+/* Hide background image completely in dark mode */
+.dark .hero-background-image {
+  display: none;
+}
+
+@keyframes shine {
+  0% { background-position: 100%; }
+  100% { background-position: -100%; }
+}
+
+.animate-shine {
+  animation: shine 5s linear infinite;
+}
+
+/* Dark mode adjustments for background image */
+.dark .hero-background-image {
+  opacity: 0.05;
+}
+
+/* Hero section container with seamless navbar blend */
+.hero-section-bg {
+  position: relative;
+  background: var(--background);
+  /* Extend background to cover navbar area for seamless blend */
+  margin-top: -80px;
+  padding-top: 80px;
+}
+
+/* Dark mode hero section background */
+.dark .hero-section-bg {
+  background: var(--background);
+}
+
+/* Responsive background image adjustments */
+@media (max-width: 768px) {
+  .hero-background-image {
+    opacity: 0.2;
+    background-position: center top;
+  }
+  
+  .dark .hero-background-image {
+    opacity: 0.1;
+  }
+}

@@ -62,13 +62,15 @@ const Integration = ({ icon, name, description }: { icon: React.ReactNode; name:
       <div className="bg-muted border-foreground/5 flex size-12 items-center justify-center rounded-lg border">
         {icon}
       </div>
-      <div className="space-y-0.5">
+      <div className="space-y-0.5 min-w-0">
         <h3 className="text-sm font-medium">{name}</h3>
         <p className="text-muted-foreground line-clamp-1 text-sm">{description}</p>
       </div>
-      <Button variant="outline" size="icon" aria-label="Add integration">
-        <Plus className="size-4" />
-      </Button>
+      <div className="flex-shrink-0">
+        <Button variant="ghost" size="sm" className="h-8 w-8 rounded-full hover:bg-muted/50 transition-colors" aria-label="Add integration">
+          <Plus className="size-4 text-muted-foreground" />
+        </Button>
+      </div>
     </div>
   )
 }
