@@ -1,0 +1,468 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Updated to use #FAFAFA background and clean minimal colors */
+  --background: #fafafa;
+  --foreground: rgb(9, 9, 11);
+  --card: #ffffff;
+  --card-foreground: rgb(9, 9, 11);
+  --popover: #ffffff;
+  --popover-foreground: rgb(9, 9, 11);
+  --primary: #3b82f6; /* Blue for primary elements */
+  --primary-foreground: #ffffff;
+  --secondary: #6b7280;
+  --secondary-foreground: #ffffff;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --accent: #8b5cf6; /* Purple for accent */
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #e5e7eb;
+  --input: #ffffff;
+  --ring: #3b82f6;
+  --chart-1: #3b82f6;
+  --chart-2: #8b5cf6;
+  --chart-3: #ef4444;
+  --chart-4: #f59e0b;
+  --chart-5: #10b981;
+  --radius: 0.5rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: rgb(9, 9, 11);
+  --sidebar-primary: #3b82f6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #8b5cf6;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #e5e7eb;
+  --sidebar-ring: #3b82f6;
+}
+
+/* Consistent typography scale across sections */
+@layer base {
+  h1 {
+    @apply text-3xl md:text-5xl lg:text-6xl font-semibold leading-tight text-foreground;
+  }
+  h2 {
+    @apply text-2xl md:text-4xl lg:text-5xl font-semibold leading-snug text-foreground;
+  }
+  h3 {
+    @apply text-xl md:text-2xl lg:text-3xl font-semibold leading-snug text-foreground;
+  }
+  p {
+    @apply text-base md:text-lg text-muted-foreground;
+  }
+}
+
+.dark {
+  /* Base surfaces aligned to zinc scale */
+  --background: #09090B; /* zinc-950 */
+  --foreground: #FAFAFA; /* zinc-50 */
+  --card: #18181B; /* zinc-900 */
+  --card-foreground: #FAFAFA;
+  --popover: #18181B;
+  --popover-foreground: #FAFAFA;
+  --primary: #3b82f6; /* brand primary */
+  --primary-foreground: #ffffff; /* readable on primary */
+  --secondary: #27272A; /* zinc-800 */
+  --secondary-foreground: #FAFAFA;
+  --muted: #18181B;
+  --muted-foreground: #A1A1AA; /* zinc-400 */
+  --accent: #8b5cf6; /* accent color */
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --destructive-foreground: #FAFAFA;
+  --border: #27272A; /* zinc-800 */
+  --input: #27272A;
+  --ring: #3b82f6;
+  --chart-1: #3b82f6;
+  --chart-2: #8b5cf6;
+  --chart-3: #ef4444;
+  --chart-4: #f59e0b;
+  --chart-5: #10b981;
+  --radius: 0.5rem;
+  /* Sidebar */
+  --sidebar: #18181B;
+  --sidebar-foreground: #FAFAFA;
+  --sidebar-primary: #3b82f6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #27272A;
+  --sidebar-accent-foreground: #FAFAFA;
+  --sidebar-border: #27272A;
+  --sidebar-ring: #3b82f6;
+}
+
+@theme inline {
+  --font-sans: var(--font-geist);
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+    overflow-x: hidden; /* Prevent horizontal scroll due to wide effects or tables */
+  }
+}
+
+/* Updated hero text styling with better responsive scaling for laptop viewports */
+.hero-text {
+  font-family: "Geist", sans-serif;
+  font-weight: 500;
+  font-style: normal;
+  font-size: clamp(28px, 5vw, 64px);
+  line-height: clamp(34px, 5.5vw, 64px);
+  color: var(--foreground);
+}
+
+/* Specific breakpoint adjustments for better laptop display */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .hero-text {
+    font-size: clamp(36px, 4.5vw, 48px);
+    line-height: clamp(42px, 5vw, 52px);
+  }
+}
+
+@media (min-width: 1025px) and (max-width: 1280px) {
+  .hero-text {
+    font-size: clamp(48px, 4vw, 56px);
+    line-height: clamp(52px, 4.5vw, 60px);
+  }
+}
+
+/* Added button text styling for Get Started and View Demo buttons */
+.button-text {
+  font-family: "Geist", sans-serif;
+  font-weight: 400;
+  font-style: normal;
+  font-size: 16px;
+  line-height: 26px;
+  color: rgb(250, 250, 250);
+}
+
+/* Added button text styling for Get Started and View Demo buttons */
+.button-text-dark {
+  font-family: "Geist", sans-serif;
+  font-weight: 400;
+  font-style: normal;
+  font-size: 16px;
+  line-height: 26px;
+  color: rgb(9, 9, 11);
+}
+
+/* Added Generate API button text styling */
+.generate-button-text {
+  font-family: "Geist", sans-serif;
+  font-weight: 400;
+  font-style: normal;
+  font-size: 16px;
+  line-height: 24px;
+  color: rgb(250, 250, 250);
+}
+
+/* Added input text styling */
+.input-text {
+  font-family: "Geist", sans-serif;
+  font-weight: 400;
+  font-style: normal;
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--foreground);
+}
+
+/* Added input placeholder text styling */
+.input-placeholder::placeholder {
+  font-family: "Geist", sans-serif;
+  font-weight: 400;
+  font-style: normal;
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--muted-foreground);
+}
+
+/* Footer brand section - light glassmorphism */
+.footer-brand-section {
+  background: transparent;
+  position: relative;
+  padding: 40px 0;
+}
+
+/* Light glassmorphism card */
+.brand-glass-light-card {
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 20px;
+  padding: 48px 32px;
+  text-align: center;
+  position: relative;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.02),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.brand-glass-light-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+  border-radius: 20px;
+  pointer-events: none;
+}
+
+/* Dark glassmorphism card variant */
+.dark .brand-glass-light-card {
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.dark .brand-glass-light-card::before {
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.06) 0%, transparent 50%);
+}
+
+/* Footer brand name styling - light theme integration */
+.footer-brand-name {
+  font-family: "Geist", sans-serif;
+  font-weight: 600;
+  font-style: normal;
+  font-size: clamp(48px, 8vw, 96px);
+  line-height: clamp(52px, 8.5vw, 100px);
+  color: var(--foreground);
+  letter-spacing: -0.02em;
+  margin-bottom: 24px;
+}
+
+/* Footer brand tagline styling - light theme integration */
+.footer-brand-tagline {
+  font-family: "Geist", sans-serif;
+  font-weight: 400;
+  font-style: normal;
+  font-size: 20px;
+  line-height: 28px;
+  color: var(--muted-foreground);
+  margin: 0;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .brand-glass-light-card {
+    padding: 32px 24px;
+    border-radius: 16px;
+    margin: 0 16px;
+  }
+  
+  .footer-brand-tagline {
+    font-size: 18px;
+    line-height: 26px;
+  }
+}
+
+/* Added hero grid system with responsive clamp values and smooth transitions */
+.hero-grid {
+  display: grid;
+  grid-template-columns: clamp(28px, 10vw, 120px) auto clamp(28px, 10vw, 120px);
+}
+
+/* Responsive grid adjustments */
+@media (max-width: 640px) {
+  .hero-grid {
+    grid-template-columns: clamp(16px, 5vw, 28px) auto clamp(16px, 5vw, 28px);
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .hero-grid {
+    grid-template-columns: clamp(28px, 8vw, 80px) auto clamp(28px, 8vw, 80px);
+  }
+}
+
+@media (min-width: 1025px) {
+  .hero-grid {
+    grid-template-columns: clamp(80px, 10vw, 120px) auto clamp(80px, 10vw, 120px);
+  }
+}
+
+/* Added sophisticated button styling system with responsive containers and gradient effects */
+
+/* Hero Button Container - Responsive width with center alignment */
+.hero-button-container {
+  @apply flex items-center justify-center px-4;
+}
+
+@media (min-width: 640px) {
+  .hero-button-container {
+    @apply px-12;
+  }
+}
+
+/* Hero Button Wrapper - Responsive max width */
+.hero-button-wrapper {
+  @apply flex w-full flex-col items-center justify-start;
+  max-width: 90vw;
+}
+
+@media (min-width: 640px) {
+  .hero-button-wrapper {
+    max-width: 320px;
+  }
+}
+
+@media (min-width: 768px) {
+  .hero-button-wrapper {
+    max-width: 392px;
+  }
+}
+
+/* Primary Button - "Get Started Free" - Responsive sizing */
+.hero-primary-button {
+  @apply h-12 sm:h-14 flex w-full flex-col items-center justify-center rounded-lg text-sm sm:text-base bg-primary text-primary-foreground hover:bg-primary/90 transition-colors duration-150;
+  font-family: "Geist", sans-serif;
+  font-weight: 400;
+  font-size: clamp(14px, 2.5vw, 16px);
+  line-height: clamp(20px, 3vw, 26px);
+  /* Light mode explicit color: Emerald */
+  background-color: #10b981; /* emerald-500 */
+  color: #ffffff;
+  padding: clamp(8px, 2vw, 12px) clamp(16px, 4vw, 24px);
+}
+
+/* Light mode hover */
+.hero-primary-button:hover {
+  background-color: #059669; /* emerald-600 */
+}
+
+/* Dark mode primary button colors */
+.dark .hero-primary-button {
+  background-color: #22c55e; /* green-500 */
+  color: #ffffff;
+}
+
+.dark .hero-primary-button:hover {
+  background-color: #16a34a; /* green-600 */
+}
+
+/* Secondary Button - "View Demo" - Responsive sizing */
+.hero-secondary-button {
+  @apply h-12 sm:h-14 flex w-full flex-col items-center justify-center rounded-lg text-sm sm:text-base border border-border bg-transparent backdrop-blur-xl transition-colors duration-150 hover:bg-black/5;
+  border-color: hsl(214.3 31.8% 91.4%);
+  font-family: "Geist", sans-serif;
+  font-weight: 400;
+  font-size: clamp(14px, 2.5vw, 16px);
+  line-height: clamp(20px, 3vw, 26px);
+  color: var(--foreground);
+  padding: clamp(8px, 2vw, 12px) clamp(16px, 4vw, 24px);
+}
+
+.dark .hero-secondary-button {
+  border-color: hsl(217.2 32.6% 17.5%);
+  @apply dark:hover:bg-white/5;
+}
+
+/* Mobile-specific button adjustments */
+@media (max-width: 640px) {
+  .hero-primary-button,
+  .hero-secondary-button {
+    @apply h-11;
+    font-size: 14px;
+    line-height: 20px;
+    padding: 10px 16px;
+  }
+  
+  .hero-button-container {
+    @apply px-2;
+  }
+}
+
+/* Gradient Background Effects */
+.hero-gradient-main {
+  @apply pointer-events-none absolute z-0 block aspect-square rounded-full blur-[200px];
+  bottom: -70%;
+  left: 50%;
+  width: 520px;
+  transform: translateX(-50%);
+  background-color: hsla(221.2, 83.2%, 53.3%, 0.4);
+}
+
+.hero-gradient-left {
+  @apply pointer-events-none absolute z-20 hidden aspect-square rounded-full opacity-50 blur-[100px];
+  left: 4vw;
+  top: 64px;
+  width: 32vw;
+  background-color: hsl(0 0% 100%);
+}
+
+.hero-gradient-right {
+  @apply pointer-events-none absolute z-20 hidden aspect-square rounded-full opacity-50 blur-[100px];
+  bottom: -50px;
+  right: 7vw;
+  width: 30vw;
+  background-color: hsl(0 0% 100%);
+}
+
+.dark .hero-gradient-left,
+.dark .hero-gradient-right {
+  background-color: var(--background);
+}
+
+@media (min-width: 768px) {
+  .hero-gradient-left,
+  .hero-gradient-right {
+    @apply block;
+  }
+}
