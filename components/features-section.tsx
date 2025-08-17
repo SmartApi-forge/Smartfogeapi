@@ -1,12 +1,15 @@
 "use client"
 
 import type React from "react"
+import { useMemo, useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import { motion } from "framer-motion"
-import { IconCode, IconRocket, IconFileText, IconShield } from "@tabler/icons-react"
+import { IconCode, IconRocket, IconFileText, IconShield, IconCircleCheck } from "@tabler/icons-react"
+import { CodeTypingAnimation } from "@/components/ui/typing-animation"
 
 export default function FeaturesSection() {
-  const features = [
+  // Memoize to keep element identity stable and avoid remounts of skeletons
+  const features = useMemo(() => [
     {
       title: "Natural Language to API",
       description:
@@ -33,7 +36,7 @@ export default function FeaturesSection() {
       skeleton: <SkeletonFour />,
       className: "col-span-1 lg:col-span-3 border-b lg:border-none",
     },
-  ]
+  ], [])
 
   return (
     <div className="relative z-20 py-10 lg:py-20 max-w-7xl mx-auto">
@@ -96,6 +99,32 @@ const FeatureDescription = ({ children }: { children?: React.ReactNode }) => {
 }
 
 export const SkeletonOne = () => {
+  const codeLines = useMemo(
+    () => [
+      // Desktop-only preamble (hidden on mobile)
+      { text: 'from fastapi import FastAPI', className: 'hidden md:block text-muted-foreground' },
+      { text: 'from pydantic import BaseModel', className: 'hidden md:block text-muted-foreground' },
+      { text: '', className: 'hidden md:block' },
+      { text: 'app = FastAPI()', className: 'hidden md:block text-muted-foreground' },
+      { text: '', className: 'hidden md:block' },
+      { text: 'class UserModel(BaseModel):', className: 'hidden md:block text-blue-600 dark:text-blue-400' },
+      { text: '    id: int', className: 'hidden md:block ml-4 text-muted-foreground' },
+      { text: '    name: str | None = None', className: 'hidden md:block ml-4 text-muted-foreground' },
+      { text: '', className: 'hidden md:block' },
+      // Mobile + Desktop core snippet
+      { text: '@app.post("/users")', className: 'text-purple-600 dark:text-purple-400' },
+      { text: 'def create_user(user: UserModel):', className: 'text-blue-600 dark:text-blue-400' },
+      { text: '    # Auto-generated validation', className: 'ml-4 text-green-600 dark:text-green-400' },
+      { text: '    return {"id": user.id}', className: 'ml-4 text-muted-foreground' },
+      // Desktop-only extra endpoint
+      { text: '', className: 'hidden md:block' },
+      { text: '@app.get("/users/{id}")', className: 'hidden md:block text-purple-600 dark:text-purple-400' },
+      { text: 'def get_user(id: int):', className: 'hidden md:block text-blue-600 dark:text-blue-400' },
+      { text: '    return {"id": id, "name": "Alice"}', className: 'hidden md:block ml-4 text-muted-foreground' },
+    ],
+    []
+  )
+
   return (
     <div className="relative flex py-8 px-2 gap-10 h-full">
       <div className="w-full p-5 mx-auto bg-card shadow-2xl group h-full">
@@ -105,12 +134,15 @@ export const SkeletonOne = () => {
               <IconCode className="h-5 w-5 text-blue-500" />
               <span className="text-sm font-medium">Generated API Code</span>
             </div>
-            <div className="space-y-2 text-xs font-mono">
-              <div className="text-purple-600 dark:text-purple-400">@app.post("/users")</div>
-              <div className="text-blue-600 dark:text-blue-400">def create_user(user: UserModel):</div>
-              <div className="ml-4 text-green-600 dark:text-green-400"># Auto-generated validation</div>
-              <div className="ml-4 text-muted-foreground">return {`{"id": user.id}`}</div>
-            </div>
+            <CodeTypingAnimation
+              lines={codeLines}
+              lineDelay={600}
+              charDelay={50}
+              startDelay={1000}
+              loop
+              loopDelay={1600}
+              className="text-xs md:text-sm leading-6 md:leading-7"
+            />
           </div>
         </div>
       </div>
@@ -197,19 +229,164 @@ export const SkeletonTwo = () => {
 }
 
 export const SkeletonThree = () => {
+  // Ordered flow per spec
+  const stages = [
+    { key: "build", label: "Building", percent: 20, dur: 1600 },
+    { key: "lint", label: "Lint & Type Check", percent: 45, dur: 1600 },
+    { key: "static", label: "Build Static Pages", percent: 75, dur: 1600 },
+    { key: "generate", label: "Generating Output", percent: 95, dur: 1600 },
+    { key: "success", label: "Live", percent: 100, dur: 2200 },
+  ] as const
+  const [stageIdx, setStageIdx] = useState(0)
+  const stage = stages[stageIdx]
+
+  // Auto advance through the pipeline and loop
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setStageIdx((i) => (i + 1) % stages.length)
+    }, stage.dur)
+    return () => clearTimeout(t)
+  }, [stageIdx])
+
   return (
     <div className="relative flex gap-10 h-full group/deploy">
       <div className="w-full mx-auto bg-transparent dark:bg-transparent group h-full">
         <div className="flex flex-1 w-full h-full flex-col space-y-2 relative">
-          <div className="bg-muted rounded-lg p-6 h-full flex flex-col justify-center items-center">
-            <IconRocket className="h-16 w-16 text-blue-500 mb-4 group-hover/deploy:scale-110 transition-transform duration-200" />
-            <div className="text-center space-y-2">
-              <div className="text-sm font-medium text-foreground">Deploy to Production</div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                <span>Ready to deploy</span>
+          <div className="relative overflow-hidden bg-muted rounded-lg p-6 h-full min-h-[260px] flex flex-col justify-center items-center">
+            {/* Subtle animated gradient backdrop */}
+            <motion.div
+              aria-hidden
+              className="absolute inset-0 opacity-50"
+              initial={{ backgroundPosition: "0% 50%" }}
+              animate={{ backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"] }}
+              transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
+              style={{
+                backgroundImage:
+                  "radial-gradient(600px 200px at 20% 20%, hsl(var(--primary)/0.15), transparent), radial-gradient(600px 200px at 80% 80%, hsl(var(--primary)/0.12), transparent)",
+                backgroundSize: "200% 200%",
+              }}
+            />
+
+            {/* Foreground content that should hide on success */}
+            <motion.div
+              className="absolute inset-0"
+              initial={false}
+              animate={
+                stage.key === "success"
+                  ? { opacity: 0, filter: "blur(2px)", transitionEnd: { visibility: "hidden" } }
+                  : { opacity: 1, filter: "none", visibility: "visible" }
+              }
+              transition={{ duration: 0.25 }}
+              aria-hidden={stage.key === "success"}
+            >
+              {/* Rocket centered (higher to keep progress visible) */}
+              <div className="absolute left-1/2 top-[38%] -translate-x-1/2 -translate-y-1/2">
+                <motion.div
+                  className="relative"
+                  initial={{ y: 0, rotate: 0, opacity: 1 }}
+                  animate={{
+                    y: stage.key === "success" ? -30 : [0, -6, 0],
+                    rotate: stage.key === "success" ? 0 : [0, 2, 0],
+                    opacity: stage.key === "success" ? 0.25 : 1,
+                  }}
+                  transition={{ duration: stage.key === "success" ? 1.1 : 2.2, repeat: stage.key === "success" ? 0 : Infinity, ease: "easeInOut" }}
+                  whileHover={{ scale: 1.06 }}
+                >
+                  <IconRocket className="h-16 w-16 text-blue-500 drop-shadow-[0_6px_16px_rgba(59,130,246,0.45)]" />
+
+                  {/* Exhaust flame during pre-success stages */}
+                  <motion.div
+                    className="absolute left-1/2 -bottom-3 -translate-x-1/2 h-3 w-3 rounded-full bg-orange-400/80 blur-[2px] -z-10"
+                    animate={{ opacity: stage.key === "success" ? 0 : 1, scale: [0.7, 1.05, 0.7] }}
+                    transition={{ duration: 0.8, repeat: Infinity, repeatType: "mirror" }}
+                  />
+
+                  {/* Exhaust particles looping */}
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <motion.span
+                      key={i}
+                      className="absolute left-1/2 -bottom-2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-blue-400/60 -z-10"
+                      style={{ filter: "blur(1px)" }}
+                      animate={{
+                        opacity: stage.key === "success" ? 0 : [0, 1, 0],
+                        y: stage.key === "success" ? 10 : [0, 26],
+                        x: stage.key === "success" ? 0 : [0, (i - 2.5) * 6],
+                      }}
+                      transition={{ duration: 1.4 + i * 0.12, repeat: Infinity, delay: i * 0.1, ease: "easeOut" }}
+                    />
+                  ))}
+                </motion.div>
               </div>
-            </div>
+
+              {/* Labels + progress just below center */}
+              <div className="absolute left-1/2 top-[52%] -translate-x-1/2 translate-y-0 w-full max-w-xs text-center">
+                <div className="space-y-1">
+                  <div className="text-sm font-medium text-foreground">Deploy to Production</div>
+                  <div className="text-xs text-muted-foreground flex items-center justify-center gap-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                    <span>Ready to deploy</span>
+                  </div>
+                </div>
+                <div className="mt-1">
+                  <div className="relative h-2 w-full rounded-full bg-border/60 overflow-hidden">
+                    <motion.div
+                      key={stageIdx}
+                      className="absolute left-0 top-0 h-full rounded-full"
+                      initial={{ width: `${stages[Math.max(0, stageIdx - 1)]?.percent ?? 0}%` }}
+                      animate={{
+                        width: `${stage.percent}%`,
+                        background: stage.key === "success"
+                          ? "linear-gradient(to right, #22c55e, #86efac)"
+                          : "linear-gradient(to right, #3b82f6, #22d3ee)",
+                      }}
+                      transition={{ duration: 0.6, ease: "easeOut" }}
+                    />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span>{stage.label}</span>
+                    <motion.span
+                      initial={{ opacity: 0.6 }}
+                      animate={{ opacity: [0.6, 1, 0.6] }}
+                      transition={{ duration: 1.6, repeat: Infinity }}
+                    >
+                      {stage.percent}%
+                    </motion.span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Full-section success sweep + animated check when done */}
+            <motion.div
+              className="absolute inset-0 grid place-items-center pointer-events-none"
+              initial={false}
+              animate={{ opacity: stage.key === "success" ? 1 : 0 }}
+              transition={{ duration: 0.4 }}
+            >
+              {/* Sweep background */}
+              <motion.div
+                className="absolute inset-0 z-[5]"
+                initial={{ scale: 0.2, borderRadius: 24, backgroundColor: "rgba(16,185,129,0.12)" }}
+                animate={{ scale: stage.key === "success" ? 1.4 : 0.2, backgroundColor: "rgba(16,185,129,0.14)" }}
+                transition={{ duration: 0.9, ease: "easeOut" }}
+              />
+              {/* Pulsing ring + check */}
+              <motion.div
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[10] flex items-center justify-center"
+                initial={{ scale: 0.7 }}
+                animate={{ scale: stage.key === "success" ? 1 : 0.7 }}
+                transition={{ type: "spring", stiffness: 220, damping: 18 }}
+              >
+                <motion.div
+                  className="absolute rounded-full border-2 border-emerald-400/50"
+                  style={{ width: 110, height: 110 }}
+                  initial={{ scale: 0.6, opacity: 0.6 }}
+                  animate={{ scale: [0.8, 1.1, 0.95], opacity: [0.6, 1, 0.8] }}
+                  transition={{ duration: 1.4, repeat: Infinity }}
+                />
+                <IconCircleCheck className="relative h-16 w-16 text-emerald-500" />
+              </motion.div>
+            </motion.div>
           </div>
         </div>
       </div>
@@ -218,32 +395,132 @@ export const SkeletonThree = () => {
 }
 
 export const SkeletonFour = () => {
+  const [started, setStarted] = useState(false)
+  const [counts, setCounts] = useState({ e: 0, v: 0, s: 0, p: 0 })
+  const [finished, setFinished] = useState(false)
+  const [cycle, setCycle] = useState(0)
+
+  // Simple RAF-based count up with easing and stagger, loops by scheduling next cycle
+  useEffect(() => {
+    if (!started) return
+
+    const targets = { e: 12, v: 8, s: 5, p: 95 }
+    const duration = 1200 // ms per counter
+    const stagger = 180 // ms
+
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
+
+    const animKeys: (keyof typeof targets)[] = ["e", "v", "s", "p"]
+    const rafIds: number[] = []
+
+    setFinished(false)
+    setCounts({ e: 0, v: 0, s: 0, p: 0 })
+
+    animKeys.forEach((key, idx) => {
+      const startTime = performance.now() + idx * stagger
+      const loop = (now: number) => {
+        const t = Math.min(1, Math.max(0, (now - startTime) / duration))
+        const eased = easeOutCubic(t)
+        const val = Math.round(targets[key] * eased)
+        setCounts((c) => ({ ...c, [key]: val }))
+        if (t < 1) rafIds[idx] = requestAnimationFrame(loop)
+      }
+      rafIds[idx] = requestAnimationFrame(loop)
+    })
+
+    // Show success check near completion, then schedule next cycle
+    const totalMs = duration + stagger * (animKeys.length - 1)
+    const doneTimer = setTimeout(() => setFinished(true), totalMs)
+    const cycleTimer = setTimeout(() => setCycle((c) => c + 1), totalMs + 2000)
+
+    return () => {
+      rafIds.forEach((id) => cancelAnimationFrame(id))
+      clearTimeout(doneTimer)
+      clearTimeout(cycleTimer)
+    }
+  }, [started, cycle])
+
+  const container = {
+    hidden: { opacity: 0, y: 8 },
+    show: { opacity: 1, y: 0, transition: { staggerChildren: 0.12 } },
+  }
+  const item = {
+    hidden: { opacity: 0, y: 8 },
+    show: { opacity: 1, y: 0 },
+  }
+
   return (
     <div className="h-60 md:h-60 flex flex-col items-center relative bg-transparent dark:bg-transparent mt-10">
-      <div className="bg-muted rounded-lg p-6 w-full h-full">
-        <div className="flex items-center gap-2 mb-4">
+      <motion.div
+        className="bg-muted rounded-lg p-6 w-full h-full"
+        variants={container}
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.4 }}
+        onViewportEnter={() => setStarted(true)}
+      >
+        <motion.div className="flex items-center gap-2 mb-4" variants={item}>
           <IconShield className="h-5 w-5 text-green-500" />
           <span className="text-sm font-medium">Test Results</span>
-        </div>
+        </motion.div>
         <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="w-2 h-2 bg-green-500 rounded-full" />
-            <span className="text-xs">API Endpoints: 12/12 passed</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="w-2 h-2 bg-green-500 rounded-full" />
-            <span className="text-xs">Validation Tests: 8/8 passed</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="w-2 h-2 bg-green-500 rounded-full" />
-            <span className="text-xs">Security Checks: 5/5 passed</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="w-2 h-2 bg-yellow-500 rounded-full" />
-            <span className="text-xs">Performance: 95% score</span>
-          </div>
+          <motion.div className="flex items-center gap-3" variants={item}>
+            <motion.div
+              className="w-2 h-2 rounded-full bg-green-500"
+              animate={{ scale: [1, 1.25, 1] }}
+              transition={{ repeat: Infinity, duration: 1.6 }}
+            />
+            <span className="text-xs">API Endpoints: {counts.e}/12 passed</span>
+          </motion.div>
+          <motion.div className="flex items-center gap-3" variants={item}>
+            <motion.div
+              className="w-2 h-2 rounded-full bg-green-500"
+              animate={{ scale: [1, 1.25, 1] }}
+              transition={{ repeat: Infinity, duration: 1.6, delay: 0.1 }}
+            />
+            <span className="text-xs">Validation Tests: {counts.v}/8 passed</span>
+          </motion.div>
+          <motion.div className="flex items-center gap-3" variants={item}>
+            <motion.div
+              className="w-2 h-2 rounded-full bg-green-500"
+              animate={{ scale: [1, 1.25, 1] }}
+              transition={{ repeat: Infinity, duration: 1.6, delay: 0.2 }}
+            />
+            <span className="text-xs">Security Checks: {counts.s}/5 passed</span>
+          </motion.div>
+          <motion.div className="flex items-center gap-3" variants={item}>
+            <motion.div
+              className="w-2 h-2 rounded-full bg-yellow-500"
+              animate={{ scale: [1, 1.2, 1], boxShadow: ["0 0 0 0 rgba(250,204,21,0.0)", "0 0 0 6px rgba(250,204,21,0.15)", "0 0 0 0 rgba(250,204,21,0.0)"] }}
+              transition={{ repeat: Infinity, duration: 2.0 }}
+            />
+            <span className="text-xs">Performance: {counts.p}% score</span>
+          </motion.div>
         </div>
-      </div>
+
+        {/* Success check overlay */}
+        <motion.div
+          className="absolute inset-0 pointer-events-none grid place-items-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: finished ? 1 : 0 }}
+          transition={{ duration: 0.35 }}
+        >
+          <motion.div
+            className="relative"
+            initial={{ scale: 0.7 }}
+            animate={{ scale: finished ? 1 : 0.7 }}
+            transition={{ type: "spring", stiffness: 260, damping: 18 }}
+          >
+            <motion.div
+              className="absolute -inset-6 rounded-full"
+              style={{ boxShadow: "0 0 0 0 rgba(16,185,129,0.0)" }}
+              animate={{ boxShadow: finished ? ["0 0 0 0 rgba(16,185,129,0.0)", "0 0 0 16px rgba(16,185,129,0.15)", "0 0 0 0 rgba(16,185,129,0.0)"] : "0 0 0 0 rgba(16,185,129,0.0)" }}
+              transition={{ duration: 1.6 }}
+            />
+            <IconCircleCheck className="h-10 w-10 text-emerald-500" />
+          </motion.div>
+        </motion.div>
+      </motion.div>
     </div>
   )
 }

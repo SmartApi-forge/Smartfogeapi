@@ -67,20 +67,77 @@ const models = [
   { id: "codellama", name: "Code Llama", provider: "Meta" },
 ]
 
-const AnimatedPlaceholder = ({ selectedModel }: { selectedModel: string }) => (
-  <AnimatePresence mode="wait">
-    <motion.p
-      key={selectedModel}
-      initial={{ opacity: 0, y: 5 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -5 }}
-      transition={{ duration: 0.1 }}
-      className="pointer-events-none text-sm text-muted-foreground truncate text-left"
-    >
-      {`Describe your API for ${models.find(m => m.id === selectedModel)?.name || "AI"}...`}
-    </motion.p>
-  </AnimatePresence>
-)
+const AnimatedPlaceholder = ({ selectedModel }: { selectedModel: string }) => {
+  const modelName = models.find((m) => m.id === selectedModel)?.name || "AI"
+
+  const prompts = [
+    `Describe the REST API you want to build with ${modelName}…`,
+    "Create an auth API with signup, login, and JWT refresh…",
+    "Generate an e‑commerce API for products, cart, and orders…",
+    "Build a blog API with posts, comments, and tags…",
+    "Design a task manager API with projects, tasks, and statuses…",
+  ]
+
+  const TYPING_MS = 28
+  const DELETING_MS = 18
+  const PAUSE_AFTER_TYPE_MS = 1200
+  const PAUSE_AFTER_DELETE_MS = 300
+
+  const [idx, setIdx] = useState(0)
+  const [text, setText] = useState("")
+  const [deleting, setDeleting] = useState(false)
+
+  // Restart typing when model changes so the copy stays relevant
+  useEffect(() => {
+    setIdx(0)
+    setText("")
+    setDeleting(false)
+  }, [selectedModel])
+
+  useEffect(() => {
+    const full = prompts[idx % prompts.length]
+
+    if (!deleting && text === full) {
+      const t = setTimeout(() => setDeleting(true), PAUSE_AFTER_TYPE_MS)
+      return () => clearTimeout(t)
+    }
+
+    if (deleting && text === "") {
+      const t = setTimeout(() => {
+        setDeleting(false)
+        setIdx((i) => (i + 1) % prompts.length)
+      }, PAUSE_AFTER_DELETE_MS)
+      return () => clearTimeout(t)
+    }
+
+    const step = () => {
+      if (deleting) {
+        setText((t) => t.slice(0, -1))
+      } else {
+        setText(full.slice(0, text.length + 1))
+      }
+    }
+
+    const interval = setTimeout(step, deleting ? DELETING_MS : TYPING_MS)
+    return () => clearTimeout(interval)
+  }, [text, deleting, idx, prompts])
+
+  return (
+    <AnimatePresence mode="wait">
+      <motion.p
+        key={`${idx}-${deleting}`}
+        initial={{ opacity: 0.6, y: 2 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0.6, y: -2 }}
+        transition={{ duration: 0.12 }}
+        className="pointer-events-none text-sm text-muted-foreground text-left whitespace-nowrap overflow-hidden"
+      >
+        {text}
+        <span className="ml-0.5 inline-block w-[1ch] animate-pulse">|</span>
+      </motion.p>
+    </AnimatePresence>
+  )
+}
 
 export function AiInput({ isAuthenticated = false }: { isAuthenticated?: boolean }) {
   const [value, setValue] = useState("")

@@ -133,9 +133,6 @@ export const HeroHeader = () => {
             <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
               <Link href="/login">Log In</Link>
             </Button>
-            <Button asChild size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg px-4">
-              <Link href="/signup">Create</Link>
-            </Button>
           </div>
 
           {/* Mobile menu button */}
@@ -239,9 +236,6 @@ export const HeroHeader = () => {
                   <div className="space-y-3 mt-8">
                     <Button asChild variant="outline" size="lg" className="w-full justify-center text-base h-12 border-border">
                       <Link href="/?auth=login" onClick={() => setMenuState(false)}>Log In</Link>
-                    </Button>
-                    <Button asChild size="lg" className="w-full text-base h-12 bg-blue-600 hover:bg-blue-700 shadow-lg">
-                      <Link href="/?auth=signup" onClick={() => setMenuState(false)}>Create</Link>
                     </Button>
                   </div>
                 </div>
