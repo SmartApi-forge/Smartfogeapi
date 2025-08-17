@@ -95,7 +95,7 @@ export const HeroHeader = () => {
   const closePanel = () => setOpenKey(null)
 
   return (
-    <header className="w-full sticky top-0 z-50 bg-background supports-[backdrop-filter]:bg-background/95 backdrop-blur-sm">
+    <header className="w-full sticky top-0 z-50 bg-background border-b border-border/20">
       <nav className="relative z-10 mx-auto max-w-7xl px-6" ref={navRef} onMouseLeave={() => setTimeout(closePanel, 120)}>
         <div className="relative flex items-center justify-between py-3 sm:py-4">
           <Link href="/" className="flex items-center space-x-2">
@@ -154,7 +154,7 @@ export const HeroHeader = () => {
               >
                 <div
                   style={{ left: panelStyle.left, width: panelStyle.width }}
-                  className="relative mx-0 rounded-b-xl rounded-t-none border border-border bg-popover text-popover-foreground shadow-2xl overflow-hidden"
+                  className="relative mx-0 rounded-b-xl rounded-t-none border border-border bg-background text-foreground shadow-2xl overflow-hidden"
                 >
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
                     {panels[openKey]?.map((col, idx) => (
