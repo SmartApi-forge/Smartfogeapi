@@ -459,44 +459,57 @@ export const SkeletonFour = () => {
         viewport={{ once: true, amount: 0.4 }}
         onViewportEnter={() => setStarted(true)}
       >
-        <motion.div className="flex items-center gap-2 mb-4" variants={item}>
-          <IconShield className="h-5 w-5 text-green-500" />
-          <span className="text-sm font-medium">Test Results</span>
+        {/* Background content that should hide on success */}
+        <motion.div
+          className="relative"
+          initial={false}
+          animate={
+            finished
+              ? { opacity: 0, filter: "blur(2px)", transitionEnd: { visibility: "hidden" } }
+              : { opacity: 1, filter: "none", visibility: "visible" }
+          }
+          transition={{ duration: 0.25 }}
+          aria-hidden={finished}
+        >
+          <motion.div className="flex items-center gap-2 mb-4" variants={item}>
+            <IconShield className="h-5 w-5 text-green-500" />
+            <span className="text-sm font-medium">Test Results</span>
+          </motion.div>
+          <div className="space-y-3">
+            <motion.div className="flex items-center gap-3" variants={item}>
+              <motion.div
+                className="w-2 h-2 rounded-full bg-green-500"
+                animate={{ scale: [1, 1.25, 1] }}
+                transition={{ repeat: Infinity, duration: 1.6 }}
+              />
+              <span className="text-xs">API Endpoints: {counts.e}/12 passed</span>
+            </motion.div>
+            <motion.div className="flex items-center gap-3" variants={item}>
+              <motion.div
+                className="w-2 h-2 rounded-full bg-green-500"
+                animate={{ scale: [1, 1.25, 1] }}
+                transition={{ repeat: Infinity, duration: 1.6, delay: 0.1 }}
+              />
+              <span className="text-xs">Validation Tests: {counts.v}/8 passed</span>
+            </motion.div>
+            <motion.div className="flex items-center gap-3" variants={item}>
+              <motion.div
+                className="w-2 h-2 rounded-full bg-green-500"
+                animate={{ scale: [1, 1.25, 1] }}
+                transition={{ repeat: Infinity, duration: 1.6, delay: 0.2 }}
+              />
+              <span className="text-xs">Security Checks: {counts.s}/5 passed</span>
+            </motion.div>
+            <motion.div className="flex items-center gap-3" variants={item}>
+              <motion.div
+                className="w-2 h-2 rounded-full bg-yellow-500"
+                animate={{ scale: [1, 1.2, 1], boxShadow: ["0 0 0 0 rgba(250,204,21,0.0)", "0 0 0 6px rgba(250,204,21,0.15)", "0 0 0 0 rgba(250,204,21,0.0)"] }}
+                transition={{ repeat: Infinity, duration: 2.0 }}
+              />
+              <span className="text-xs">Performance: {counts.p}% score</span>
+            </motion.div>
+          </div>
         </motion.div>
-        <div className="space-y-3">
-          <motion.div className="flex items-center gap-3" variants={item}>
-            <motion.div
-              className="w-2 h-2 rounded-full bg-green-500"
-              animate={{ scale: [1, 1.25, 1] }}
-              transition={{ repeat: Infinity, duration: 1.6 }}
-            />
-            <span className="text-xs">API Endpoints: {counts.e}/12 passed</span>
-          </motion.div>
-          <motion.div className="flex items-center gap-3" variants={item}>
-            <motion.div
-              className="w-2 h-2 rounded-full bg-green-500"
-              animate={{ scale: [1, 1.25, 1] }}
-              transition={{ repeat: Infinity, duration: 1.6, delay: 0.1 }}
-            />
-            <span className="text-xs">Validation Tests: {counts.v}/8 passed</span>
-          </motion.div>
-          <motion.div className="flex items-center gap-3" variants={item}>
-            <motion.div
-              className="w-2 h-2 rounded-full bg-green-500"
-              animate={{ scale: [1, 1.25, 1] }}
-              transition={{ repeat: Infinity, duration: 1.6, delay: 0.2 }}
-            />
-            <span className="text-xs">Security Checks: {counts.s}/5 passed</span>
-          </motion.div>
-          <motion.div className="flex items-center gap-3" variants={item}>
-            <motion.div
-              className="w-2 h-2 rounded-full bg-yellow-500"
-              animate={{ scale: [1, 1.2, 1], boxShadow: ["0 0 0 0 rgba(250,204,21,0.0)", "0 0 0 6px rgba(250,204,21,0.15)", "0 0 0 0 rgba(250,204,21,0.0)"] }}
-              transition={{ repeat: Infinity, duration: 2.0 }}
-            />
-            <span className="text-xs">Performance: {counts.p}% score</span>
-          </motion.div>
-        </div>
 
         {/* Success check overlay */}
         <motion.div

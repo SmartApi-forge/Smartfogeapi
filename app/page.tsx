@@ -39,11 +39,13 @@ export default function HomePage() {
           <div className="relative z-10 min-h-[80svh] sm:grid sm:[grid-template-columns:clamp(80px,10vw,120px)_minmax(0,1fr)_clamp(80px,10vw,120px)]">
             <div className="hidden sm:block" />
             <div className="mx-auto w-full max-w-5xl px-3 sm:px-4 flex flex-col items-center divide-y divide-border/50 h-full">
-              {/* Trust signal section */}
-              <div className="flex w-full items-center justify-center py-1 mt-1 sm:mt-3 md:mt-6 mb-2 sm:mb-4 md:mb-6">
-                <Badge variant="default" shiny={true} className="px-2 py-1 text-xs sm:text-sm">
-                  Trusted by developers and non-developers alike
-                </Badge>
+              {/* Trust signal section - hidden on mobile, with spacing preserved */}
+              <div className="py-4 mb-4 sm:py-1 sm:mt-3 md:mt-6 sm:mb-2 md:mb-6">
+                <div className="hidden sm:flex w-full items-center justify-center">
+                  <Badge variant="default" shiny={true} className="px-2 py-1 text-xs sm:text-sm">
+                    Trusted by developers and non-developers alike
+                  </Badge>
+                </div>
               </div>
 
               {/* Main content area */}
@@ -59,13 +61,13 @@ export default function HomePage() {
                 </div>
 
                 {/* AI Input Box */}
-                <div className="w-full max-w-2xl mx-auto px-0">
+                <div className="w-full max-w-2xl mx-auto px-3 sm:px-0">
                   <AiInput />
                 </div>
 
                 {/* Supporting text with precise line breaks */}
                 <div className="max-w-3xl mx-auto mt-0 px-1 sm:px-0">
-                  <p className="text-muted-foreground text-sm sm:text-base md:text-lg text-balance leading-relaxed">
+                  <p className="text-muted-foreground text-base sm:text-base md:text-lg text-balance leading-relaxed">
                     Go from user story to production-ready, documented API in seconds. No setup, no coding, no hassle.
                   </p>
                 </div>
