@@ -49,8 +49,8 @@ export default function FAQSection() {
 
     return (
         <section className="py-16 md:py-32" id="faq">
-            <div className="mx-auto max-w-5xl px-4 md:px-6">
-                <div className="mx-auto max-w-xl text-center">
+            <div className="mx-auto max-w-7xl px-4 md:px-6">
+                <div className="mx-auto max-w-3xl text-center">
                     <h2 className="text-balance text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-semibold leading-tight">
                         Frequently Asked Questions
                     </h2>
@@ -59,7 +59,7 @@ export default function FAQSection() {
                     </p>
                 </div>
 
-                <div className="mx-auto mt-12 max-w-xl">
+                <div className="mx-auto mt-12 max-w-3xl lg:max-w-4xl">
                     <Accordion
                         type="single"
                         collapsible
@@ -100,3 +100,4 @@ export default function FAQSection() {
         </section>
     )
 }
+
