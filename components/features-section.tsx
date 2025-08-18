@@ -101,26 +101,21 @@ const FeatureDescription = ({ children }: { children?: React.ReactNode }) => {
 export const SkeletonOne = () => {
   const codeLines = useMemo(
     () => [
-      // Desktop-only preamble (hidden on mobile)
-      { text: 'from fastapi import FastAPI', className: 'hidden md:block text-muted-foreground' },
-      { text: 'from pydantic import BaseModel', className: 'hidden md:block text-muted-foreground' },
-      { text: '', className: 'hidden md:block' },
-      { text: 'app = FastAPI()', className: 'hidden md:block text-muted-foreground' },
-      { text: '', className: 'hidden md:block' },
-      { text: 'class UserModel(BaseModel):', className: 'hidden md:block text-blue-600 dark:text-blue-400' },
-      { text: '    id: int', className: 'hidden md:block ml-4 text-muted-foreground' },
-      { text: '    name: str | None = None', className: 'hidden md:block ml-4 text-muted-foreground' },
-      { text: '', className: 'hidden md:block' },
-      // Mobile + Desktop core snippet
+      // More comprehensive API example
+      { text: 'from fastapi import FastAPI', className: 'text-muted-foreground' },
+      { text: 'from pydantic import BaseModel', className: 'text-muted-foreground' },
+      { text: 'app = FastAPI()', className: 'text-muted-foreground' },
+      { text: 'class UserModel(BaseModel):', className: 'text-blue-600 dark:text-blue-400' },
+      { text: '    id: int', className: 'ml-4 text-muted-foreground' },
+      { text: '    name: str', className: 'ml-4 text-muted-foreground' },
+      { text: '    email: str', className: 'ml-4 text-muted-foreground' },
       { text: '@app.post("/users")', className: 'text-purple-600 dark:text-purple-400' },
       { text: 'def create_user(user: UserModel):', className: 'text-blue-600 dark:text-blue-400' },
       { text: '    # Auto-generated validation', className: 'ml-4 text-green-600 dark:text-green-400' },
       { text: '    return {"id": user.id}', className: 'ml-4 text-muted-foreground' },
-      // Desktop-only extra endpoint
-      { text: '', className: 'hidden md:block' },
-      { text: '@app.get("/users/{id}")', className: 'hidden md:block text-purple-600 dark:text-purple-400' },
-      { text: 'def get_user(id: int):', className: 'hidden md:block text-blue-600 dark:text-blue-400' },
-      { text: '    return {"id": id, "name": "Alice"}', className: 'hidden md:block ml-4 text-muted-foreground' },
+      { text: '@app.get("/users/{id}")', className: 'text-purple-600 dark:text-purple-400' },
+      { text: 'def get_user(id: int):', className: 'text-blue-600 dark:text-blue-400' },
+      { text: '    return {"id": id, "name": "Alice"}', className: 'ml-4 text-muted-foreground' },
     ],
     []
   )
@@ -129,20 +124,22 @@ export const SkeletonOne = () => {
     <div className="relative flex py-8 px-2 gap-10 h-full">
       <div className="w-full p-5 mx-auto bg-card shadow-2xl group h-full">
         <div className="flex flex-1 w-full h-full flex-col space-y-2">
-          <div className="bg-muted rounded-lg p-4 h-full">
+          <div className="bg-muted rounded-lg p-4 h-full overflow-hidden">
             <div className="flex items-center gap-2 mb-4">
               <IconCode className="h-5 w-5 text-blue-500" />
               <span className="text-sm font-medium">Generated API Code</span>
             </div>
-            <CodeTypingAnimation
-              lines={codeLines}
-              lineDelay={600}
-              charDelay={50}
-              startDelay={1000}
-              loop
-              loopDelay={1600}
-              className="text-xs md:text-sm leading-6 md:leading-7"
-            />
+            <div className="flex-1 overflow-hidden">
+              <CodeTypingAnimation
+                lines={codeLines}
+                lineDelay={400}
+                charDelay={35}
+                startDelay={1000}
+                loop
+                loopDelay={1400}
+                className="text-sm leading-5 font-mono"
+              />
+            </div>
           </div>
         </div>
       </div>

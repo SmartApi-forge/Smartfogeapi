@@ -122,7 +122,7 @@ export function CodeTypingAnimation({
           />
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="whitespace-pre">
           {lines.map((line, idx) => (
             <div key={idx} className={cn("whitespace-pre", line.className)}>
               {line.text}
