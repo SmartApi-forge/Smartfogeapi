@@ -163,7 +163,7 @@ export default function Dashboard() {
                 }}
                 onMouseEnter={() => setLogoHovered(true)}
                 onMouseLeave={() => setLogoHovered(false)}
-                className="w-6 h-6 bg-gradient-to-br from-purple-500 to-pink-500 rounded-sm flex items-center justify-center hover:opacity-80 transition-all duration-200 relative"
+                className="w-6 h-6 bg-blue-600 hover:bg-blue-700 rounded-sm flex items-center justify-center transition-all duration-200 relative"
                 title={isMobile ? "Toggle menu" : (sidebarCollapsed ? "Open sidebar" : "Collapse sidebar")}
               >
                 {(sidebarCollapsed && logoHovered && !isMobile) ? (
@@ -194,19 +194,19 @@ export default function Dashboard() {
               )}
             </div>
             {(!sidebarCollapsed || (isMobile && mobileMenuOpen)) && (
-              <button className="p-1.5 hover:bg-accent rounded-md transition-colors">
+              <button className="p-1.5 hover:bg-muted rounded-md transition-colors">
                 <Plus className="w-4 h-4 text-muted-foreground" />
               </button>
             )}
           </div>
           
           {(!sidebarCollapsed || (isMobile && mobileMenuOpen)) ? (
-            <button className="w-full p-2.5 text-left text-sm bg-accent/50 rounded-lg hover:bg-accent transition-colors flex items-center gap-2">
+            <button className="w-full p-2.5 text-left text-sm bg-muted/60 rounded-lg hover:bg-muted dark:hover:bg-foreground/10 transition-colors flex items-center gap-2">
               <MessageSquare className="w-4 h-4" />
               New chat
             </button>
           ) : (
-            <button className="w-6 h-6 mx-auto bg-accent/50 rounded-lg hover:bg-accent transition-colors flex items-center justify-center" title="New chat">
+            <button className="w-6 h-6 mx-auto bg-muted/60 rounded-lg hover:bg-muted dark:hover:bg-foreground/10 transition-colors flex items-center justify-center" title="New chat">
               <MessageSquare className="w-4 h-4" />
             </button>
           )}
@@ -215,11 +215,11 @@ export default function Dashboard() {
         {/* Navigation */}
         <nav className="px-3 pb-3">
           <div className="space-y-1">
-            <button className={`flex items-center ${(!sidebarCollapsed || (isMobile && mobileMenuOpen)) ? 'gap-3 w-full px-3' : 'justify-center w-6 mx-auto'} py-2 text-sm rounded-lg hover:bg-accent text-foreground transition-colors`} title={(sidebarCollapsed && !isMobile) ? "Search chats" : ""}>
+            <button className={`flex items-center ${(!sidebarCollapsed || (isMobile && mobileMenuOpen)) ? 'gap-3 w-full px-3' : 'justify-center w-6 mx-auto'} py-2 text-sm rounded-lg hover:bg-muted dark:hover:bg-foreground/10 text-foreground transition-colors`} title={(sidebarCollapsed && !isMobile) ? "Search chats" : ""}>
               <Search className="w-4 h-4" />
               {(!sidebarCollapsed || (isMobile && mobileMenuOpen)) && <span>Search chats</span>}
             </button>
-            <button className={`flex items-center ${(!sidebarCollapsed || (isMobile && mobileMenuOpen)) ? 'gap-3 w-full px-3' : 'justify-center w-6 mx-auto'} py-2 text-sm rounded-lg hover:bg-accent text-foreground transition-colors`} title={(sidebarCollapsed && !isMobile) ? "Library" : ""}>
+            <button className={`flex items-center ${(!sidebarCollapsed || (isMobile && mobileMenuOpen)) ? 'gap-3 w-full px-3' : 'justify-center w-6 mx-auto'} py-2 text-sm rounded-lg hover:bg-muted dark:hover:bg-foreground/10 text-foreground transition-colors`} title={(sidebarCollapsed && !isMobile) ? "Library" : ""}>
               <BookOpen className="w-4 h-4" />
               {(!sidebarCollapsed || (isMobile && mobileMenuOpen)) && <span>Library</span>}
             </button>
@@ -231,10 +231,10 @@ export default function Dashboard() {
           <div className="flex-1 px-3 overflow-y-auto">
             <div className="text-xs text-muted-foreground mb-2 px-3">Chats</div>
             <div className="space-y-1">
-              {chatHistory.map((chat) => (
+              {chatHistory.map((chat, idx) => (
                 <button
                   key={chat.id}
-                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-accent transition-colors group"
+                  className={`w-full text-left px-3 py-2 rounded-lg transition-colors group ${idx === 0 ? 'bg-muted' : 'hover:bg-muted dark:hover:bg-foreground/8'}`}
                   onClick={() => isMobile && setMobileMenuOpen(false)}
                 >
                   <div className="text-sm text-foreground truncate">{chat.title}</div>
@@ -250,7 +250,7 @@ export default function Dashboard() {
         {/* Bottom User Section */}
         <div className="p-3 border-t border-border">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+            <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
               <span className="text-xs font-medium text-white">S</span>
             </div>
             {(!sidebarCollapsed || (isMobile && mobileMenuOpen)) && (
@@ -284,7 +284,7 @@ export default function Dashboard() {
           <div className="fixed top-4 left-4 z-50 md:hidden">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 bg-card border border-border rounded-lg shadow-lg hover:bg-accent transition-colors"
+              className="p-2 bg-card border border-border rounded-lg shadow-lg hover:bg-muted dark:hover:bg-foreground/10 transition-colors"
               aria-label="Toggle menu"
             >
               <PanelLeft className="w-5 h-5 text-foreground" />
@@ -303,7 +303,7 @@ export default function Dashboard() {
                 Good Evening, <span className="text-foreground">{user.name}</span>
               </h1>
               <p className="text-xl text-muted-foreground">
-                What <span className="bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent font-medium">API</span> can I help you build?
+                What <span className="text-blue-600 font-medium">API</span> can I help you build?
               </p>
             </div>
             
@@ -319,10 +319,10 @@ export default function Dashboard() {
                 {examplePrompts.map((prompt) => (
                   <div
                     key={prompt.id}
-                    className="p-4 text-left bg-card border border-border rounded-lg hover:bg-card hover:border-purple-500/30 hover:shadow-lg hover:shadow-purple-500/10 transition-all group cursor-pointer"
+                    className="p-4 text-left bg-card border border-border rounded-lg hover:bg-muted dark:hover:bg-foreground/10 hover:border-blue-500/30 hover:shadow-lg hover:shadow-blue-500/10 transition-all group cursor-pointer"
                   >
                     <div className="flex items-start gap-3">
-                      <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-md group-hover:from-purple-400 group-hover:to-pink-400 group-hover:shadow-md transition-all">
+                      <div className="p-2 bg-blue-600 rounded-md group-hover:bg-blue-700 group-hover:shadow-md transition-all">
                         <div className="text-white">
                           {prompt.icon}
                         </div>
