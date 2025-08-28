@@ -41,6 +41,7 @@
     "@react-three/drei": "^10.7.2",
     "@react-three/fiber": "^9.3.0",
     "@splinetool/react-spline": "^4.1.0",
+    "@supabase/supabase-js": "^2.56.0",
     "@tabler/icons-react": "latest",
     "@types/three": "^0.179.0",
     "autoprefixer": "^10.4.20",
