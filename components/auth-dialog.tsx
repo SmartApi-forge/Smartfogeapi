@@ -147,7 +147,7 @@ export default function AuthDialog() {
                     
                     // Use window.location for a hard redirect to ensure it works
                     setTimeout(() => {
-                      window.location.href = '/dashboard'
+                      window.location.href = '/ask'
                     }, 100)
                   } else {
                     throw new Error('Sign in failed - no user data received')

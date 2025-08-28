@@ -67,7 +67,7 @@ const models = [
   { id: "codellama", name: "Code Llama", provider: "Meta" },
 ]
 
-const AnimatedPlaceholder = ({ selectedModel }: { selectedModel: string }) => {
+const AnimatedPlaceholder = ({ selectedModel, isFocused }: { selectedModel: string; isFocused: boolean }) => {
   const modelName = models.find((m) => m.id === selectedModel)?.name || "AI"
 
   const prompts = [
@@ -94,7 +94,18 @@ const AnimatedPlaceholder = ({ selectedModel }: { selectedModel: string }) => {
     setDeleting(false)
   }, [selectedModel])
 
+  // Stop animation when focused
   useEffect(() => {
+    if (isFocused) {
+      setText("")
+      setDeleting(false)
+    }
+  }, [isFocused])
+
+  useEffect(() => {
+    // Don't animate if focused
+    if (isFocused) return
+
     const full = prompts[idx % prompts.length]
 
     if (!deleting && text === full) {
@@ -120,7 +131,10 @@ const AnimatedPlaceholder = ({ selectedModel }: { selectedModel: string }) => {
 
     const interval = setTimeout(step, deleting ? DELETING_MS : TYPING_MS)
     return () => clearTimeout(interval)
-  }, [text, deleting, idx, prompts])
+  }, [text, deleting, idx, prompts, isFocused])
+
+  // Don't render anything if focused
+  if (isFocused) return null
 
   return (
     <AnimatePresence mode="wait">
@@ -141,6 +155,7 @@ const AnimatedPlaceholder = ({ selectedModel }: { selectedModel: string }) => {
 
 export function AiInput({ isAuthenticated = false }: { isAuthenticated?: boolean }) {
   const [value, setValue] = useState("")
+  const [isFocused, setIsFocused] = useState(false)
   const { textareaRef, adjustHeight } = useAutoResizeTextarea({
     minHeight: MIN_HEIGHT,
     maxHeight: MAX_HEIGHT,
@@ -206,6 +221,8 @@ export function AiInput({ isAuthenticated = false }: { isAuthenticated?: boolean
                 placeholder=""
                 className="w-full rounded-[24px] rounded-b-none px-4 py-3 bg-card border-none resize-none focus-visible:ring-2 focus-visible:ring-blue-500/20 focus-visible:border-blue-500/50 leading-[1.2] text-foreground placeholder:text-muted-foreground text-left"
                 ref={textareaRef}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault()
@@ -218,8 +235,11 @@ export function AiInput({ isAuthenticated = false }: { isAuthenticated?: boolean
                 }}
               />
               {!value && (
-                <div className="absolute inset-x-4 top-3 text-left">
-                  <AnimatedPlaceholder selectedModel={selectedModel} />
+                <div 
+                  className="absolute inset-x-4 top-3 text-left cursor-text"
+                  onClick={() => textareaRef.current?.focus()}
+                >
+                  <AnimatedPlaceholder selectedModel={selectedModel} isFocused={isFocused} />
                 </div>
               )}
             </div>
