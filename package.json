@@ -45,6 +45,7 @@
     "@tabler/icons-react": "latest",
     "@tanstack/react-query": "^4.29.0",
     "@trpc/client": "^10.45.2",
+    "@trpc/next": "^11.5.0",
     "@trpc/react-query": "^10.45.2",
     "@trpc/server": "^10.45.2",
     "@types/three": "^0.179.0",

@@ -27,23 +27,39 @@ import ThreeDOrb from "@/components/three-d-orb"
 const examplePrompts = [
   {
     id: 1,
-    title: "Create a REST API for user authentication with JWT tokens",
+    title: "User authentication API",
+    description: "JWT tokens, OAuth, role-based access",
     icon: <User className="w-4 h-4" />
   },
   {
     id: 2,
-    title: "Build an e-commerce API with products, orders, and payments",
+    title: "E-commerce API",
+    description: "Products, orders, payments, inventory",
     icon: <Code className="w-4 h-4" />
   },
   {
     id: 3,
-    title: "Generate a blog API with posts, comments, and categories",
+    title: "Blog API",
+    description: "Posts, comments, categories, tags",
     icon: <FileText className="w-4 h-4" />
   },
   {
     id: 4,
-    title: "Design a task management API with projects and assignments",
+    title: "Task management API",
+    description: "Projects, tasks, teams, deadlines",
     icon: <MessageSquare className="w-4 h-4" />
+  },
+  {
+    id: 5,
+    title: "Social media API",
+    description: "Posts, likes, follows, messaging",
+    icon: <User className="w-4 h-4" />
+  },
+  {
+    id: 6,
+    title: "Analytics dashboard",
+    description: "Metrics, reports, data visualization",
+    icon: <Code className="w-4 h-4" />
   }
 ]
 
@@ -312,24 +328,22 @@ export default function Dashboard() {
               <AiInput isAuthenticated={isAuthenticated} />
             </div>
             
-            {/* Example Prompts */}
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground font-medium">POPULAR API TEMPLATES</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Template Section - Clean pill-style layout */}
+            <div className="max-w-4xl mx-auto">
+              <div className="flex flex-wrap justify-center gap-2 px-4">
                 {examplePrompts.map((prompt) => (
-                  <div
+                  <button
                     key={prompt.id}
-                    className="p-4 text-left bg-card border border-border rounded-lg hover:bg-muted dark:hover:bg-foreground/10 hover:border-blue-500/30 hover:shadow-lg hover:shadow-blue-500/10 transition-all group cursor-pointer"
+                    className="group inline-flex items-center gap-2 px-4 py-2.5 bg-card/60 hover:bg-card border border-border/50 hover:border-border rounded-full text-sm font-medium text-muted-foreground hover:text-foreground transition-all duration-200 hover:shadow-sm hover:scale-[1.02] backdrop-blur-sm"
+                    title={prompt.description}
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="p-2 bg-blue-600 rounded-md group-hover:bg-blue-700 group-hover:shadow-md transition-all">
-                        <div className="text-white">
-                          {prompt.icon}
-                        </div>
+                    <div className="p-1 bg-blue-600/10 group-hover:bg-blue-600/20 rounded-md transition-colors">
+                      <div className="text-blue-600 group-hover:text-blue-700 dark:text-blue-400 dark:group-hover:text-blue-300">
+                        {prompt.icon}
                       </div>
-                      <p className="text-sm text-foreground group-hover:text-foreground">{prompt.title}</p>
                     </div>
-                  </div>
+                    <span className="whitespace-nowrap">{prompt.title}</span>
+                  </button>
                 ))}
               </div>
             </div>

@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import Image from "next/image"
 import { AnimatePresence, motion } from "framer-motion"
-import { Bot, Paperclip, Plus, Send, ChevronDown } from "lucide-react"
+import { Bot, Paperclip, Plus, Send, ChevronDown, Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 import { cn } from "@/lib/utils"
 import { Textarea } from "@/components/ui/textarea"
+import { trpc } from "@/src/trpc/client"
 
 interface UseAutoResizeTextareaProps {
   minHeight: number
@@ -166,6 +167,16 @@ export function AiInput({ isAuthenticated = false }: { isAuthenticated?: boolean
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
+  // tRPC hook for automatic Inngest invocation
+  const invokeInngest = trpc.invoke.useMutation({
+    onSuccess: () => {
+      console.log("Inngest function invoked successfully!")
+    },
+    onError: (error: any) => {
+      console.error("Failed to invoke Inngest function:", error)
+    }
+  })
+
   const handelClose = (e: any) => {
     e.preventDefault()
     e.stopPropagation()
@@ -190,10 +201,10 @@ export function AiInput({ isAuthenticated = false }: { isAuthenticated?: boolean
     
     if (!value.trim()) return
     
-    // Here you would typically send the API request to generate the API
-    console.log("Generating API for:", value)
+    // Automatically invoke Inngest function with the user's input
+    invokeInngest.mutate({ text: value })
     
-    // For now, just clear the input
+    // Clear the input after submission
     setValue("")
     adjustHeight(true)
   }
@@ -347,14 +358,19 @@ export function AiInput({ isAuthenticated = false }: { isAuthenticated?: boolean
               <button
                 type="button"
                 onClick={handleSubmit}
+                disabled={invokeInngest.isLoading}
                 className={cn(
                   "rounded-full p-2 transition-colors",
-                  value
+                  value && !invokeInngest.isLoading
                     ? "bg-blue-600 hover:bg-blue-700 text-white shadow-lg"
                     : "bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80"
                 )}
               >
-                <Send className="w-4 h-4" />
+                {invokeInngest.isLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
               </button>
             </div>
           </div>
