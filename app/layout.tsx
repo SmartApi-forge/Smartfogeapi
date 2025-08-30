@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Geist } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
+import { TRPCReactProvider } from "@/src/trpc/client"
 import "./globals.css"
 
 const geist = Geist({
@@ -24,14 +25,16 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geist.variable} antialiased`}>
       <body className="font-sans">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          {children}
-        </ThemeProvider>
+        <TRPCReactProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            {children}
+          </ThemeProvider>
+        </TRPCReactProvider>
       </body>
     </html>
   )
