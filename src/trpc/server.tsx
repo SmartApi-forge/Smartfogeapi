@@ -13,4 +13,7 @@ export const trpc = createTRPCOptionsProxy({
   queryClient: getQueryClient,
 });
 // Create a caller for server-side operations (detached from query client)
-export const caller = appRouter.createCaller(createTRPCContext);
+export const createCaller = async () => {
+  const ctx = await createTRPCContext();
+  return appRouter.createCaller(ctx);
+};
