@@ -1,5 +1,3 @@
-"use client"
-
 import { HeroHeader } from "@/components/header"
 import AuthDialog from "@/components/auth-dialog"
 import { Button } from "@/components/ui/button"
@@ -16,8 +14,23 @@ import NewsletterCTA from "@/components/newsletter-cta"
 import Link from "next/link"
 import { motion } from "framer-motion"
 import BelowFooterBanner from "@/components/below-footer-banner"
+import { caller, getQueryClient, trpc } from "@/src/trpc/server"
+import { dehydrate } from "@tanstack/react-query"
+import { ClientContent } from "./client"
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Server-side data fetching with tRPC
+  const queryClient = getQueryClient();
+  
+  // Fetch initial data for the landing page
+  const templates = await queryClient.fetchQuery(trpc.apiGeneration.getTemplates.queryOptions());
+  const recentProjects = await caller.apiGeneration.getProjects();
+  
+  // Get server-side stats for hero section
+  const totalProjects = recentProjects.length;
+  const deployedProjects = recentProjects.filter(p => p.status === 'deployed').length;
+  
+  const dehydratedState = dehydrate(queryClient);
   return (
     <div className="min-h-screen bg-background overflow-x-clip">
       <HeroHeader />
@@ -114,7 +127,7 @@ export default function HomePage() {
                     size="lg"
                     className="border-border/50 text-foreground hover:bg-accent px-8 py-3 h-12 rounded-xl font-medium transition-all duration-200 w-full sm:w-auto"
                   >
-                    View Demo
+                    View Documentation
                   </Button>
                 </motion.div>
 
@@ -132,6 +145,13 @@ export default function HomePage() {
           >
             <FeaturesSection />
           </motion.div>
+        </section>
+
+        {/* API Generation Section with tRPC */}
+        <section className="py-16 bg-background">
+          <div className="container mx-auto">
+            <ClientContent />
+          </div>
         </section>
 
         <motion.div
