@@ -6,38 +6,35 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, CheckCircle, Clock, AlertCircle } from 'lucide-react';
-import { useTRPC } from '@/src/trpc/client';
+import { trpc } from '@/src/trpc/client';
 
 export function ClientContent() {
   const [prompt, setPrompt] = useState('');
-  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
 
-  // tRPC hooks for API generation
-  const generateAPI = useTRPC().apiGeneration.generateAPI.useMutation({
-    onSuccess: (data: { jobId: string; status: string; message: string; estimatedTime: number }) => {
-      setCurrentJobId(data.jobId);
+  // tRPC hook for automatic Inngest invocation
+  const invokeInngest = trpc.invoke.useMutation({
+    onSuccess: () => {
+      console.log("Inngest function invoked successfully from ClientContent!")
     },
+    onError: (error: any) => {
+      console.error("Failed to invoke Inngest function:", error)
+    }
   });
 
-  const { data: jobStatus } = useTRPC().jobs.getJob.useQuery(
-    { jobId: currentJobId! },
-    { 
-      enabled: !!currentJobId,
-      refetchInterval: 2000,
-    }
+  // tRPC hook for createApi
+  const createApi = trpc.createApi.useQuery(
+    { text: prompt },
+    { enabled: false } // Only run when manually triggered
   );
-
-  const { data: projects } = useTRPC().apiGeneration.getProjects.useQuery();
-  const { data: templates } = useTRPC().apiGeneration.getTemplates.useQuery();
 
   const handleGenerate = () => {
     if (!prompt.trim()) return;
     
-    generateAPI.mutate({
-      prompt,
-      framework: 'fastapi',
-      advanced: false,
-    });
+    // Invoke Inngest function automatically
+    invokeInngest.mutate({ text: prompt });
+    
+    // Clear the prompt after submission
+    setPrompt('');
   };
 
   const getStatusColor = (status: string) => {
@@ -80,47 +77,33 @@ export function ClientContent() {
             />
             <Button 
               onClick={handleGenerate}
-              disabled={generateAPI.isLoading || !prompt.trim()}
+              disabled={invokeInngest.isLoading || !prompt.trim()}
             >
-              {generateAPI.isLoading ? (
+              {invokeInngest.isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : null}
               Generate API
             </Button>
           </div>
 
-          {/* Job Status */}
-          {currentJobId && jobStatus && (
-            <Card className="border-l-4 border-l-blue-500">
+          {/* Success Message */}
+          {invokeInngest.isSuccess && (
+            <Card className="border-l-4 border-l-green-500">
               <CardContent className="pt-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    {getStatusIcon(jobStatus.status)}
-                    <span className="font-medium">API Generation in Progress</span>
-                  </div>
-                  <Badge variant="secondary">{jobStatus.progress}%</Badge>
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  <span className="font-medium text-green-700">Inngest function invoked successfully!</span>
                 </div>
-                <p className="text-sm text-muted-foreground mb-2">
-                  {jobStatus.currentStep}
+                <p className="text-sm text-muted-foreground mt-2">
+                  Your API generation request has been processed.
                 </p>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${jobStatus.progress}%` }}
-                  />
-                </div>
-                {jobStatus.estimatedTimeRemaining && (
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Estimated time remaining: {jobStatus.estimatedTimeRemaining}s
-                  </p>
-                )}
               </CardContent>
             </Card>
           )}
         </CardContent>
       </Card>
 
-      {/* Templates */}
+      {/* Demo Templates */}
       <Card>
         <CardHeader>
           <CardTitle>Quick Start Templates</CardTitle>
@@ -130,7 +113,12 @@ export function ClientContent() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {templates?.map((template: { id: string; name: string; description: string; framework: string; estimatedTime: number }) => (
+            {[
+              { id: '1', name: 'Blog API', description: 'Create a REST API for a blog with posts, comments, and user authentication', framework: 'FastAPI' },
+              { id: '2', name: 'E-commerce API', description: 'Build an e-commerce API with products, cart, orders, and payment processing', framework: 'Express' },
+              { id: '3', name: 'Task Manager API', description: 'Design a task management API with projects, tasks, and team collaboration', framework: 'FastAPI' },
+              { id: '4', name: 'Social Media API', description: 'Create a social media API with posts, likes, follows, and messaging', framework: 'Express' }
+            ].map((template) => (
               <Card key={template.id} className="cursor-pointer hover:shadow-md transition-shadow">
                 <CardContent className="pt-4">
                   <div className="flex justify-between items-start mb-2">
@@ -142,7 +130,7 @@ export function ClientContent() {
                   </p>
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-muted-foreground">
-                      ~{template.estimatedTime}s generation
+                      ~30s generation
                     </span>
                     <Button 
                       size="sm" 
@@ -154,44 +142,6 @@ export function ClientContent() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Recent Projects */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Your Recent APIs</CardTitle>
-          <CardDescription>
-            Manage and deploy your generated APIs
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {projects?.map((project: { id: string; name: string; description: string; framework: string; status: string; deploy_url?: string }) => (
-              <div key={project.id} className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className={`w-3 h-3 rounded-full ${getStatusColor(project.status)}`} />
-                  <div>
-                    <h3 className="font-medium">{project.name}</h3>
-                    <p className="text-sm text-muted-foreground">{project.description}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">{project.framework}</Badge>
-                  <Badge variant={project.status === 'deployed' ? 'default' : 'secondary'}>
-                    {project.status}
-                  </Badge>
-                  {project.deploy_url && (
-                    <Button size="sm" variant="outline" asChild>
-                      <a href={project.deploy_url} target="_blank" rel="noopener noreferrer">
-                        View API
-                      </a>
-                    </Button>
-                  )}
-                </div>
-              </div>
             ))}
           </div>
         </CardContent>
