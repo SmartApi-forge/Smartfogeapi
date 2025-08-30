@@ -329,6 +329,8 @@ export default function Dashboard() {
             </div>
             
             {/* Template Section - Clean pill-style layout */}
+            {/* TODO: Integrate with E2B sandbox for code execution */}
+            {/* TODO: Connect to AI models for actual API generation */}
             <div className="max-w-4xl mx-auto">
               <div className="flex flex-wrap justify-center gap-2 px-4">
                 {examplePrompts.map((prompt) => (
@@ -336,6 +338,7 @@ export default function Dashboard() {
                     key={prompt.id}
                     className="group inline-flex items-center gap-2 px-4 py-2.5 bg-card/60 hover:bg-card border border-border/50 hover:border-border rounded-full text-sm font-medium text-muted-foreground hover:text-foreground transition-all duration-200 hover:shadow-sm hover:scale-[1.02] backdrop-blur-sm"
                     title={prompt.description}
+                    // TODO: Add onClick handler to trigger API generation workflow
                   >
                     <div className="p-1 bg-blue-600/10 group-hover:bg-blue-600/20 rounded-md transition-colors">
                       <div className="text-blue-600 group-hover:text-blue-700 dark:text-blue-400 dark:group-hover:text-blue-300">
