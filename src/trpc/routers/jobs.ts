@@ -120,7 +120,7 @@ export const jobsRouter = createTRPCRouter({
     .input(z.object({ jobId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       // TODO: Cancel Inngest workflow and update status
-      
+
       const cancelledJob = {
         id: input.jobId,
         userId: 'user_123',

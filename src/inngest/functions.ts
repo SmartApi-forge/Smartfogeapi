@@ -27,7 +27,7 @@ export const generateAPI = inngest.createFunction(
     const apiResult = await step.run("generate-api-code", async () => {
       try {
         const completion = await openaiClient.chat.completions.create({
-          model: "gpt-4o",
+          model: "gpt-4.1",
           messages: [
             {
               role: "system",
