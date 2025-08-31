@@ -6,13 +6,13 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, CheckCircle, Clock, AlertCircle } from 'lucide-react';
-import { trpc } from '@/src/trpc/client';
+import { api } from '@/lib/trpc-client';
 
 export function ClientContent() {
   const [prompt, setPrompt] = useState('');
 
   // tRPC hook for automatic Inngest invocation
-  const invokeInngest = trpc.invoke.useMutation({
+  const invokeInngest = api.apiGeneration.invoke.useMutation({
     onSuccess: () => {
       console.log("Inngest function invoked successfully from ClientContent!")
     },
@@ -22,7 +22,7 @@ export function ClientContent() {
   });
 
   // tRPC hook for createApi
-  const createApi = trpc.createApi.useQuery(
+  const createApi = api.apiGeneration.createApi.useQuery(
     { text: prompt },
     { enabled: false } // Only run when manually triggered
   );

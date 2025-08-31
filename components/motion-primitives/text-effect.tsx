@@ -4,12 +4,12 @@ import { motion } from "framer-motion"
 import type { JSX } from "react/jsx-runtime" // Import JSX to fix the undeclared variable error
 
 interface TextEffectProps {
-  children: React.ReactNode
+  children: string
   className?: string
   preset?: "fade-in-blur"
   speedSegment?: number
   delay?: number
-  as?: keyof JSX.IntrinsicElements
+  as?: React.ElementType
   per?: "line" | "word" | "char"
 }
 
@@ -31,24 +31,24 @@ export const TextEffect: React.FC<TextEffectProps> = ({
 
   if (per === "line") {
     const lines = text.split("\n")
-    return (
-      <Component className={className}>
-        {lines.map((line, i) => (
-          <motion.div
-            key={i}
-            initial="hidden"
-            animate="visible"
-            variants={variants}
-            transition={{
-              duration: speedSegment,
-              delay: delay + i * 0.1,
-              ease: "easeOut",
-            }}
-          >
-            {line}
-          </motion.div>
-        ))}
-      </Component>
+    return React.createElement(
+      Component,
+      { className },
+      lines.map((line, i) => (
+        <motion.div
+          key={i}
+          initial="hidden"
+          animate="visible"
+          variants={variants}
+          transition={{
+            duration: speedSegment,
+            delay: delay + i * 0.1,
+            ease: "easeOut",
+          }}
+        >
+          {line}
+        </motion.div>
+      ))
     )
   }
 

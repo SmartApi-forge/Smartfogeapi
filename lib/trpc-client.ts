@@ -3,7 +3,7 @@ import { httpBatchLink, loggerLink } from '@trpc/client';
 import { createClient } from '@supabase/supabase-js';
 import superjson from 'superjson';
 
-import { type AppRouter } from '../server/root';
+import { type AppRouter } from '../src/trpc/routers/_app';
 
 const getBaseUrl = () => {
   if (typeof window !== 'undefined') return ''; // browser should use relative url
@@ -20,6 +20,7 @@ const supabase = createClient(
 export const api = createTRPCReact<AppRouter>();
 
 export const trpcClient = api.createClient({
+  transformer: superjson,
   links: [
     loggerLink({
       enabled: (opts) =>
@@ -28,7 +29,6 @@ export const trpcClient = api.createClient({
     }),
     httpBatchLink({
       url: `${getBaseUrl()}/api/trpc`,
-      transformer: superjson,
       async headers() {
         const headers: Record<string, string> = {};
         
