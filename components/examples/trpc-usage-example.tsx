@@ -13,19 +13,16 @@ export function TRPCUsageExample() {
   const [framework, setFramework] = useState<'fastapi' | 'express'>('fastapi');
 
   // tRPC queries and mutations
-  const { data: projects, isLoading: projectsLoading, refetch: refetchProjects } = api.api.listProjects.useQuery({
-    limit: 10,
-    offset: 0,
-  });
+  const { data: projects, isLoading: projectsLoading, refetch: refetchProjects } = api.apiGeneration.getProjects.useQuery();
 
-  const generateApiMutation = api.api.generate.useMutation({
+  const generateApiMutation = api.apiGeneration.invoke.useMutation({
     onSuccess: () => {
       setPrompt('');
       refetchProjects();
     },
   });
 
-  const deleteProjectMutation = api.api.deleteProject.useMutation({
+  const deleteProjectMutation = api.apiGeneration.invoke.useMutation({
     onSuccess: () => {
       refetchProjects();
     },
@@ -35,14 +32,12 @@ export function TRPCUsageExample() {
     if (!prompt.trim()) return;
     
     generateApiMutation.mutate({
-      prompt,
-      framework,
-      name: `API: ${prompt.slice(0, 30)}...`,
+      text: prompt,
     });
   };
 
   const handleDelete = (projectId: string) => {
-    deleteProjectMutation.mutate({ id: projectId });
+    deleteProjectMutation.mutate({ text: `Delete project ${projectId}` });
   };
 
   const getStatusColor = (status: string) => {
@@ -135,7 +130,7 @@ export function TRPCUsageExample() {
             </div>
           ) : projects && projects.length > 0 ? (
             <div className="space-y-3">
-              {projects.map((project) => (
+              {projects.map((project: any) => (
                 <div
                   key={project.id}
                   className="flex items-center justify-between p-4 border rounded-lg"

@@ -24,11 +24,12 @@ export default async function HomePage() {
   
   // Fetch initial data for the landing page
   const templates = await queryClient.fetchQuery(trpc.apiGeneration.getTemplates.queryOptions());
-  const recentProjects = await caller.apiGeneration.getProjects();
+  const callerInstance = await caller();
+  const recentProjects = await callerInstance.apiGeneration.getProjects();
   
   // Get server-side stats for hero section
   const totalProjects = recentProjects.length;
-  const deployedProjects = recentProjects.filter(p => p.status === 'deployed').length;
+  const deployedProjects = recentProjects.filter((p: { status: string }) => p.status === 'deployed').length;
   
   const dehydratedState = dehydrate(queryClient);
   return (

@@ -53,7 +53,7 @@ export default function AuthDialog() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const auth = searchParams.get("auth")
+  const auth = searchParams?.get("auth")
   const open = Boolean(auth)
 
   const title = useMemo(() => {
@@ -63,10 +63,10 @@ export default function AuthDialog() {
   }, [auth])
 
   const close = () => {
-    const sp = new URLSearchParams(searchParams.toString())
+    const sp = new URLSearchParams(searchParams?.toString() || '')
     sp.delete("auth")
     const q = sp.toString()
-    router.replace(q ? `${pathname}?${q}` : pathname)
+    router.replace(q ? `${pathname}?${q}` : pathname || '/')
   }
 
   useEffect(() => {
