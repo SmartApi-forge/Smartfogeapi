@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import Image from "next/image"
-import { AnimatePresence, motion } from "framer-motion"
+import { AnimatePresence, motion } from "@/components/motion-wrapper"
 import { Paperclip, Plus, Send, Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 

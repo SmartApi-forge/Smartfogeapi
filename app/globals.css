@@ -3,6 +3,29 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* NeueMontreal Medium (500) – global registration */
+@font-face {
+  font-family: 'NeueMontreal';
+  src: url('/fonts/NeueMontreal-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: '__flecha_df5a44';
+  src: url('/fonts/flecha-lightitalic.otf') format('opentype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Utility: apply NeueMontreal Medium (500) */
+.font-neue-500 {
+  font-family: 'NeueMontreal', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  font-weight: 500;
+}
+
 :root {
   /* Updated to use #FAFAFA background and clean minimal colors */
   --background: #fafafa;

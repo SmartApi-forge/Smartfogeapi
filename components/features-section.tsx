@@ -3,7 +3,7 @@
 import type React from "react"
 import { useMemo, useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
-import { motion } from "framer-motion"
+import { motion } from "@/components/motion-wrapper"
 import { IconCode, IconRocket, IconFileText, IconShield, IconCircleCheck } from "@tabler/icons-react"
 import { CodeTypingAnimation } from "@/components/ui/typing-animation"
 

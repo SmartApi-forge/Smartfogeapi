@@ -5,7 +5,7 @@ import { Menu, ChevronDown, Sun, Moon, Laptop, Code2, Cpu, NotebookText, Rocket,
 import { Button } from "@/components/ui/button"
 import { ThemeSwitch } from "@/components/ui/theme-switch"
 import React from "react"
-import { AnimatePresence, motion } from "framer-motion"
+import { AnimatePresence, motion } from "@/components/motion-wrapper"
 
 const menuItems = [
   { name: "Model Platform", key: "features" },

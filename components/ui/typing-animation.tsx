@@ -1,135 +1,79 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { cn } from "@/lib/utils"
+import React, { useState, useEffect } from "react"
 
 interface TypingAnimationProps {
-  text: string
-  duration?: number
+  prompts: string[]
   className?: string
-  onComplete?: () => void
+  typingSpeed?: number
+  deletingSpeed?: number
+  pauseAfterType?: number
+  pauseAfterDelete?: number
 }
 
-export function TypingAnimation({ 
-  text, 
-  duration = 50, 
-  className,
-  onComplete 
-}: TypingAnimationProps) {
-  const [displayText, setDisplayText] = useState("")
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const hasCompletedRef = useRef(false)
-
-  // Reset when the text changes (new line)
-  useEffect(() => {
-    setDisplayText("")
-    setCurrentIndex(0)
-    hasCompletedRef.current = false
-  }, [text])
+export const TypingAnimation: React.FC<TypingAnimationProps> = ({
+  prompts,
+  className = "",
+  typingSpeed = 50,
+  deletingSpeed = 30,
+  pauseAfterType = 2000,
+  pauseAfterDelete = 500,
+}) => {
+  const [currentPromptIndex, setCurrentPromptIndex] = useState(0)
+  const [currentText, setCurrentText] = useState("")
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [isPaused, setIsPaused] = useState(false)
 
   useEffect(() => {
-    if (currentIndex < text.length) {
-      const timeout = setTimeout(() => {
-        setDisplayText(prev => prev + text[currentIndex])
-        setCurrentIndex(prev => prev + 1)
-      }, duration)
-
-      return () => clearTimeout(timeout)
-    } else if (onComplete && !hasCompletedRef.current) {
-      hasCompletedRef.current = true
-      onComplete()
+    const currentPrompt = prompts[currentPromptIndex]
+    
+    if (isPaused) {
+      const pauseTimeout = setTimeout(() => {
+        setIsPaused(false)
+        if (isDeleting) {
+          setIsDeleting(false)
+          setCurrentPromptIndex((prev) => (prev + 1) % prompts.length)
+        } else {
+          setIsDeleting(true)
+        }
+      }, isDeleting ? pauseAfterDelete : pauseAfterType)
+      
+      return () => clearTimeout(pauseTimeout)
     }
-  }, [currentIndex, duration, text, onComplete])
 
-  return (
-    <span className={cn("", className)}>
-      {displayText}
-      {currentIndex < text.length && (
-        <span className="animate-pulse">|</span>
-      )}
-    </span>
-  )
-}
-
-interface CodeTypingAnimationProps {
-  lines: { text: string; className?: string }[]
-  lineDelay?: number
-  charDelay?: number
-  className?: string
-  startDelay?: number
-  loop?: boolean
-  loopDelay?: number
-}
-
-export function CodeTypingAnimation({ 
-  lines, 
-  lineDelay = 800, 
-  charDelay = 30,
-  className,
-  startDelay = 0,
-  loop = false,
-  loopDelay = 1200,
-}: CodeTypingAnimationProps) {
-  const [started, setStarted] = useState(false)
-  const [isComplete, setIsComplete] = useState(false)
-  const [cycle, setCycle] = useState(0)
-
-  const fullText = lines.map(l => l.text).join("\n")
-
-  useEffect(() => {
-    if (startDelay > 0) {
-      const t = setTimeout(() => setStarted(true), startDelay)
-      return () => clearTimeout(t)
-    }
-    setStarted(true)
-  }, [startDelay])
-
-  // When complete and looping enabled, restart after a delay
-  useEffect(() => {
-    if (!loop) return
-    if (!isComplete) return
-    const t = setTimeout(() => {
-      setIsComplete(false)
-      // retrigger TypingAnimation by changing key
-      setCycle((c) => c + 1)
-      // optionally retrigger start-guard
-      if (startDelay > 0) {
-        setStarted(false)
-        const st = setTimeout(() => setStarted(true), startDelay)
-        return () => clearTimeout(st)
+    const timeout = setTimeout(() => {
+      if (isDeleting) {
+        if (currentText.length > 0) {
+          setCurrentText(currentPrompt.substring(0, currentText.length - 1))
+        } else {
+          setIsPaused(true)
+        }
+      } else {
+        if (currentText.length < currentPrompt.length) {
+          setCurrentText(currentPrompt.substring(0, currentText.length + 1))
+        } else {
+          setIsPaused(true)
+        }
       }
-    }, loopDelay)
-    return () => clearTimeout(t)
-  }, [isComplete, loop, loopDelay, startDelay])
+    }, isDeleting ? deletingSpeed : typingSpeed)
 
-  if (!started) {
-    return (
-      <div className={cn("font-mono text-sm", className)}>
-        <span className="animate-pulse">|</span>
-      </div>
-    )
-  }
+    return () => clearTimeout(timeout)
+  }, [
+    currentText,
+    currentPromptIndex,
+    isDeleting,
+    isPaused,
+    prompts,
+    typingSpeed,
+    deletingSpeed,
+    pauseAfterType,
+    pauseAfterDelete,
+  ])
 
   return (
-    <div className={cn("font-mono text-sm", className)}>
-      {!isComplete ? (
-        <div className={"whitespace-pre"}>
-          <TypingAnimation
-            text={fullText}
-            duration={charDelay}
-            onComplete={() => setIsComplete(true)}
-            key={cycle}
-          />
-        </div>
-      ) : (
-        <div className="whitespace-pre">
-          {lines.map((line, idx) => (
-            <div key={idx} className={cn("whitespace-pre", line.className)}>
-              {line.text}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    <span className={className}>
+      {currentText}
+      <span className="animate-pulse">|</span>
+    </span>
   )
 }
