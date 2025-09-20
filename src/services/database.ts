@@ -347,13 +347,42 @@ export const apiFragmentService = {
     return data
   },
 
-  delete: async (id: string) => {
-    const { error } = await supabase
+  delete: async (id: string, userId: string) => {
+    // First fetch the fragment with its related job to verify ownership
+    const { data: fragment, error: fetchError } = await supabase
+      .from('api_fragments')
+      .select(`
+        id,
+        job_id,
+        jobs!inner(
+          id,
+          user_id
+        )
+      `)
+      .eq('id', id)
+      .single()
+    
+    if (fetchError) {
+      if (fetchError.code === 'PGRST116') {
+        throw new Error('Fragment not found')
+      }
+      throw new Error(`Failed to fetch fragment: ${fetchError.message}`)
+    }
+    
+    // Verify ownership through the job relationship
+    if (fragment.jobs.user_id !== userId) {
+      throw new Error('Not authorized to delete this fragment')
+    }
+    
+    // Perform the delete operation
+    const { error: deleteError } = await supabase
       .from('api_fragments')
       .delete()
       .eq('id', id)
     
-    if (error) throw error
+    if (deleteError) {
+      throw new Error(`Failed to delete fragment: ${deleteError.message}`)
+    }
   }
 }
 
