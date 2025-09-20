@@ -95,6 +95,9 @@ export interface Database {
           started_at: string | null
           completed_at: string | null
           created_at: string
+          prompt: string | null
+          mode: 'standalone' | 'github'
+          repo_url: string | null
         }
         Insert: {
           id?: string
@@ -108,6 +111,9 @@ export interface Database {
           started_at?: string | null
           completed_at?: string | null
           created_at?: string
+          prompt?: string | null
+          mode?: 'standalone' | 'github'
+          repo_url?: string | null
         }
         Update: {
           id?: string
@@ -121,6 +127,47 @@ export interface Database {
           started_at?: string | null
           completed_at?: string | null
           created_at?: string
+          prompt?: string | null
+          mode?: 'standalone' | 'github'
+          repo_url?: string | null
+        }
+      }
+      api_fragments: {
+        Row: {
+          id: string
+          job_id: string
+          openapi_spec: Json | null
+          implementation_code: Json | null
+          requirements: string[] | null
+          description: string | null
+          validation_results: Json | null
+          pr_url: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          job_id: string
+          openapi_spec?: Json | null
+          implementation_code?: Json | null
+          requirements?: string[] | null
+          description?: string | null
+          validation_results?: Json | null
+          pr_url?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          job_id?: string
+          openapi_spec?: Json | null
+          implementation_code?: Json | null
+          requirements?: string[] | null
+          description?: string | null
+          validation_results?: Json | null
+          pr_url?: string | null
+          created_at?: string
+          updated_at?: string
         }
       }
       templates: {

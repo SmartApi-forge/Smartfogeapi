@@ -5,10 +5,12 @@ export type Profile = Database['public']['Tables']['profiles']['Row']
 export type Project = Database['public']['Tables']['projects']['Row']
 export type Job = Database['public']['Tables']['jobs']['Row']
 export type Template = Database['public']['Tables']['templates']['Row']
+export type ApiFragment = Database['public']['Tables']['api_fragments']['Row']
 
 export type ProjectInsert = Database['public']['Tables']['projects']['Insert']
 export type JobInsert = Database['public']['Tables']['jobs']['Insert']
 export type ProfileInsert = Database['public']['Tables']['profiles']['Insert']
+export type ApiFragmentInsert = Database['public']['Tables']['api_fragments']['Insert']
 
 // Profile operations
 export const profileService = {
@@ -295,6 +297,63 @@ export const templateService = {
     }
 
     return data || []
+  }
+}
+
+// API Fragment operations
+export const apiFragmentService = {
+  create: async (fragment: ApiFragmentInsert) => {
+    const { data, error } = await supabase
+      .from('api_fragments')
+      .insert(fragment)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data
+  },
+
+  getById: async (id: string) => {
+    const { data, error } = await supabase
+      .from('api_fragments')
+      .select('*')
+      .eq('id', id)
+      .single()
+    
+    if (error) throw error
+    return data
+  },
+
+  getByJobId: async (jobId: string) => {
+    const { data, error } = await supabase
+      .from('api_fragments')
+      .select('*')
+      .eq('job_id', jobId)
+      .order('created_at', { ascending: false })
+    
+    if (error) throw error
+    return data
+  },
+
+  update: async (id: string, updates: Partial<ApiFragment>) => {
+    const { data, error } = await supabase
+      .from('api_fragments')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data
+  },
+
+  delete: async (id: string) => {
+    const { error } = await supabase
+      .from('api_fragments')
+      .delete()
+      .eq('id', id)
+    
+    if (error) throw error
   }
 }
 
