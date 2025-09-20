@@ -1,6 +1,6 @@
 "use client"
 import React from "react"
-import { motion } from "framer-motion"
+import { motion } from "@/components/motion-wrapper"
 import type { JSX } from "react/jsx-runtime" // Import JSX to fix the undeclared variable error
 
 interface TextEffectProps {

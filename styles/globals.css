@@ -1,6 +1,15 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
+/* NeueMontreal Medium (500) – registered globally so it's available app-wide */
+@font-face {
+  font-family: 'NeueMontreal';
+  src: url('/fonts/NeueMontreal-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
@@ -120,6 +129,14 @@
   body {
     @apply bg-background text-foreground font-sans;
   }
+
+  /* Utility: apply NeueMontreal Medium (500) */
+  .font-neue-500 {
+    font-family: 'NeueMontreal', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    font-weight: 500;
+  }
+ 
+  
   
   /* Custom Scrollbar Styling - Modern Thin Design */
   * {

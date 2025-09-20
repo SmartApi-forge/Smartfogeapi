@@ -3,9 +3,9 @@
 import type React from "react"
 import { useMemo, useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
-import { motion } from "framer-motion"
+import { motion } from "@/components/motion-wrapper"
 import { IconCode, IconRocket, IconFileText, IconShield, IconCircleCheck } from "@tabler/icons-react"
-import { CodeTypingAnimation } from "@/components/ui/typing-animation"
+import { CodeTypingAnimation } from "@/components/ui/code-typing-animation"
 
 export default function FeaturesSection() {
   // Memoize to keep element identity stable and avoid remounts of skeletons
@@ -131,13 +131,10 @@ export const SkeletonOne = () => {
             </div>
             <div className="flex-1 overflow-hidden">
               <CodeTypingAnimation
-                lines={codeLines}
-                lineDelay={400}
-                charDelay={35}
-                startDelay={1000}
-                loop
-                loopDelay={1400}
-                className="text-sm leading-5 font-mono"
+                codeLines={codeLines}
+                typingSpeed={35}
+                pauseBetweenLines={200}
+                className="text-sm leading-5"
               />
             </div>
           </div>

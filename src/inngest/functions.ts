@@ -71,8 +71,41 @@ export const generateAPI = inngest.createFunction(
     // Process and structure the generated API
     const processedResult = await step.run("process-api-result", async () => {
       try {
-        // Parse the AI output and structure it
-        const parsedOutput = typeof apiResult === 'string' ? JSON.parse(apiResult) : apiResult;
+        // Clean and parse the AI output
+        let cleanedOutput = apiResult;
+        if (typeof apiResult === 'string') {
+          // Remove only outer code fence wrappers (handle various language tags)
+          const codeFencePattern = /^```(?:json|javascript|js)?\s*\n?([\s\S]*?)\n?```\s*$/;
+          const match = apiResult.trim().match(codeFencePattern);
+          
+          if (match) {
+            cleanedOutput = match[1].trim();
+            console.log('Removed code fence wrapper');
+          } else {
+            cleanedOutput = apiResult.trim();
+          }
+          
+          // Validate that cleaned output looks like JSON
+          if (!cleanedOutput.startsWith('{') && !cleanedOutput.startsWith('[')) {
+            console.warn('Cleaned output does not start with { or [:', cleanedOutput.substring(0, 100));
+          }
+        }
+        
+        let parsedOutput;
+        try {
+          parsedOutput = typeof cleanedOutput === 'string' ? JSON.parse(cleanedOutput) : cleanedOutput;
+        } catch (parseError) {
+          console.error('JSON parse error:', parseError);
+          console.error('Offending cleaned output:', cleanedOutput);
+          // Return safe fallback structure
+          parsedOutput = {
+            openapi_spec: {},
+            server_code: "// Error: Failed to parse AI response",
+            requirements: [],
+            tests: "// Error: Failed to parse AI response",
+            deployment: {}
+          };
+        }
         
         return {
           openapi_spec: parsedOutput.openapi_spec || {},
