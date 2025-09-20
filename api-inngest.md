@@ -186,7 +186,6 @@ We didn't plan for:
 - Custom Docker templates for API environments
 - Live preview URLs for generated APIs
 
-
 ### 3. **Agent Tool System**
 
 We missed the importance of:

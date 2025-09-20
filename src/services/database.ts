@@ -5,10 +5,12 @@ export type Profile = Database['public']['Tables']['profiles']['Row']
 export type Project = Database['public']['Tables']['projects']['Row']
 export type Job = Database['public']['Tables']['jobs']['Row']
 export type Template = Database['public']['Tables']['templates']['Row']
+export type ApiFragment = Database['public']['Tables']['api_fragments']['Row']
 
 export type ProjectInsert = Database['public']['Tables']['projects']['Insert']
 export type JobInsert = Database['public']['Tables']['jobs']['Insert']
 export type ProfileInsert = Database['public']['Tables']['profiles']['Insert']
+export type ApiFragmentInsert = Database['public']['Tables']['api_fragments']['Insert']
 
 // Profile operations
 export const profileService = {
@@ -295,6 +297,92 @@ export const templateService = {
     }
 
     return data || []
+  }
+}
+
+// API Fragment operations
+export const apiFragmentService = {
+  create: async (fragment: ApiFragmentInsert) => {
+    const { data, error } = await supabase
+      .from('api_fragments')
+      .insert(fragment)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data
+  },
+
+  getById: async (id: string) => {
+    const { data, error } = await supabase
+      .from('api_fragments')
+      .select('*')
+      .eq('id', id)
+      .single()
+    
+    if (error) throw error
+    return data
+  },
+
+  getByJobId: async (jobId: string) => {
+    const { data, error } = await supabase
+      .from('api_fragments')
+      .select('*')
+      .eq('job_id', jobId)
+      .order('created_at', { ascending: false })
+    
+    if (error) throw error
+    return data
+  },
+
+  update: async (id: string, updates: Partial<ApiFragment>) => {
+    const { data, error } = await supabase
+      .from('api_fragments')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data
+  },
+
+  delete: async (id: string, userId: string) => {
+    // First fetch the fragment with its related job to verify ownership
+    const { data: fragment, error: fetchError } = await supabase
+      .from('api_fragments')
+      .select(`
+        id,
+        job_id,
+        jobs!inner(
+          id,
+          user_id
+        )
+      `)
+      .eq('id', id)
+      .single()
+    
+    if (fetchError) {
+      if (fetchError.code === 'PGRST116') {
+        throw new Error('Fragment not found')
+      }
+      throw new Error(`Failed to fetch fragment: ${fetchError.message}`)
+    }
+    
+    // Verify ownership through the job relationship
+    if (fragment.jobs.user_id !== userId) {
+      throw new Error('Not authorized to delete this fragment')
+    }
+    
+    // Perform the delete operation
+    const { error: deleteError } = await supabase
+      .from('api_fragments')
+      .delete()
+      .eq('id', id)
+    
+    if (deleteError) {
+      throw new Error(`Failed to delete fragment: ${deleteError.message}`)
+    }
   }
 }
 

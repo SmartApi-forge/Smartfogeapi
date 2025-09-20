@@ -97,19 +97,145 @@ export const generateAPI = inngest.createFunction(
     });
     
     // Step 3: Handle repository if GitHub mode
+    let repoAnalysis = null;
     if (mode === "github" && repoUrl) {
       await step.run("clone-repository", async () => {
-        // Clone the repository in the sandbox
-        await sandbox.process.start({
-          cmd: `git clone ${repoUrl} /home/user/repo`,
+        // Validate and sanitize repository URL
+        const validateRepoUrl = (url) => {
+          try {
+            // Check URL length limit
+            if (url.length > 2048) {
+              throw new Error('URL too long');
+            }
+            
+            const parsedUrl = new URL(url);
+            
+            // Only allow http, https, and ssh schemes
+            if (!['http:', 'https:', 'ssh:'].includes(parsedUrl.protocol)) {
+              throw new Error('Invalid protocol. Only http, https, and ssh are allowed');
+            }
+            
+            // Reject file:// and data:// schemes
+            if (['file:', 'data:'].includes(parsedUrl.protocol)) {
+              throw new Error('File and data protocols are not allowed');
+            }
+            
+            // Strip embedded credentials for security
+            parsedUrl.username = '';
+            parsedUrl.password = '';
+            
+            // Enforce allowlist of known Git hosting providers
+            const allowedHosts = [
+              'github.com',
+              'gitlab.com',
+              'bitbucket.org',
+              'dev.azure.com',
+              'ssh.dev.azure.com'
+            ];
+            
+            if (!allowedHosts.includes(parsedUrl.hostname)) {
+              throw new Error(`Host ${parsedUrl.hostname} is not in the allowlist`);
+            }
+            
+            return parsedUrl.toString();
+          } catch (error) {
+            throw new Error(`Invalid repository URL: ${error.message}`);
+          }
+        };
+        
+        const sanitizedUrl = validateRepoUrl(repoUrl);
+        
+        // Create unique temporary directory
+        const tempDir = `/tmp/repo_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Clone repository with safe options and structured arguments
+        const cloneResult = await sandbox.process.start({
+          cmd: 'git',
+          args: [
+            'clone',
+            '--depth', '1',                    // Shallow clone for security
+            '--config', 'core.hooksPath=/dev/null',  // Disable git hooks
+            '--config', 'advice.detachedHead=false', // Suppress warnings
+            sanitizedUrl,
+            tempDir
+          ],
+          timeout: 30000  // 30 second timeout
         });
         
-        // Analyze the repository structure
-        const repoAnalysis = await step.run("analyze-repository", async () => {
-          const result = await sandbox.process.start({
-            cmd: "find /home/user/repo -type f -name '*.js' -o -name '*.ts' | xargs cat",
+        if (cloneResult.exitCode !== 0) {
+          throw new Error(`Git clone failed: ${cloneResult.stderr}`);
+        }
+        
+        // Analyze the repository structure with controlled traversal
+        repoAnalysis = await step.run("analyze-repository", async () => {
+          const maxFileSize = 1024 * 1024; // 1MB limit per file
+          const maxTotalSize = 10 * 1024 * 1024; // 10MB total limit
+          let totalSize = 0;
+          let analysisContent = '';
+          
+          // Find JavaScript and TypeScript files with size limits
+          const findResult = await sandbox.process.start({
+            cmd: 'find',
+            args: [
+              tempDir,
+              '-type', 'f',
+              '(',
+              '-name', '*.js',
+              '-o', '-name', '*.ts',
+              '-o', '-name', '*.jsx',
+              '-o', '-name', '*.tsx',
+              ')',
+              '-size', `-${maxFileSize}c`  // Limit individual file size
+            ],
+            timeout: 10000
           });
-          return result.stdout;
+          
+          if (findResult.exitCode !== 0) {
+            throw new Error(`File search failed: ${findResult.stderr}`);
+          }
+          
+          const files = findResult.stdout.trim().split('\n').filter(f => f);
+          
+          // Read files with controlled access and size limits
+          for (const file of files.slice(0, 50)) { // Limit to 50 files max
+            try {
+              const catResult = await sandbox.process.start({
+                cmd: 'head',
+                args: ['-c', maxFileSize.toString(), file], // Read max 1MB per file
+                timeout: 5000
+              });
+              
+              if (catResult.exitCode === 0 && catResult.stdout) {
+                const content = catResult.stdout;
+                if (totalSize + content.length > maxTotalSize) {
+                  break; // Stop if we exceed total size limit
+                }
+                
+                // Sanitize content - remove potential malicious patterns
+                const sanitizedContent = content
+                  .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control chars
+                  .substring(0, 10000); // Limit individual file content
+                
+                analysisContent += `\n--- ${file} ---\n${sanitizedContent}\n`;
+                totalSize += content.length;
+              }
+            } catch (error) {
+              console.error(`Error reading file ${file}:`, error.message);
+              continue;
+            }
+          }
+          
+          // Truncate final analysis to safe size
+          const truncatedAnalysis = analysisContent.substring(0, 50000); // 50KB limit
+          
+          return truncatedAnalysis || 'No analyzable files found';
+        });
+        
+        // Clean up temporary directory
+        await sandbox.process.start({
+          cmd: 'rm',
+          args: ['-rf', tempDir],
+          timeout: 5000
         });
         
         // Update job with repository analysis
@@ -123,7 +249,7 @@ export const generateAPI = inngest.createFunction(
     // Step 4: Generate API using OpenAI
     const apiResult = await step.run("generate-api-code", async () => {
       // Enhanced prompt that includes repository context if in GitHub mode
-      const enhancedPrompt = mode === "github" 
+      const enhancedPrompt = mode === "github" && repoAnalysis
         ? `Generate an API that fits within this existing codebase: ${repoAnalysis}\n\nUser request: ${prompt}` 
         : prompt;
       
@@ -313,7 +439,7 @@ The dashboard content component needs to be updated to support both API generati
 
 ```tsx
 // components/dashboard-content.tsx
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button, Card, Tabs, TabsContent, TabsList, TabsTrigger, Input } from './ui';
 import { AiPromptBox } from './ui/ai-prompt-box';
 import { ApiPreview } from './api-preview'; // New component for API preview
@@ -325,6 +451,17 @@ export function DashboardContent() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Cleanup interval on component unmount
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, []);
   
   const handleSubmit = async () => {
     setIsLoading(true);
@@ -346,7 +483,13 @@ export function DashboardContent() {
   };
   
   const pollJobStatus = async (id: string) => {
-    const interval = setInterval(async () => {
+    // Clear any existing interval before starting a new one
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    
+    intervalRef.current = setInterval(async () => {
       try {
         const response = await fetch(`/api/jobs/${id}`);
         const data = await response.json();
@@ -354,10 +497,19 @@ export function DashboardContent() {
         if (data.status === 'completed' || data.status === 'failed') {
           setIsLoading(false);
           setResult(data.result);
-          clearInterval(interval);
+          // Clear interval when job completes
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+          }
         }
       } catch (error) {
         console.error('Error polling job status:', error);
+        // Clear interval on error to prevent continuous failed requests
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
       }
     }, 2000);
   };
