@@ -31,7 +31,11 @@ export function ClientContent() {
     if (!prompt.trim()) return;
     
     // Invoke Inngest function automatically
-    invokeInngest.mutate({ text: prompt });
+    invokeInngest.mutate({ 
+        text: prompt,
+        mode: 'direct',
+        repoUrl: undefined
+      });
     
     // Clear the prompt after submission
     setPrompt('');

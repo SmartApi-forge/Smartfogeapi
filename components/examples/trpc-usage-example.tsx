@@ -33,11 +33,17 @@ export function TRPCUsageExample() {
     
     generateApiMutation.mutate({
       text: prompt,
+      mode: 'direct',
+      repoUrl: undefined
     });
   };
 
   const handleDelete = (projectId: string) => {
-    deleteProjectMutation.mutate({ text: `Delete project ${projectId}` });
+    deleteProjectMutation.mutate({ 
+      text: `Delete project ${projectId}`,
+      mode: 'direct',
+      repoUrl: undefined
+    });
   };
 
   const getStatusColor = (status: string) => {

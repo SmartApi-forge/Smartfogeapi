@@ -7,13 +7,30 @@ export const appRouter = createTRPCRouter({
     invoke: baseProcedure
       .input(z.object({
         text: z.string(),
+        mode: z.enum(['direct', 'github']).default('direct'),
+        repoUrl: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
+        // Get user ID from context - this should be set by your auth middleware
+        const userId = ctx.user?.id;
+        
+        if (!userId || !ctx.user) {
+          throw new Error('User not authenticated - please log in with a valid Supabase account');
+        }
+        
+        // Validate that userId is a valid UUID format
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(userId)) {
+          throw new Error(`Invalid user ID format: ${userId}. Expected UUID format.`);
+        }
+        
         await inngest.send({
           name: "api/generate",
           data: { 
             prompt: input.text,
-            userId: "user-1", // TODO: Get from auth context
+            mode: input.mode,
+            repoUrl: input.repoUrl,
+            userId: userId,
             projectId: `project-${Date.now()}`
           }
         });

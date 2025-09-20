@@ -4,22 +4,42 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardContent } from "@/components/dashboard-content"
+import { supabase } from "@/lib/supabase"
 
 export default function Dashboard() {
   const router = useRouter()
   const [isAuthenticated, setIsAuthenticated] = useState(false)
 
   useEffect(() => {
-    // Check authentication status
-    const checkAuth = () => {
-      const authToken = localStorage.getItem("authToken")
-      if (!authToken) {
+    // Clear any old localStorage auth data
+    localStorage.removeItem('authToken')
+    
+    // Check Supabase authentication status
+    const checkAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        if (error || !session) {
+          router.push("/?auth=login")
+          return
+        }
+        setIsAuthenticated(true)
+      } catch (error) {
+        console.error('Auth check failed:', error)
         router.push("/?auth=login")
-        return
       }
-      setIsAuthenticated(true)
     }
     checkAuth()
+    
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        router.push("/?auth=login")
+      } else if (event === 'SIGNED_IN' && session) {
+        setIsAuthenticated(true)
+      }
+    })
+    
+    return () => subscription.unsubscribe()
   }, [router])
 
   if (!isAuthenticated) {

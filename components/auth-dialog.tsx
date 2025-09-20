@@ -14,10 +14,13 @@ function SocialButtons() {
   const handleGitHubAuth = async () => {
     try {
       setLoading(true)
-      const { error } = await authService.signInWithGitHub()
+      const { data, error } = await authService.signInWithGitHub()
       if (error) {
         console.error('GitHub auth error:', error.message)
         alert('GitHub authentication failed. Please try again.')
+      } else if (data?.url) {
+        // GitHub OAuth returns a URL for redirection
+        window.location.href = data.url
       }
     } catch (error) {
       console.error('GitHub auth error:', error)
@@ -134,7 +137,14 @@ export default function AuthDialog() {
                   
                   if (data?.user) {
                     console.log('Sign in successful, setting auth data...')
-                    localStorage.setItem("authToken", data.session?.access_token || "auth-token-" + Date.now())
+                    
+                    // Supabase automatically handles session storage
+                    // Set cookies for server-side access
+                    if (data.session) {
+                      document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`
+                      document.cookie = `sb-refresh-token=${data.session.refresh_token}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`
+                    }
+                    
                     localStorage.setItem("user", JSON.stringify({
                       name: data.user.email?.split('@')[0] || 'User',
                       email: data.user.email || email

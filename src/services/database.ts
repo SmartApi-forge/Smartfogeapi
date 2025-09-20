@@ -370,7 +370,7 @@ export const apiFragmentService = {
     }
     
     // Verify ownership through the job relationship
-    if (fragment.jobs.user_id !== userId) {
+    if (!fragment.jobs || fragment.jobs[0]?.user_id !== userId) {
       throw new Error('Not authorized to delete this fragment')
     }
     

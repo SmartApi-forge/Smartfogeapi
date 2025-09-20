@@ -186,7 +186,11 @@ export function AiInput({ isAuthenticated = false }: { isAuthenticated?: boolean
     if (!value.trim()) return
     
     // Automatically invoke Inngest function with the user's input
-    invokeInngest.mutate({ text: value })
+    invokeInngest.mutate({ 
+      text: value,
+      mode: 'direct', // Default to direct mode
+      repoUrl: undefined // No repo URL for basic input
+    })
     
     // Clear the input after submission
     setValue("")

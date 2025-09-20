@@ -19,7 +19,11 @@ export function DashboardContent() {
     if (!message.trim()) return
 
     // Invoke Inngest function with the user's input
-    invokeInngest.mutate({ text: message })
+    invokeInngest.mutate({ 
+      text: message,
+      mode: 'direct',
+      repoUrl: undefined
+    })
     console.log('Message:', message)
   }
 

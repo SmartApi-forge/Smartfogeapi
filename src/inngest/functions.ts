@@ -1,6 +1,6 @@
 import { inngest } from "./client";
 import OpenAI from 'openai';
-import { CodeInterpreter } from '@e2b/code-interpreter';
+import CodeInterpreter from '@e2b/code-interpreter';
 import { Octokit } from '@octokit/rest';
 import { createClient } from '@supabase/supabase-js';
 
@@ -23,10 +23,9 @@ export const generateAPI = inngest.createFunction(
   { id: "generate-api" },
   { event: "api/generate" },
   async ({ event, step }) => {
-    const { prompt, mode, repoUrl } = event.data;
-    const userId = event.user?.id;
+    const { prompt, mode, repoUrl, userId } = event.data;
     
-    let jobId;
+    let jobId: string | undefined;
     
     try {
     
@@ -36,9 +35,12 @@ export const generateAPI = inngest.createFunction(
         .from("jobs")
         .insert({
           user_id: userId,
-          status: "processing",
-          mode: mode,
-          repo_url: repoUrl || null,
+          type: "generate_api",
+          status: "running",
+          payload: {
+            mode: mode,
+            repo_url: repoUrl || null,
+          },
         })
         .select("id")
         .single();
@@ -75,7 +77,24 @@ export const generateAPI = inngest.createFunction(
         messages: [
           {
             role: "system",
-            content: "You are an expert API designer. Generate an OpenAPI specification and starter code based on the user's request."
+            content: `You are an expert API designer. Generate a complete OpenAPI specification and implementation code based on the user's request.
+
+You MUST respond with valid JSON in this exact structure:
+{
+  "openApiSpec": {
+    "openapi": "3.0.0",
+    "info": { "title": "API Title", "version": "1.0.0" },
+    "paths": { /* actual API endpoints */ }
+  },
+  "implementationCode": {
+    "main.js": "// Complete working Node.js/Express implementation",
+    "package.json": "// Package.json with dependencies"
+  },
+  "requirements": ["List of functional requirements"],
+  "description": "Brief description of the API"
+}
+
+Ensure the OpenAPI spec includes proper paths, methods, parameters, and responses. The implementation code should be complete and runnable.`
           },
           { role: "user", content: enhancedPrompt }
         ],
@@ -88,8 +107,8 @@ export const generateAPI = inngest.createFunction(
       
       try {
         // Handle potential markdown-wrapped JSON
-        let jsonStr = rawOutput;
-        const markdownMatch = rawOutput.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        let jsonStr = rawOutput || '';
+        const markdownMatch = rawOutput?.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
         if (markdownMatch) {
           jsonStr = markdownMatch[1];
         }
@@ -116,19 +135,35 @@ export const generateAPI = inngest.createFunction(
       }
     });
 
-    // Step 4: Basic validation (placeholder for E2B sandbox validation)
+    // Step 4: Enhanced validation
     const validationResult = await step.run("validate-code", async () => {
-      // For now, perform basic validation without E2B sandbox
-      // TODO: Implement E2B sandbox validation
+      // Validate OpenAPI spec structure
+      const specValid = !!(apiResult.openApiSpec && 
+        apiResult.openApiSpec.openapi && 
+        apiResult.openApiSpec.info && 
+        apiResult.openApiSpec.paths && 
+        Object.keys(apiResult.openApiSpec.paths).length > 0);
       
-      const hasValidSpec = apiResult.openApiSpec && Object.keys(apiResult.openApiSpec).length > 0;
-      const hasValidCode = apiResult.implementationCode && Object.keys(apiResult.implementationCode).length > 0;
+      // Validate implementation code
+      const codeValid = !!(apiResult.implementationCode && 
+        Object.keys(apiResult.implementationCode).length > 0 &&
+        Object.values(apiResult.implementationCode).some(code => 
+          typeof code === 'string' && code.trim().length > 50
+        ));
+      
+      const specValidationOutput = specValid 
+        ? `OpenAPI spec validation passed - Found ${Object.keys(apiResult.openApiSpec.paths || {}).length} endpoints`
+        : "Invalid OpenAPI spec: Missing required fields (openapi, info, paths) or no endpoints defined";
+        
+      const codeValidationOutput = codeValid
+        ? `Code validation passed - Generated ${Object.keys(apiResult.implementationCode || {}).length} files`
+        : "Invalid implementation code: No substantial code files generated";
       
       return {
-        specValid: hasValidSpec,
-        codeValid: hasValidCode,
-        specValidationOutput: hasValidSpec ? "OpenAPI spec validation passed" : "No valid OpenAPI spec found",
-        codeValidationOutput: hasValidCode ? "Code validation passed" : "No valid implementation code found"
+        specValid,
+        codeValid,
+        specValidationOutput,
+        codeValidationOutput
       };
     });
     
@@ -212,13 +247,13 @@ export const generateAPI = inngest.createFunction(
       console.error('Error in generateAPI function:', error);
       
       // Update job status to failed if jobId exists
-      if (jobId) {
+      if (typeof jobId !== 'undefined') {
         try {
           await supabase
             .from('jobs')
             .update({
               status: 'failed',
-              error_message: error.message || 'Unknown error occurred',
+              error_message: (error as Error).message || 'Unknown error occurred',
               completed_at: new Date().toISOString()
             })
             .eq('id', jobId);
