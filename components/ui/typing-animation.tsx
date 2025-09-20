@@ -25,6 +25,17 @@ export const TypingAnimation: React.FC<TypingAnimationProps> = ({
   const [isPaused, setIsPaused] = useState(false)
 
   useEffect(() => {
+    // Early guard to prevent runtime errors
+    if (!prompts || prompts.length === 0) {
+      return
+    }
+    
+    // Ensure currentPromptIndex is within valid range
+    if (currentPromptIndex >= prompts.length) {
+      setCurrentPromptIndex(0)
+      return
+    }
+    
     const currentPrompt = prompts[currentPromptIndex]
     
     if (isPaused) {

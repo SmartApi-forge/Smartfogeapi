@@ -136,12 +136,7 @@ export default function HomePage() {
           </motion.div>
         </section>
 
-        {/* API Generation Section */}
-        <section className="py-16 bg-background">
-          <div className="container mx-auto">
-            {/* Content removed - now using PromptInputBox in hero section */}
-          </div>
-        </section>
+
 
         <motion.div
           initial={{ opacity: 0, y: 40 }}

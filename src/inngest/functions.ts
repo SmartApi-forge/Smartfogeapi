@@ -74,18 +74,38 @@ export const generateAPI = inngest.createFunction(
         // Clean and parse the AI output
         let cleanedOutput = apiResult;
         if (typeof apiResult === 'string') {
-          // Remove markdown code blocks if present
-          cleanedOutput = apiResult
-            .replace(/^```(?:json)?\s*/gm, '') // Remove opening code blocks
-            .replace(/```\s*$/gm, '') // Remove closing code blocks
-            .trim();
+          // Remove only outer code fence wrappers (handle various language tags)
+          const codeFencePattern = /^```(?:json|javascript|js)?\s*\n?([\s\S]*?)\n?```\s*$/;
+          const match = apiResult.trim().match(codeFencePattern);
           
-          console.log('Original output length:', apiResult.length);
-          console.log('Cleaned output length:', cleanedOutput.length);
-          console.log('First 200 chars of cleaned output:', cleanedOutput.substring(0, 200));
+          if (match) {
+            cleanedOutput = match[1].trim();
+            console.log('Removed code fence wrapper');
+          } else {
+            cleanedOutput = apiResult.trim();
+          }
+          
+          // Validate that cleaned output looks like JSON
+          if (!cleanedOutput.startsWith('{') && !cleanedOutput.startsWith('[')) {
+            console.warn('Cleaned output does not start with { or [:', cleanedOutput.substring(0, 100));
+          }
         }
         
-        const parsedOutput = typeof cleanedOutput === 'string' ? JSON.parse(cleanedOutput) : cleanedOutput;
+        let parsedOutput;
+        try {
+          parsedOutput = typeof cleanedOutput === 'string' ? JSON.parse(cleanedOutput) : cleanedOutput;
+        } catch (parseError) {
+          console.error('JSON parse error:', parseError);
+          console.error('Offending cleaned output:', cleanedOutput);
+          // Return safe fallback structure
+          parsedOutput = {
+            openapi_spec: {},
+            server_code: "// Error: Failed to parse AI response",
+            requirements: [],
+            tests: "// Error: Failed to parse AI response",
+            deployment: {}
+          };
+        }
         
         return {
           openapi_spec: parsedOutput.openapi_spec || {},

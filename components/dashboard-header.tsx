@@ -50,9 +50,21 @@ export function DashboardHeader() {
   }
 
   const getUserInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map(word => word[0])
+    if (!name || typeof name !== 'string') {
+      return ''
+    }
+    
+    const words = name
+      .trim()
+      .split(/\s+/)
+      .filter(word => word.length > 0)
+    
+    if (words.length === 0) {
+      return ''
+    }
+    
+    return words
+      .map(word => word[0] || '')
       .join('')
       .toUpperCase()
       .slice(0, 2)

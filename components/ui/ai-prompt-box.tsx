@@ -27,11 +27,15 @@ const styles = `
   }
 `;
 
-// Inject styles into document
+// Inject styles into document with guard to prevent duplicates
 if (typeof document !== 'undefined') {
-  const styleSheet = document.createElement("style");
-  styleSheet.innerText = styles;
-  document.head.appendChild(styleSheet);
+  const styleId = 'ai-prompt-box-styles';
+  if (!document.getElementById(styleId)) {
+    const styleSheet = document.createElement("style");
+    styleSheet.id = styleId;
+    styleSheet.innerText = styles;
+    document.head.appendChild(styleSheet);
+  }
 }
 
 // Textarea Component
