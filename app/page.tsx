@@ -1,8 +1,10 @@
+"use client"
+
 import { HeroHeader } from "@/components/header"
 import AuthDialog from "@/components/auth-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { AiInput } from "@/components/ui/ai-input"
+import { PromptInputBox } from "@/components/ui/ai-prompt-box"
 import { Badge } from "@/components/ui/badge"
 import FeaturesSection from "@/components/features-section"
 import IntegrationsSection from "@/components/integrations-section"
@@ -14,24 +16,10 @@ import NewsletterCTA from "@/components/newsletter-cta"
 import Link from "next/link"
 import { motion } from "@/components/motion-wrapper"
 import BelowFooterBanner from "@/components/below-footer-banner"
-import { caller, getQueryClient, trpc } from "@/src/trpc/server"
-import { dehydrate } from "@tanstack/react-query"
-import { ClientContent } from "./client"
 
-export default async function HomePage() {
-  // Server-side data fetching with tRPC
-  const queryClient = getQueryClient();
-  
-  // Fetch initial data for the landing page
-  const templates = await queryClient.fetchQuery(trpc.apiGeneration.getTemplates.queryOptions());
-  const callerInstance = await caller();
-  const recentProjects = await callerInstance.apiGeneration.getProjects();
-  
-  // Get server-side stats for hero section
-  const totalProjects = recentProjects.length;
-  const deployedProjects = recentProjects.filter((p: { status: string }) => p.status === 'deployed').length;
-  
-  const dehydratedState = dehydrate(queryClient);
+
+
+export default function HomePage() {
   return (
     <div className="min-h-screen bg-background overflow-x-clip">
       <HeroHeader />
@@ -95,7 +83,7 @@ export default async function HomePage() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, delay: 0.4 }}
                 >
-                  <AiInput />
+                  <PromptInputBox />
                 </motion.div>
 
                 {/* Supporting text with precise line breaks */}
@@ -148,10 +136,10 @@ export default async function HomePage() {
           </motion.div>
         </section>
 
-        {/* API Generation Section with tRPC */}
+        {/* API Generation Section */}
         <section className="py-16 bg-background">
           <div className="container mx-auto">
-            <ClientContent />
+            {/* Content removed - now using PromptInputBox in hero section */}
           </div>
         </section>
 

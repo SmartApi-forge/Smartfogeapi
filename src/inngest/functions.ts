@@ -71,8 +71,21 @@ export const generateAPI = inngest.createFunction(
     // Process and structure the generated API
     const processedResult = await step.run("process-api-result", async () => {
       try {
-        // Parse the AI output and structure it
-        const parsedOutput = typeof apiResult === 'string' ? JSON.parse(apiResult) : apiResult;
+        // Clean and parse the AI output
+        let cleanedOutput = apiResult;
+        if (typeof apiResult === 'string') {
+          // Remove markdown code blocks if present
+          cleanedOutput = apiResult
+            .replace(/^```(?:json)?\s*/gm, '') // Remove opening code blocks
+            .replace(/```\s*$/gm, '') // Remove closing code blocks
+            .trim();
+          
+          console.log('Original output length:', apiResult.length);
+          console.log('Cleaned output length:', cleanedOutput.length);
+          console.log('First 200 chars of cleaned output:', cleanedOutput.substring(0, 200));
+        }
+        
+        const parsedOutput = typeof cleanedOutput === 'string' ? JSON.parse(cleanedOutput) : cleanedOutput;
         
         return {
           openapi_spec: parsedOutput.openapi_spec || {},
