@@ -1,22 +1,18 @@
 import { z } from 'zod';
-import { baseProcedure, createTRPCRouter } from '../init';
+import { baseProcedure, protectedProcedure, createTRPCRouter } from '../init';
 import { inngest } from '@/src/inngest/client';
 
 export const appRouter = createTRPCRouter({
   apiGeneration: createTRPCRouter({
-    invoke: baseProcedure
+    invoke: protectedProcedure
       .input(z.object({
         text: z.string(),
         mode: z.enum(['direct', 'github']).default('direct'),
         repoUrl: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        // Get user ID from context - this should be set by your auth middleware
-        const userId = ctx.user?.id;
-        
-        if (!userId || !ctx.user) {
-          throw new Error('User not authenticated - please log in with a valid Supabase account');
-        }
+        // User is guaranteed to be authenticated by protectedProcedure
+        const userId = ctx.user.id;
         
         // Validate that userId is a valid UUID format
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

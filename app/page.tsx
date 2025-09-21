@@ -1,5 +1,6 @@
 "use client"
 
+import { Suspense } from "react"
 import { HeroHeader } from "@/components/header"
 import AuthDialog from "@/components/auth-dialog"
 import { Button } from "@/components/ui/button"
@@ -195,7 +196,9 @@ export default function HomePage() {
         {/* Below Footer Banner matching provided screenshot */}
         <BelowFooterBanner />
         
-        <AuthDialog />
+        <Suspense fallback={<div />}>
+          <AuthDialog />
+        </Suspense>
       </main>
     </div>
   )
