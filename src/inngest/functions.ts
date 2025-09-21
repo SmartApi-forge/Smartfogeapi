@@ -19,6 +19,40 @@ const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN,
 });
 
+// New message created background job (following YouTube tutorial pattern)
+export const messageCreated = inngest.createFunction(
+  { id: "message-created" },
+  { event: "message/created" },
+  async ({ event, step }) => {
+    const { messageId, content, role, type } = event.data;
+    
+    console.log(`Processing new message: ${messageId}`);
+    console.log(`Content: ${content}`);
+    console.log(`Role: ${role}, Type: ${type}`);
+    
+    // Here you can add any background processing logic
+    // For example: AI processing, notifications, analytics, etc.
+    
+    await step.run("process-message", async () => {
+      // Update message status or add processing results
+      const { error } = await supabase
+        .from('messages')
+        .update({ 
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', messageId);
+        
+      if (error) {
+        console.error('Failed to update message:', error);
+        throw new Error(`Failed to update message: ${error.message}`);
+      }
+      
+      console.log(`Message ${messageId} processed successfully`);
+      return { success: true, messageId };
+    });
+  }
+);
+
 export const generateAPI = inngest.createFunction(
   { id: "generate-api" },
   { event: "api/generate" },

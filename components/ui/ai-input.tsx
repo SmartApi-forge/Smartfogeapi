@@ -151,13 +151,13 @@ export function AiInput({ isAuthenticated = false }: { isAuthenticated?: boolean
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
-  // tRPC hook for automatic Inngest invocation
-  const invokeInngest = api.apiGeneration.invoke.useMutation({
+  // tRPC hook for message creation (following YouTube tutorial pattern)
+  const createMessage = api.messages.create.useMutation({
     onSuccess: () => {
-      console.log("Inngest function invoked successfully!")
+      console.log("Message created successfully!")
     },
     onError: (error: any) => {
-      console.error("Failed to invoke Inngest function:", error)
+      console.error("Failed to create message:", error)
     }
   })
 
@@ -185,11 +185,11 @@ export function AiInput({ isAuthenticated = false }: { isAuthenticated?: boolean
     
     if (!value.trim()) return
     
-    // Automatically invoke Inngest function with the user's input
-    invokeInngest.mutate({ 
-      text: value,
-      mode: 'direct', // Default to direct mode
-      repoUrl: undefined // No repo URL for basic input
+    // Create message using trpc.messages.create (following YouTube tutorial pattern)
+    createMessage.mutate({ 
+      content: value,
+      role: 'user',
+      type: 'result'
     })
     
     // Clear the input after submission
@@ -289,15 +289,15 @@ export function AiInput({ isAuthenticated = false }: { isAuthenticated?: boolean
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={invokeInngest.isLoading}
+                disabled={createMessage.isPending}
                 className={cn(
                   "rounded-full p-2 transition-colors",
-                  value && !invokeInngest.isLoading
+                  value && !createMessage.isPending
                     ? "bg-blue-600 hover:bg-blue-700 text-white shadow-lg"
                     : "bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80"
                 )}
               >
-                {invokeInngest.isLoading ? (
+                {createMessage.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <Send className="w-4 h-4" />
