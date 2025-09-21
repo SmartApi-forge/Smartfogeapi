@@ -4,8 +4,9 @@ import superjson from "superjson";
 import type { QueryClient } from '@tanstack/react-query';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { createTRPCReact } from '@trpc/react-query';
-import { createTRPCClient, httpBatchLink } from '@trpc/client';
+import { createTRPCClient, httpBatchLink, loggerLink } from '@trpc/client';
 import { useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import { makeQueryClient } from './query-client';
 import type { AppRouter } from './routers/_app';
 
@@ -30,6 +31,12 @@ function getUrl() {
   })();
   return `${base}/api/trpc`;
 }
+
+// Create Supabase client for auth token
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 export function TRPCReactProvider(
   props: Readonly<{
     children: React.ReactNode;
@@ -44,8 +51,25 @@ export function TRPCReactProvider(
     trpc.createClient({
       transformer: superjson,
       links: [
+        loggerLink({
+          enabled: (opts) =>
+            process.env.NODE_ENV === 'development' ||
+            (opts.direction === 'down' && opts.result instanceof Error),
+        }),
         httpBatchLink({
           url: getUrl(),
+          async headers() {
+            const headers: Record<string, string> = {};
+            
+            // Get the current session and add auth header
+            const { data: { session } } = await supabase.auth.getSession();
+            
+            if (session?.access_token) {
+              headers.authorization = `Bearer ${session.access_token}`;
+            }
+            
+            return headers;
+          },
         }),
       ],
     }),

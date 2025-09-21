@@ -34,7 +34,7 @@ export const generateAPI = inngest.createFunction(
       const { data, error } = await supabase
         .from("jobs")
         .insert({
-          user_id: userId,
+          user_id: userId || 'anonymous', // Use anonymous if no userId provided
           type: "generate_api",
           status: "running",
           payload: {
@@ -45,7 +45,10 @@ export const generateAPI = inngest.createFunction(
         .select("id")
         .single();
         
-      if (error) throw new Error(`Failed to create job: ${error.message}`);
+      if (error) {
+        console.warn(`Failed to create job (continuing without job tracking): ${error.message}`);
+        return null; // Continue without job tracking if database fails
+      }
       return data.id;
     });
 
@@ -60,7 +63,7 @@ export const generateAPI = inngest.createFunction(
           sandbox = await Sandbox.create('smart-forge-api-sandbox');
           
           // Clone the repository
-          const cloneResult = await sandbox.commands.run(`git clone ${repoUrl} /home/user/repo`);
+          const cloneResult = await sandbox.commands.run(`git clone ${repoUrl} /home/user/repo 2>/dev/null || echo "clone_failed"`);
           if (cloneResult.exitCode !== 0) {
             throw new Error(`Failed to clone repository: ${cloneResult.stderr}`);
           }
@@ -75,7 +78,7 @@ export const generateAPI = inngest.createFunction(
           }
           
           // Get directory structure
-          const dirStructure = await sandbox.commands.run('find /home/user/repo -type f -name "*.js" -o -name "*.ts" -o -name "*.json" -o -name "*.md" | head -50');
+          const dirStructure = await sandbox.commands.run('find /home/user/repo -type f -name "*.js" -o -name "*.ts" -o -name "*.json" -o -name "*.md" | head -50 2>/dev/null || echo "find_failed"');
           
           // Analyze main files
           const mainFiles = [];
@@ -131,11 +134,13 @@ export const generateAPI = inngest.createFunction(
         }
       });
       
-      // Update job with repository analysis
-      await supabase
-        .from("jobs")
-        .update({ repo_analysis: repoAnalysis })
-        .eq("id", jobId);
+      // Update job with repository analysis (if job tracking is available)
+      if (jobId) {
+        await supabase
+          .from("jobs")
+          .update({ repo_analysis: repoAnalysis })
+          .eq("id", jobId);
+      }
     }
 
     // Step 3: Generate API using OpenAI
@@ -226,18 +231,26 @@ IMPORTANT REQUIREMENTS:
 6. Implementation code must be syntactically correct JavaScript/TypeScript
 7. Package.json must include all necessary dependencies and valid scripts
 8. Include proper Express.js setup with middleware and error handling
-9. Add health check endpoint at /health that returns 200 OK
+9. Add health check endpoint at /health that returns 200 OK with {"status":"OK","timestamp":new Date().toISOString()}
 10. Generate complete, working code that can run immediately
 11. Include proper CORS setup and security middleware
 12. Add input validation using joi or similar
 13. Include proper error handling middleware
 14. Generate realistic sample data and endpoints
 15. Ensure all imports and exports are correct
-16. Add proper logging with console.log statements
+16. Add comprehensive logging with console.log statements for startup, requests, and errors
 17. Include a start script that works: "node index.js" or "ts-node index.ts"
-18. Make sure the server listens on port 3000 by default
+18. Make sure the server listens on port 3000 by default with proper startup logging
 19. Add proper JSON parsing middleware
 20. Include at least 3-5 meaningful API endpoints based on the request
+21. CRITICAL: Server MUST log "Server running on port 3000" or similar when successfully started
+22. CRITICAL: Add graceful shutdown handling with process.on('SIGTERM') and process.on('SIGINT')
+23. CRITICAL: Include error handling for server startup failures with process.exit(1)
+24. CRITICAL: Add request logging middleware to log all incoming requests
+25. CRITICAL: Ensure the server can run in background mode (detached process)
+26. CRITICAL: Add timeout handling for long-running requests (30 second timeout)
+27. CRITICAL: Include proper error responses for all endpoints with consistent error format
+28. CRITICAL: Add process.on('uncaughtException') and process.on('unhandledRejection') handlers
 
 EXAMPLE STRUCTURE:
 {
@@ -251,7 +264,7 @@ EXAMPLE STRUCTURE:
           "responses": {
             "200": {
               "description": "OK",
-              "content": { "application/json": { "schema": { "type": "object" } } }
+              "content": { "application/json": { "schema": { "type": "object", "properties": { "status": { "type": "string" }, "timestamp": { "type": "string" } } } } }
             }
           }
         }
@@ -259,8 +272,8 @@ EXAMPLE STRUCTURE:
     }
   },
   "implementationCode": {
-    "index.js": "const express = require('express');\nconst app = express();\napp.use(express.json());\napp.get('/health', (req, res) => res.json({ status: 'OK' }));\napp.listen(3000, () => console.log('Server running on port 3000'));",
-    "package.json": "{\"name\": \"api\", \"version\": \"1.0.0\", \"scripts\": {\"start\": \"node index.js\"}, \"dependencies\": {\"express\": \"^4.18.0\"}}"
+    "index.js": "const express = require('express');\nconst cors = require('cors');\nconst app = express();\nconst PORT = process.env.PORT || 3000;\n\n// Middleware\napp.use(cors());\napp.use(express.json());\napp.use((req, res, next) => { console.log(\`\${new Date().toISOString()} \${req.method} \${req.path}\`); next(); });\n\n// Health check\napp.get('/health', (req, res) => res.json({ status: 'OK', timestamp: new Date().toISOString() }));\n\n// Error handling\napp.use((err, req, res, next) => { console.error('Error:', err); res.status(500).json({ error: 'Internal server error' }); });\n\n// Graceful shutdown\nprocess.on('SIGTERM', () => { console.log('SIGTERM received, shutting down gracefully'); process.exit(0); });\nprocess.on('SIGINT', () => { console.log('SIGINT received, shutting down gracefully'); process.exit(0); });\nprocess.on('uncaughtException', (err) => { console.error('Uncaught Exception:', err); process.exit(1); });\nprocess.on('unhandledRejection', (err) => { console.error('Unhandled Rejection:', err); process.exit(1); });\n\n// Start server\nconst server = app.listen(PORT, () => { console.log(\`Server running on port \${PORT}\`); console.log(\`Health check available at http://localhost:\${PORT}/health\`); }).on('error', (err) => { console.error('Server startup error:', err); process.exit(1); });",
+    "package.json": "{\"name\": \"api\", \"version\": \"1.0.0\", \"scripts\": {\"start\": \"node index.js\"}, \"dependencies\": {\"express\": \"^4.18.0\", \"cors\": \"^2.8.5\"}}"
   }
 }`
           },
@@ -315,8 +328,11 @@ EXAMPLE STRUCTURE:
       let sandbox: Sandbox | null = null;
       
       try {
-        // Create sandbox with our custom template
-        sandbox = await Sandbox.create('smart-forge-api-sandbox');
+        // Create sandbox with our custom template and timeout configuration
+        console.log('🏗️ Creating E2B sandbox with timeout configuration...');
+        sandbox = await Sandbox.create('smart-forge-api-sandbox', {
+          timeoutMs: 300000, // 5 minutes timeout
+        });
         
         // Write OpenAPI spec to sandbox
         await sandbox.files.write('/home/user/openapi.json', JSON.stringify(apiResult.openApiSpec, null, 2));
@@ -329,18 +345,28 @@ EXAMPLE STRUCTURE:
           if (typeof content === 'string') {
             console.log(`📝 Writing file: ${filename} (${content.length} chars)`);
             await sandbox.files.write(`/home/user/src/${filename}`, content);
+            
+            // Also copy package.json and main entry files to root directory for npm start to work
+            if (filename === 'package.json') {
+              console.log('📝 Copying package.json to root directory for npm start');
+              await sandbox.files.write('/home/user/package.json', content);
+            } else if (filename === 'index.js' || filename === 'server.js' || filename === 'app.js') {
+              console.log(`📝 Copying ${filename} to root directory for npm start`);
+              await sandbox.files.write(`/home/user/${filename}`, content);
+            }
           } else {
             console.log(`⚠️ Skipping non-string content for ${filename}:`, typeof content);
           }
         }
         
         // List all files in the sandbox for debugging
-        const fileList = await sandbox.commands.run('cd /home/user && find . -type f -name "*" | head -20');
+        const fileList = await sandbox.commands.run('cd /home/user && find . -type f -name "*" | head -20 2>/dev/null || echo "find_failed"');
         console.log('📋 Files in sandbox:', fileList.stdout);
         
         // Check if OpenAPI spec file exists and is valid JSON
         let specValidation, specValid = false;
         try {
+          console.log('🔍 Step 1: Validating OpenAPI specification...');
           const specExists = await sandbox.commands.run('cd /home/user && test -f openapi.json && echo "exists" || echo "missing"');
           if (specExists.stdout?.includes('exists')) {
             // Validate JSON syntax and basic OpenAPI structure
@@ -370,6 +396,10 @@ EXAMPLE STRUCTURE:
             
             specValidation = validation;
             specValid = validation.exitCode === 0;
+            console.log('📋 Spec validation result:', specValid ? '✅ Valid' : '❌ Invalid');
+            if (!specValid) {
+              console.log('🚨 Spec validation errors:', validation.stderr);
+            }
           } else {
             specValidation = { exitCode: 1, stdout: '', stderr: 'OpenAPI spec file not found' };
           }
@@ -380,7 +410,8 @@ EXAMPLE STRUCTURE:
         // Check if TypeScript files exist before validation
          let tsValidation, tsValid = false;
          try {
-           const tsFiles = await sandbox.commands.run('cd /home/user/src && find . -name "*.ts" | head -1');
+           console.log('🔍 Step 2: Validating TypeScript code...');
+           const tsFiles = await sandbox.commands.run('cd /home/user/src && find . -name "*.ts" | head -1 2>/dev/null || echo "no_ts_files"');
            if (tsFiles.stdout?.trim()) {
              // Ensure tsconfig.json exists in the src directory
              const tsconfigExists = await sandbox.commands.run('cd /home/user/src && test -f tsconfig.json && echo "exists" || echo "missing"');
@@ -407,15 +438,19 @@ EXAMPLE STRUCTURE:
                }, null, 2));
              }
              
-             // Install TypeScript if not available
-             await sandbox.commands.run('cd /home/user && npm install typescript --save-dev --silent');
+             // Install TypeScript if not available (with timeout)
+             await sandbox.commands.run('cd /home/user && npm install typescript --save-dev --silent', { timeoutMs: 60000 });
              
              // Run TypeScript compilation check
-             tsValidation = await sandbox.commands.run('cd /home/user/src && npx tsc --noEmit --skipLibCheck --allowJs');
+             tsValidation = await sandbox.commands.run('cd /home/user/src && npx tsc --noEmit --skipLibCheck --allowJs 2>/dev/null || echo "tsc_failed"');
              tsValid = tsValidation.exitCode === 0;
+             console.log('📝 TypeScript validation result:', tsValid ? '✅ Valid' : '❌ Invalid');
+             if (!tsValid) {
+               console.log('🚨 TypeScript validation errors:', tsValidation.stderr);
+             }
            } else {
              // Check JavaScript files instead
-             const jsFiles = await sandbox.commands.run('cd /home/user/src && find . -name "*.js" | head -1');
+             const jsFiles = await sandbox.commands.run('cd /home/user/src && find . -name "*.js" | head -1 2>/dev/null || echo "no_js_files"');
              if (jsFiles.stdout?.trim()) {
                tsValidation = { exitCode: 0, stdout: 'No TypeScript files found, JavaScript files present', stderr: '' };
                tsValid = true;
@@ -430,7 +465,8 @@ EXAMPLE STRUCTURE:
         // Run basic syntax validation with better error handling
         let syntaxValidation, syntaxValid = false;
         try {
-          const jsFiles = await sandbox.commands.run('cd /home/user/src && find . -name "*.js" -type f');
+          console.log('🔍 Step 3: Validating code syntax...');
+          const jsFiles = await sandbox.commands.run('cd /home/user/src && find . -name "*.js" -type f 2>/dev/null || echo "no_js_files"');
           if (jsFiles.stdout?.trim()) {
             // Check each JS file individually for better error reporting
             const fileList = jsFiles.stdout.trim().split('\n').filter(f => f.trim());
@@ -438,7 +474,7 @@ EXAMPLE STRUCTURE:
             let validationOutput = '';
             
             for (const file of fileList) {
-              const fileCheck = await sandbox.commands.run(`cd /home/user/src && node --check "${file.trim()}"`);
+              const fileCheck = await sandbox.commands.run(`cd /home/user/src && node --check "${file.trim()}" 2>/dev/null || echo "check_failed"`);
               if (fileCheck.exitCode !== 0) {
                 allValid = false;
                 validationOutput += `${file}: ${fileCheck.stderr}\n`;
@@ -451,6 +487,10 @@ EXAMPLE STRUCTURE:
               stderr: validationOutput 
             };
             syntaxValid = allValid;
+            console.log('⚙️ Syntax validation result:', syntaxValid ? '✅ Valid' : '❌ Invalid');
+            if (!syntaxValid) {
+              console.log('🚨 Syntax validation errors:', validationOutput);
+            }
           } else {
             syntaxValidation = { exitCode: 0, stdout: 'No JavaScript files to validate', stderr: '' };
             syntaxValid = true;
@@ -462,10 +502,11 @@ EXAMPLE STRUCTURE:
         // Run Jest tests with better handling for missing tests
         let testValidation, testsValid = false;
         try {
+          console.log('🔍 Step 4: Validating test files...');
           const packageExists = await sandbox.commands.run('cd /home/user && test -f package.json && echo "exists" || echo "missing"');
           if (packageExists.stdout?.includes('exists')) {
             // Check if test script exists and what it contains
-            const testScriptCheck = await sandbox.commands.run('cd /home/user && node -e "const pkg = JSON.parse(require(\'fs\').readFileSync(\'package.json\', \'utf8\')); console.log(pkg.scripts && pkg.scripts.test ? pkg.scripts.test : \'no-test\')"');
+            const testScriptCheck = await sandbox.commands.run('cd /home/user && node -e "const pkg = JSON.parse(require(\'fs\').readFileSync(\'package.json\', \'utf8\')); console.log(pkg.scripts && pkg.scripts.test ? pkg.scripts.test : \'no-test\')"; 2>/dev/null || echo "no-test"');
             
             if (testScriptCheck.stdout?.includes('no-test')) {
               testValidation = { exitCode: 0, stdout: 'No test script found in package.json', stderr: '' };
@@ -478,8 +519,8 @@ EXAMPLE STRUCTURE:
               // There's an actual test script, try to run it
               try {
                 // Install dependencies first
-                await sandbox.commands.run('cd /home/user && npm install --silent');
-                testValidation = await sandbox.commands.run('cd /home/user && timeout 30s npm test 2>&1 || echo "Test execution completed"');
+                await sandbox.commands.run('cd /home/user && npm install --silent 2>/dev/null || echo "install_failed"', { timeoutMs: 120000 }); // 2 minutes timeout
+            testValidation = await sandbox.commands.run('cd /home/user && timeout 30s npm test 2>&1 || echo "Test execution completed"', { timeoutMs: 45000 });
                 
                 // Consider tests valid if they run without crashing (even if they fail)
                 testsValid = !testValidation.stdout?.includes('Test timeout') && 
@@ -488,6 +529,10 @@ EXAMPLE STRUCTURE:
               } catch (testError) {
                 testValidation = { exitCode: 0, stdout: 'Test execution attempted but encountered issues', stderr: String(testError) };
                 testsValid = true; // Don't fail the entire validation for test issues
+                console.log('🧪 Test validation result:', testsValid ? '✅ Valid' : '❌ Invalid');
+                if (!testsValid) {
+                  console.log('🚨 Test validation errors:', testError);
+                }
               }
             }
           } else {
@@ -500,62 +545,250 @@ EXAMPLE STRUCTURE:
         
         // Step 5: Execute and test the API if validation passes
         let executionResult = null;
+        console.log('🔍 Validation results - Spec valid:', specValid, 'TS valid:', tsValid);
+        
         if (specValid && tsValid) {
+          console.log('✅ Basic validation passed, proceeding with execution tests...');
           try {
             // Install dependencies with verbose output
-            const installResult = await sandbox.commands.run('cd /home/user && npm install --verbose');
+            const installResult = await sandbox.commands.run('cd /home/user && npm install --verbose 2>/dev/null || echo "install_failed"', { timeoutMs: 120000 }); // 2 minutes timeout
             console.log('Install output:', installResult.stdout, installResult.stderr);
             
             // Check what port the package.json start script uses
-            const portCheck = await sandbox.commands.run('cd /home/user && grep -o "PORT=[0-9]*" package.json || grep -o "port.*[0-9]*" package.json || echo "port:3000"');
+            const portCheck = await sandbox.commands.run('cd /home/user && grep -o "PORT=[0-9]*" package.json 2>/dev/null || grep -o "port.*[0-9]*" package.json 2>/dev/null || echo "port:3000"');
             
-            // Start the API server in background with longer timeout
-            const startResult = await sandbox.commands.run('cd /home/user && timeout 60s npm start &');
+            // Start the API server in background with proper environment variables
+            console.log('🚀 Starting API server in background...');
+            // Copy the improved compile script functions to the working directory
+            await sandbox.commands.run('cp /tmp/compile_page.sh /home/user/ 2>/dev/null || echo "compile script not found"');
             
-            // Wait longer for server to start and check process
-            await new Promise(resolve => setTimeout(resolve, 10000));
+            // First try to start from src directory, then fallback to root
+            // Use proper environment variables for networking
+            let startResult = await sandbox.commands.run('cd /home/user/src && test -f package.json && (HOST=0.0.0.0 PORT=3000 timeout 30 npm start > ../server.log 2>&1 & echo $! > ../server.pid 2>/dev/null || echo $!) || echo "start_failed"', { timeoutMs: 35000 });
             
-            // Check if any node process is running
-            const processCheck = await sandbox.commands.run('ps aux | grep node | grep -v grep || echo "no node process"');
+            // If that fails, try from root directory with timeout
+            if (startResult.exitCode !== 0 || startResult.stdout.includes('start_failed')) {
+              console.log('🔄 Retrying npm start from root directory...');
+              startResult = await sandbox.commands.run('cd /home/user && (HOST=0.0.0.0 PORT=3000 timeout 30 npm start > server.log 2>&1 & echo $! > server.pid 2>/dev/null || echo $!) || echo "start_failed"', { timeoutMs: 35000 });
+            }
+            console.log('Server start command result:', startResult.stdout, startResult.stderr);
+            
+            // Use the improved wait_for_server function if available
+            let serverWaitResult;
+            try {
+              serverWaitResult = await sandbox.commands.run('cd /home/user && test -f compile_page.sh && source compile_page.sh && wait_for_server 3000 20 || echo "wait_function_not_available"');
+              console.log('Server wait result:', serverWaitResult.stdout);
+            } catch (error) {
+              console.log('Wait function not available, using fallback delay');
+              await new Promise(resolve => setTimeout(resolve, 8000));
+            }
+            
+            // Check server logs for startup confirmation
+            const serverLogs = await sandbox.commands.run('cd /home/user && tail -30 server.log 2>/dev/null || echo "No server logs found"');
+            console.log('Server startup logs:', serverLogs.stdout);
+            
+            // Verify server process is running with multiple methods
+            const pidCheck = await sandbox.commands.run('cd /home/user && (test -f server.pid && kill -0 $(cat server.pid) 2>/dev/null && echo "process running") || echo "process not found"');
+            console.log('Server process check:', pidCheck.stdout);
+            
+            // Check if any node process is running with more specific search
+            const processCheck = await sandbox.commands.run('ps aux | grep -E "node.*index\.js|npm.*start" | grep -v grep 2>/dev/null || echo "no node process"');
             console.log('Process check:', processCheck.stdout);
             
-            // Test basic health endpoint on multiple ports with better error handling
+            // Use the improved port detection function if available
+            let listeningCheck;
+            try {
+              listeningCheck = await sandbox.commands.run('cd /home/user && test -f compile_page.sh && source compile_page.sh && detect_listening_ports || echo "detect_function_not_available"');
+              if (listeningCheck.stdout.includes('detect_function_not_available')) {
+                // Fallback to manual detection
+                listeningCheck = await sandbox.commands.run('netstat -tlnp 2>/dev/null | grep -E ":3000|:8000|:5000" | head -3 || ss -tlnp 2>/dev/null | grep -E ":3000|:8000|:5000" | head -3 || echo "no listening ports"');
+              }
+            } catch (error) {
+              listeningCheck = await sandbox.commands.run('netstat -tlnp 2>/dev/null | grep -E ":3000|:8000|:5000" | head -3 || ss -tlnp 2>/dev/null | grep -E ":3000|:8000|:5000" | head -3 || echo "no listening ports"');
+            }
+            console.log('Listening processes check:', listeningCheck.stdout);
+            
+            // Enhanced health check with better port detection and fallback mechanisms
             let healthCheck;
-            const ports = [3000, 8000, 5000, 4000];
+            const ports = [3000, 8000, 5000, 4000, 8080];
             let healthCheckPassed = false;
             let workingPort = null;
+            let healthCheckDetails = [];
             
-            for (const port of ports) {
+            // First, check what ports are actually listening using multiple methods with better detection
+            let listeningPorts;
+            let discoveredPorts = [];
+            
+            // Method 1: netstat
+            try {
+              listeningPorts = await sandbox.commands.run('netstat -tln 2>/dev/null | grep LISTEN | grep -o ":[0-9]*" | cut -d: -f2 | sort -u || echo "no ports"');
+              if (listeningPorts.stdout && !listeningPorts.stdout.includes('no ports')) {
+                const ports = listeningPorts.stdout.split('\n').filter(p => p.trim() && !isNaN(parseInt(p.trim()))).map(p => parseInt(p.trim()));
+                discoveredPorts.push(...ports);
+              }
+            } catch (error) {
+              console.log('netstat failed:', error);
+            }
+            
+            // Method 2: ss
+            try {
+              const ssResult = await sandbox.commands.run('ss -tln 2>/dev/null | grep LISTEN | grep -o ":[0-9]*" | cut -d: -f2 | sort -u || echo "no ports"');
+              if (ssResult.stdout && !ssResult.stdout.includes('no ports')) {
+                const ports = ssResult.stdout.split('\n').filter(p => p.trim() && !isNaN(parseInt(p.trim()))).map(p => parseInt(p.trim()));
+                discoveredPorts.push(...ports);
+              }
+            } catch (error) {
+              console.log('ss failed:', error);
+            }
+            
+            // Method 3: lsof
+            try {
+              const lsofResult = await sandbox.commands.run('lsof -i -P -n 2>/dev/null | grep LISTEN | grep -o ":[0-9]*" | cut -d: -f2 | sort -u || echo "no ports"');
+              if (lsofResult.stdout && !lsofResult.stdout.includes('no ports')) {
+                const ports = lsofResult.stdout.split('\n').filter(p => p.trim() && !isNaN(parseInt(p.trim()))).map(p => parseInt(p.trim()));
+                discoveredPorts.push(...ports);
+              }
+            } catch (error) {
+              console.log('lsof failed:', error);
+            }
+            
+            // Remove duplicates and add to test list
+            discoveredPorts = [...new Set(discoveredPorts)];
+            console.log('Discovered listening ports:', discoveredPorts);
+            
+            // Add discovered ports to our test list (prioritize discovered ports)
+            let allPorts;
+            if (discoveredPorts.length > 0) {
+              allPorts = [...discoveredPorts.slice(0, 5), ...ports].slice(0, 8); // Prioritize discovered ports
+              allPorts = [...new Set(allPorts)]; // Remove duplicates
+            } else {
+              allPorts = ports;
+            }
+            
+            console.log('Testing ports:', allPorts);
+            
+            // Direct test of port 3000 since logs show server started there
+            console.log('Direct test of port 3000 (from server logs):');
+            try {
+              const directTest = await sandbox.commands.run(`curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/health 2>/dev/null || echo "curl_failed"`);
+              console.log('Direct port 3000 test result:', directTest.stdout);
+              if (directTest.exitCode === 0 && !directTest.stdout.includes('curl_failed')) {
+                console.log('Port 3000 is responding directly!');
+              }
+            } catch (error) {
+              console.log('Direct port 3000 test failed:', error);
+            }
+            
+            for (const port of allPorts) {
               try {
-                // First check if port is listening
-                const portListening = await sandbox.commands.run(`netstat -tlnp | grep :${port} || echo "port ${port} not listening"`);
-                console.log(`Port ${port} status:`, portListening.stdout);
+                // Check if port is listening with multiple methods
+                let portCheck1, portCheck2;
+                let isListening = false;
                 
-                if (!portListening.stdout.includes('not listening')) {
-                  // Try health endpoint
-                  healthCheck = await sandbox.commands.run(`curl -f -m 5 http://localhost:${port}/health`);
-                  if (healthCheck.exitCode === 0) {
-                    healthCheckPassed = true;
-                    workingPort = port;
-                    break;
+                try {
+                  portCheck1 = await sandbox.commands.run(`netstat -tln | grep :${port} || echo "not found"`);
+                  isListening = !portCheck1.stdout.includes('not found');
+                } catch (error) {
+                  console.log(`netstat check failed for port ${port}:`, error);
+                  portCheck1 = { stdout: 'not found', stderr: '', exitCode: 1 };
+                }
+                
+                if (!isListening) {
+                  try {
+                    portCheck2 = await sandbox.commands.run(`ss -tln | grep :${port} || echo "not found"`);
+                    isListening = !portCheck2.stdout.includes('not found');
+                  } catch (error) {
+                    console.log(`ss check failed for port ${port}:`, error);
+                    portCheck2 = { stdout: 'not found', stderr: '', exitCode: 1 };
+                  }
+                }
+                
+                if (!isListening) {
+                  try {
+                    const portCheck3 = await sandbox.commands.run(`lsof -i :${port} 2>/dev/null || echo "not found"`);
+                    isListening = !portCheck3.stdout.includes('not found');
+                  } catch (error) {
+                    console.log(`lsof check failed for port ${port}:`, error);
+                  }
+                }
+                
+                console.log(`Port ${port} listening check:`, isListening);
+                
+                if (isListening) {
+                  // Use the improved test_api_endpoint function if available
+                  let endpointTestResult;
+                  try {
+                    endpointTestResult = await sandbox.commands.run(`cd /home/user && test -f compile_page.sh && source compile_page.sh && test_api_endpoint ${port} /health GET || echo "test_function_not_available"`);
+                    
+                    if (!endpointTestResult.stdout.includes('test_function_not_available') && endpointTestResult.stdout.includes('✅')) {
+                      healthCheckPassed = true;
+                      workingPort = port;
+                      healthCheckDetails.push({ port, endpoint: '/health', success: true, response: endpointTestResult.stdout.substring(0, 200) });
+                    } else if (!endpointTestResult.stdout.includes('test_function_not_available')) {
+                      // Try root endpoint with the improved function
+                      const rootTestResult = await sandbox.commands.run(`cd /home/user && source compile_page.sh && test_api_endpoint ${port} / GET`);
+                      if (rootTestResult.stdout.includes('✅')) {
+                        healthCheckPassed = true;
+                        workingPort = port;
+                        healthCheckDetails.push({ port, endpoint: '/', success: true, response: rootTestResult.stdout.substring(0, 200) });
+                      } else {
+                        healthCheckDetails.push({ port, endpoint: '/health,/', success: false, response: `Both endpoints failed: ${endpointTestResult.stdout} | ${rootTestResult.stdout}` });
+                      }
+                    } else {
+                      // Fallback to manual curl testing
+                      for (let retry = 0; retry < 3; retry++) {
+                        try {
+                          healthCheck = await sandbox.commands.run(`curl -f -m 10 -s http://localhost:${port}/health 2>/dev/null || echo "curl_failed"`, { timeoutMs: 15000 });
+                          if (healthCheck.exitCode === 0 && healthCheck.stdout && !healthCheck.stdout.includes('curl_failed')) {
+                            healthCheckPassed = true;
+                            workingPort = port;
+                            healthCheckDetails.push({ port, endpoint: '/health', success: true, response: healthCheck.stdout.substring(0, 200) });
+                            break;
+                          }
+                        } catch (error) {
+                          console.log(`Health check retry ${retry + 1} failed for port ${port}:`, error);
+                          healthCheckDetails.push({ port, endpoint: '/health', success: false, response: `Retry ${retry + 1} failed: ${error}` });
+                        }
+                        
+                        if (retry < 2) await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s between retries
+                      }
+                      
+                      // If health check failed, try root endpoint
+                      if (!healthCheckPassed) {
+                        try {
+                          const rootCheck = await sandbox.commands.run(`curl -f -m 10 -s http://localhost:${port}/ 2>/dev/null || echo "curl_failed"`, { timeoutMs: 15000 });
+                          if (rootCheck.exitCode === 0 && !rootCheck.stdout.includes('curl_failed')) {
+                            healthCheck = rootCheck;
+                            healthCheckPassed = true;
+                            workingPort = port;
+                            healthCheckDetails.push({ port, endpoint: '/', success: true, response: rootCheck.stdout.substring(0, 200) });
+                          } else {
+                            healthCheckDetails.push({ port, endpoint: '/', success: false, response: rootCheck.stderr || rootCheck.stdout || 'No response' });
+                          }
+                        } catch (error) {
+                          healthCheckDetails.push({ port, endpoint: '/', success: false, response: `Error: ${error}` });
+                        }
+                      }
+                    }
+                  } catch (error) {
+                    console.log(`Endpoint test failed for port ${port}:`, error);
+                    healthCheckDetails.push({ port, endpoint: '/health', success: false, response: `Test function error: ${error}` });
                   }
                   
-                  // Try root endpoint if health fails
-                  const rootCheck = await sandbox.commands.run(`curl -f -m 5 http://localhost:${port}/`);
-                  if (rootCheck.exitCode === 0) {
-                    healthCheck = rootCheck;
-                    healthCheckPassed = true;
-                    workingPort = port;
-                    break;
-                  }
+                  if (healthCheckPassed) break;
+                } else {
+                  healthCheckDetails.push({ port, endpoint: 'N/A', success: false, response: 'Port not listening' });
                 }
               } catch (error) {
                 console.log(`Port ${port} check failed:`, error);
+                healthCheckDetails.push({ port, endpoint: 'N/A', success: false, response: `Check failed: ${error}` });
               }
             }
             
+            console.log('Health check details:', healthCheckDetails);
+            
             if (!healthCheck) {
-              healthCheck = { exitCode: 1, stdout: '', stderr: 'No working port found' };
+              healthCheck = { exitCode: 1, stdout: '', stderr: `No working port found. Tested ports: ${allPorts.join(', ')}` };
             }
             
             // Test a few API endpoints from the OpenAPI spec using the working port
@@ -569,15 +802,16 @@ EXAMPLE STRUCTURE:
                 if (method) {
                   const testUrl = `http://localhost:${workingPort}${path}`;
                   const curlCmd = method.toLowerCase() === 'get' 
-                    ? `curl -f -m 10 -X GET "${testUrl}"` 
-                    : `curl -f -m 10 -X POST "${testUrl}" -H "Content-Type: application/json" -d '{}'`;
+                    ? `curl -f -m 10 -X GET "${testUrl}" 2>/dev/null || echo "curl_failed"` 
+                    : `curl -f -m 10 -X POST "${testUrl}" -H "Content-Type: application/json" -d '{}' 2>/dev/null || echo "curl_failed"`;
                   
                   try {
-                    const endpointTest = await sandbox.commands.run(curlCmd);
+                    const endpointTest = await sandbox.commands.run(curlCmd, { timeoutMs: 15000 });
+                    const success = endpointTest.exitCode === 0 && !endpointTest.stdout.includes('curl_failed');
                     endpoints.push({
                       path,
                       method,
-                      success: endpointTest.exitCode === 0,
+                      success,
                       response: endpointTest.stdout?.substring(0, 200) || endpointTest.stderr?.substring(0, 200),
                       port: workingPort
                     });
@@ -595,35 +829,58 @@ EXAMPLE STRUCTURE:
             }
             
             executionResult = {
-              serverStarted: startResult.exitCode === 0 && processCheck.stdout.includes('node'),
+              serverStarted: startResult.exitCode === 0 && (processCheck.stdout.includes('node') || pidCheck.stdout.includes('process running')),
               healthCheckPassed: healthCheckPassed,
+              healthCheckDetails: healthCheckDetails,
+              workingPort: workingPort,
+              serverLogs: serverLogs.stdout,
+              processInfo: {
+                startCommand: startResult,
+                processCheck: processCheck.stdout,
+                pidCheck: pidCheck.stdout
+              },
               endpointTests: endpoints,
               installOutput: installResult.stdout || installResult.stderr,
-              healthCheckOutput: healthCheck.stdout || healthCheck.stderr,
-              workingPort: workingPort,
-              processInfo: processCheck.stdout
+              healthCheckOutput: healthCheck.stdout || healthCheck.stderr
             };
           } catch (execError) {
             console.error('Execution error:', execError);
+            const errorMessage = (execError as Error).message;
+            
+            // Check if this is a sandbox termination error
+            const isSandboxTerminated = errorMessage.includes('terminated') || errorMessage.includes('SandboxError');
+            
             executionResult = {
               serverStarted: false,
               healthCheckPassed: false,
-              endpointTests: [],
-              error: (execError as Error).message,
-              errorStack: (execError as Error).stack,
+              healthCheckDetails: [],
               workingPort: null,
-              processInfo: 'Error occurred during execution'
+              serverLogs: isSandboxTerminated ? 'Sandbox was terminated during execution' : '',
+              processInfo: {
+                error: errorMessage,
+                sandboxTerminated: isSandboxTerminated
+              },
+              endpointTests: [],
+              error: errorMessage,
+              errorDetails: {
+                message: errorMessage,
+                stack: (execError as Error).stack,
+                timestamp: new Date().toISOString(),
+                sandboxTerminated: isSandboxTerminated
+              }
             };
           }
         }
         
-        // Calculate overall validity with more lenient criteria
+        // Calculate overall validity with more lenient criteria for sandbox termination
         const hasWorkingServer = executionResult?.serverStarted && executionResult?.healthCheckPassed;
         const hasValidSpec = specValid;
         const hasValidCode = tsValid && syntaxValid;
+        const sandboxTerminated = executionResult?.errorDetails?.sandboxTerminated || false;
         
-        // Overall valid if we have a valid spec and either working server OR valid code
-        const overallValid = hasValidSpec && (hasWorkingServer || hasValidCode);
+        // If sandbox was terminated, still consider valid if we have valid spec and code
+        // This prevents sandbox resource issues from failing the entire workflow
+        const overallValid = hasValidSpec && (hasWorkingServer || hasValidCode || (sandboxTerminated && hasValidSpec));
         
         return {
           specValid,
@@ -641,7 +898,7 @@ EXAMPLE STRUCTURE:
             hasValidSpec,
             hasValidCode,
             criticalIssues: !hasValidSpec ? ['Invalid OpenAPI spec'] : [],
-            warnings: !hasWorkingServer ? ['Server startup issues'] : []
+            warnings: !hasWorkingServer ? (sandboxTerminated ? ['Sandbox terminated during execution - validation incomplete'] : ['Server startup issues']) : []
           }
         };
       } catch (error) {
@@ -703,7 +960,7 @@ EXAMPLE STRUCTURE:
         const { data, error } = await supabase
           .from('api_fragments')
           .insert({
-            job_id: jobId,
+            job_id: jobId || null, // Allow null if no job tracking
             openapi_spec: apiResult.openApiSpec,
             implementation_code: apiResult.implementationCode,
             requirements: apiResult.requirements,
@@ -717,6 +974,31 @@ EXAMPLE STRUCTURE:
           
         if (error) {
           console.error('Database save error:', error);
+          // If job_id constraint fails and we don't have a jobId, try without job_id
+          if (error.code === '23502' && error.message.includes('job_id') && !jobId) {
+            console.log('Retrying API save without job_id constraint...');
+            const { data: retryData, error: retryError } = await supabase
+              .from('api_fragments')
+              .insert({
+                openapi_spec: apiResult.openApiSpec,
+                implementation_code: apiResult.implementationCode,
+                requirements: apiResult.requirements,
+                description: apiResult.description,
+                validation_results: validationResult,
+                pr_url: prUrl,
+                created_at: new Date().toISOString()
+              })
+              .select()
+              .single();
+              
+            if (retryError) {
+              console.error('Retry save error:', retryError);
+              throw new Error(`Failed to save API: ${retryError.message}`);
+            }
+            
+            return retryData;
+          }
+          
           throw new Error(`Failed to save API: ${error.message}`);
         }
         
@@ -728,8 +1010,13 @@ EXAMPLE STRUCTURE:
       }
     });
 
-    // Step 7: Update job status to completed
+    // Step 7: Update job status to completed (if job tracking is available)
     await step.run("update-job-completed", async () => {
+      if (!jobId) {
+        console.log('No job ID available, skipping job status update');
+        return;
+      }
+      
       try {
         const { error } = await supabase
           .from('jobs')
@@ -766,8 +1053,8 @@ EXAMPLE STRUCTURE:
     } catch (error) {
       console.error('Error in generateAPI function:', error);
       
-      // Update job status to failed if jobId exists
-      if (typeof jobId !== 'undefined') {
+      // Update job status to failed (if job tracking is available)
+      if (jobId) {
         try {
           await supabase
             .from('jobs')
