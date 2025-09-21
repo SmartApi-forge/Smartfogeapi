@@ -59,7 +59,7 @@ export const generateAPI = inngest.createFunction(
         let sandbox: Sandbox | null = null;
         
         try {
-          // Create sandbox for repository analysis
+          // Create sandbox for repository analysis - assign immediately
           sandbox = await Sandbox.create('smart-forge-api-sandbox');
           
           // Clone the repository
@@ -117,17 +117,28 @@ export const generateAPI = inngest.createFunction(
           };
         } catch (error) {
           console.error('Repository analysis error:', error);
+          
+          // Attempt to clean up sandbox if it exists before returning error
+          if (sandbox && typeof sandbox.kill === 'function') {
+            try {
+              await sandbox.kill();
+            } catch (killError) {
+              console.error('Failed to kill sandbox in catch block:', killError);
+            }
+          }
+          
           return {
             repoUrl,
             error: (error as Error).message,
             analysisTimestamp: new Date().toISOString()
           };
         } finally {
-          // Clean up sandbox
-          if (sandbox) {
+          // Robust cleanup - check sandbox is truthy and has kill function
+          if (sandbox && typeof sandbox.kill === 'function') {
             try {
               await sandbox.kill();
             } catch (cleanupError) {
+              // Swallow cleanup errors to prevent them from throwing
               console.error('Repository analysis sandbox cleanup error:', cleanupError);
             }
           }

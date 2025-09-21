@@ -61,11 +61,18 @@ export function TRPCReactProvider(
           async headers() {
             const headers: Record<string, string> = {};
             
-            // Get the current session and add auth header
-            const { data: { session } } = await supabase.auth.getSession();
-            
-            if (session?.access_token) {
-              headers.authorization = `Bearer ${session.access_token}`;
+            try {
+              // Get the current session and add auth header
+              // TODO: Consider session token caching or using Supabase session change listeners
+              // if calling getSession() on every request becomes a performance issue
+              const { data: { session } } = await supabase.auth.getSession();
+              
+              if (session?.access_token) {
+                headers.authorization = `Bearer ${session.access_token}`;
+              }
+            } catch (error) {
+              console.error('Failed to get Supabase session for tRPC headers:', error);
+              // Return empty headers object to ensure tRPC requests don't break
             }
             
             return headers;
