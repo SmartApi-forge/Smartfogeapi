@@ -59,13 +59,19 @@ export const generateAPI = inngest.createFunction(
         let sandbox: Sandbox | null = null;
         
         try {
+          // Validate and sanitize repository URL
+          const urlPattern = /^https:\/\/(github\.com|gitlab\.com|bitbucket\.org)\/[\w\-\.]+\/[\w\-\.]+(\.git)?$/;
+          if (!urlPattern.test(repoUrl)) {
+            throw new Error(`Invalid repository URL format: ${repoUrl}`);
+          }
+          
           // Create sandbox for repository analysis - assign immediately
           sandbox = await Sandbox.create('smart-forge-api-sandbox');
           
-          // Clone the repository
-          const cloneResult = await sandbox.commands.run(`git clone ${repoUrl} /home/user/repo 2>/dev/null || echo "clone_failed"`);
+          // Clone the repository using argument array to prevent command injection
+          const cloneResult = await sandbox.commands.run('git', ['clone', repoUrl, '/home/user/repo']);
           if (cloneResult.exitCode !== 0) {
-            throw new Error(`Failed to clone repository: ${cloneResult.stderr}`);
+            throw new Error(`Failed to clone repository (exit code: ${cloneResult.exitCode}): ${cloneResult.stderr || cloneResult.stdout}`);
           }
           
           // Analyze package.json if it exists
@@ -78,7 +84,7 @@ export const generateAPI = inngest.createFunction(
           }
           
           // Get directory structure
-          const dirStructure = await sandbox.commands.run('find /home/user/repo -type f -name "*.js" -o -name "*.ts" -o -name "*.json" -o -name "*.md" | head -50 2>/dev/null || echo "find_failed"');
+          const dirStructure = await sandbox.commands.run('find', ['/home/user/repo', '-type', 'f', '-name', '*.js', '-o', '-name', '*.ts', '-o', '-name', '*.json', '-o', '-name', '*.md']);
           
           // Analyze main files
           const mainFiles = [];
@@ -575,12 +581,12 @@ EXAMPLE STRUCTURE:
             
             // First try to start from src directory, then fallback to root
             // Use proper environment variables for networking
-            let startResult = await sandbox.commands.run('cd /home/user/src && test -f package.json && (HOST=0.0.0.0 PORT=3000 timeout 30 npm start > ../server.log 2>&1 & echo $! > ../server.pid 2>/dev/null || echo $!) || echo "start_failed"', { timeoutMs: 35000 });
+            let startResult = await sandbox.commands.run('cd /home/user/src && test -f package.json && (HOST=0.0.0.0 PORT=3000 npm start > ../server.log 2>&1 & echo $! > ../server.pid 2>/dev/null || echo $!) || echo "start_failed"', { timeoutMs: 35000 });
             
-            // If that fails, try from root directory with timeout
+            // If that fails, try from root directory
             if (startResult.exitCode !== 0 || startResult.stdout.includes('start_failed')) {
               console.log('🔄 Retrying npm start from root directory...');
-              startResult = await sandbox.commands.run('cd /home/user && (HOST=0.0.0.0 PORT=3000 timeout 30 npm start > server.log 2>&1 & echo $! > server.pid 2>/dev/null || echo $!) || echo "start_failed"', { timeoutMs: 35000 });
+              startResult = await sandbox.commands.run('cd /home/user && (HOST=0.0.0.0 PORT=3000 npm start > server.log 2>&1 & echo $! > server.pid 2>/dev/null || echo $!) || echo "start_failed"', { timeoutMs: 35000 });
             }
             console.log('Server start command result:', startResult.stdout, startResult.stderr);
             

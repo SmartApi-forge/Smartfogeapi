@@ -36,6 +36,14 @@ CREATE POLICY "Users can update own api_fragments" ON public.api_fragments
       WHERE jobs.id = api_fragments.job_id 
       AND jobs.user_id = auth.uid()
     )
+  )
+  WITH CHECK (
+    job_id IS NULL OR
+    EXISTS (
+      SELECT 1 FROM public.jobs 
+      WHERE jobs.id = api_fragments.job_id 
+      AND jobs.user_id = auth.uid()
+    )
   );
 
 -- Add index for performance on nullable job_id

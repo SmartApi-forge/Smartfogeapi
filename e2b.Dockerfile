@@ -1,5 +1,5 @@
 # You can use most Debian-based base images
-FROM node:21-slim
+FROM node:22-slim
 
 # Install system dependencies including network tools
 RUN apt-get update && apt-get install -y \
@@ -17,8 +17,14 @@ RUN apt-get update && apt-get install -y \
 COPY compile_page.sh /compile_page.sh
 RUN chmod +x /compile_page.sh
 
-# Set up working directory
+# Create non-root user and set up working directory
+RUN groupadd --gid 1001 appuser || true && \
+    useradd --uid 1001 --gid 1001 --shell /bin/bash --create-home appuser || true
+
+# Set up working directory with proper ownership
 WORKDIR /home/user
+RUN chown -R appuser:appuser /home/user && \
+    chmod -R 755 /home/user
 
 # Install global npm packages for API development and validation
 RUN npm install -g \
@@ -76,3 +82,6 @@ EXPOSE 3000 8000 5000 4000 8080
 # Set environment variables for better networking
 ENV HOST=0.0.0.0
 ENV PORT=3000
+
+# Switch to non-root user for runtime
+USER appuser

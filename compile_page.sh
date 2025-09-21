@@ -8,6 +8,87 @@ echo "Setting up API generation sandbox environment..."
 # Change to user directory
 cd /home/user
 
+# CLI parsing and help handler
+show_help() {
+    echo "Usage: $0 [COMMAND] [OPTIONS]"
+    echo ""
+    echo "Available commands:"
+    echo "  validate_openapi_spec <file>  Validate OpenAPI specification file"
+    echo "  compile_typescript            Run TypeScript compilation"
+    echo "  lint_code                     Run ESLint code linting"
+    echo "  run_tests                     Run Jest test suite"
+    echo "  validate_api_project          Run full validation suite"
+    echo ""
+    echo "Options:"
+    echo "  -h, --help                    Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  $0 validate_openapi_spec api-spec.json"
+    echo "  $0 compile_typescript"
+    echo "  $0 --help"
+}
+
+# Handle command line arguments
+if [ "$#" -gt 0 ]; then
+    case "$1" in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        validate_openapi_spec)
+            shift
+            validate_openapi_spec "$@"
+            exit $?
+            ;;
+        compile_typescript)
+            shift
+            compile_typescript "$@"
+            exit $?
+            ;;
+        lint_code)
+            shift
+            lint_code "$@"
+            exit $?
+            ;;
+        run_tests)
+            shift
+            run_tests "$@"
+            exit $?
+            ;;
+        validate_api_project)
+            shift
+            validate_api_project "$@"
+            exit $?
+            ;;
+        *)
+            echo "Unknown command: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+fi
+
+# CLI-friendly wrapper functions (shims)
+validate_openapi_spec() {
+    validate_openapi "$@"
+    return $?
+}
+
+compile_typescript() {
+    run_typescript_compilation "$@"
+    return $?
+}
+
+lint_code() {
+    run_linting "$@"
+    return $?
+}
+
+run_tests() {
+    run_test_suite "$@"
+    return $?
+}
+
 # Function to validate OpenAPI specifications
 validate_openapi() {
     local spec_file="$1"
@@ -36,7 +117,7 @@ validate_openapi() {
 }
 
 # Function to run TypeScript compilation
-compile_typescript() {
+run_typescript_compilation() {
     echo "Running TypeScript compilation..."
     
     if [ -f "tsconfig.json" ]; then
@@ -78,7 +159,7 @@ run_linting() {
 }
 
 # Function to run tests
-run_tests() {
+run_test_suite() {
     echo "Running tests..."
     
     if [ -f "jest.config.json" ] || [ -f "jest.config.js" ]; then
@@ -105,8 +186,10 @@ validate_api_project() {
     local validation_passed=true
     
     # Check for OpenAPI spec files
+    local spec_found=false
     for spec_file in api-spec.json openapi.json swagger.json api.yaml openapi.yaml swagger.yaml; do
         if [ -f "$spec_file" ]; then
+            spec_found=true
             validate_openapi "$spec_file"
             if [ $? -ne 0 ]; then
                 validation_passed=false
@@ -115,8 +198,14 @@ validate_api_project() {
         fi
     done
     
+    # If no spec file was found, mark validation as failed
+    if [ "$spec_found" = false ]; then
+        echo "❌ No OpenAPI specification file found"
+        validation_passed=false
+    fi
+    
     # Run TypeScript compilation
-    compile_typescript
+    run_typescript_compilation
     if [ $? -ne 0 ]; then
         validation_passed=false
     fi
@@ -128,7 +217,7 @@ validate_api_project() {
     fi
     
     # Run tests
-    run_tests
+    run_test_suite
     if [ $? -ne 0 ]; then
         validation_passed=false
     fi
@@ -286,23 +375,34 @@ process.on('SIGTERM', () => {
 });
 EOF
 
-# Make the validation function available for external calls
-echo "API validation environment is ready!"
-echo "Available commands:"
-echo "  - validate_openapi <spec-file>  : Validate OpenAPI specification"
-echo "  - compile_typescript            : Run TypeScript compilation"
-echo "  - run_linting                   : Run ESLint"
-echo "  - run_tests                     : Run Jest tests"
-echo "  - validate_api_project          : Run full validation suite"
-echo "  - node health-check.js          : Start health check server"
-
 # Export functions for use in interactive mode
 export -f validate_openapi
+export -f validate_openapi_spec
+export -f run_typescript_compilation
 export -f compile_typescript
 export -f run_linting
+export -f lint_code
+export -f run_test_suite
 export -f run_tests
 export -f validate_api_project
 
-# Keep the container running
-echo "Sandbox is ready for API development and testing!"
-tail -f /dev/null
+# Only run the announce and tail block when executed directly (not when sourced)
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+    # Make the validation function available for external calls
+    echo "API validation environment is ready!"
+    echo "Available commands:"
+    echo "  - validate_openapi <spec-file>  : Validate OpenAPI specification"
+    echo "  - validate_openapi_spec <file>  : CLI-friendly OpenAPI validation"
+    echo "  - run_typescript_compilation    : Run TypeScript compilation"
+    echo "  - compile_typescript            : CLI-friendly TypeScript compilation"
+    echo "  - run_linting                   : Run ESLint"
+    echo "  - lint_code                     : CLI-friendly code linting"
+    echo "  - run_test_suite                : Run Jest tests"
+    echo "  - run_tests                     : CLI-friendly test runner"
+    echo "  - validate_api_project          : Run full validation suite"
+    echo "  - node health-check.js          : Start health check server"
+    
+    # Keep the container running
+    echo "Sandbox is ready for API development and testing!"
+    tail -f /dev/null
+fi
