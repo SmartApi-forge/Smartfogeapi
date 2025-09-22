@@ -1,6 +1,5 @@
 import { supabase } from '../../lib/supabase'
 import type { User, Session } from '@supabase/supabase-js'
-import { useState, useEffect } from 'react'
 
 export interface AuthResponse {
   user: User | null
@@ -143,28 +142,4 @@ export const authService = {
       return false
     }
   }
-}
-
-// Auth hooks for React components
-export const useAuthState = () => {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    // Get initial session
-    authService.getCurrentUser().then(({ user }) => {
-      setUser(user)
-      setLoading(false)
-    })
-
-    // Listen for auth changes
-    const { data: { subscription } } = authService.onAuthStateChange((event, session) => {
-      setUser(session?.user || null)
-      setLoading(false)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
-
-  return { user, loading }
 }

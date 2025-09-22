@@ -11,11 +11,39 @@ import {
 const apiGenerationService = new ApiGenerationService()
 
 export const apiGenerationRouter = createTRPCRouter({
+  // Invoke procedure for client compatibility
+  invoke: protectedProcedure
+    .input(z.object({
+      text: z.string().min(1, "Text is required"),
+      mode: z.enum(['direct', 'repo']).default('direct'),
+      repoUrl: z.string().optional()
+    }))
+    .mutation(async ({ input, ctx }) => {
+      // Convert the invoke input to generateAPI format
+      const generateInput = {
+        prompt: input.text,
+        framework: 'fastapi' as const,
+        advanced: false
+      }
+      return await apiGenerationService.generateAPI(generateInput, ctx.user.id)
+    }),
+
   // Generate a new API from prompt
   generateAPI: protectedProcedure
     .input(generateAPISchema)
     .mutation(async ({ input, ctx }) => {
       return await apiGenerationService.generateAPI(input, ctx.user.id)
+    }),
+
+  // Create API procedure for client compatibility
+  createApi: protectedProcedure
+    .query(async ({ ctx }) => {
+      // Return a simple response for now
+      return {
+        success: true,
+        message: "API creation endpoint available",
+        userId: ctx.user.id
+      }
     }),
 
   // Get all projects for authenticated user

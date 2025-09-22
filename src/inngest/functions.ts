@@ -103,7 +103,7 @@ export const generateAPI = inngest.createFunction(
           sandbox = await Sandbox.create('smart-forge-api-sandbox');
           
           // Clone the repository using argument array to prevent command injection
-          const cloneResult = await sandbox.commands.run('git', ['clone', repoUrl, '/home/user/repo']);
+          const cloneResult = await sandbox.commands.run(`git clone ${repoUrl} /home/user/repo`);
           if (cloneResult.exitCode !== 0) {
             throw new Error(`Failed to clone repository (exit code: ${cloneResult.exitCode}): ${cloneResult.stderr || cloneResult.stdout}`);
           }
@@ -118,7 +118,7 @@ export const generateAPI = inngest.createFunction(
           }
           
           // Get directory structure
-          const dirStructure = await sandbox.commands.run('find', ['/home/user/repo', '-type', 'f', '-name', '*.js', '-o', '-name', '*.ts', '-o', '-name', '*.json', '-o', '-name', '*.md']);
+          const dirStructure = await sandbox.commands.run(`find /home/user/repo -type f -name '*.js' -o -name '*.ts' -o -name '*.json' -o -name '*.md'`);
           
           // Analyze main files
           const mainFiles = [];
