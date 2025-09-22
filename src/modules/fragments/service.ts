@@ -24,6 +24,19 @@ export class FragmentService {
   }
 
   /**
+   * Bulk create fragments with transaction support
+   */
+  static async bulkCreate(inputs: CreateFragmentInput[]): Promise<Fragment[]> {
+    try {
+      const fragments = await fragmentOperations.bulkCreate(inputs)
+      return fragments
+    } catch (error) {
+      console.error('Error bulk creating fragments:', error)
+      throw new Error('Failed to bulk create fragments')
+    }
+  }
+
+  /**
    * Get a fragment by ID
    */
   static async getById(input: GetFragmentInput): Promise<Fragment> {
@@ -37,17 +50,21 @@ export class FragmentService {
   }
 
   /**
-   * Get fragments by message ID
+   * Get fragments by message ID with database-level pagination
    */
   static async getByMessageId(input: GetFragmentsByMessageInput): Promise<Fragment[]> {
     try {
-      const allFragments = await fragmentOperations.getByMessageId(input.message_id)
+      // Validate input parameters
+      const limit = Math.min(Math.max(input.limit || 20, 1), 100)
+      const offset = Math.max(input.offset || 0, 0)
       
-      // Apply pagination
-      const startIndex = input.offset || 0
-      const endIndex = startIndex + (input.limit || 20)
+      // Use database-level pagination
+      const fragments = await fragmentOperations.getByMessageId(input.message_id, {
+        limit,
+        offset
+      })
       
-      return allFragments.slice(startIndex, endIndex)
+      return fragments
     } catch (error) {
       console.error('Error getting fragments by message ID:', error)
       throw new Error('Failed to get fragments')
@@ -55,29 +72,56 @@ export class FragmentService {
   }
 
   /**
-   * Get all fragments with optional filtering and pagination
+   * Get all fragments with optional filtering and database-level pagination
    */
   static async getAll(input: GetFragmentsInput): Promise<Fragment[]> {
     try {
-      let fragments: Fragment[]
+      // Validate input parameters
+      const limit = Math.min(Math.max(input.limit || 20, 1), 100)
+      const offset = Math.max(input.offset || 0, 0)
 
       if (input.message_id) {
-        // Get fragments for specific message
-        fragments = await fragmentOperations.getByMessageId(input.message_id)
+        // Get fragments for specific message with database-level pagination
+        return await fragmentOperations.getByMessageId(input.message_id, {
+          limit,
+          offset
+        })
       } else {
-        // This would require a new method in fragmentOperations to get all fragments
-        // For now, we'll throw an error as the current implementation doesn't support this
-        throw new Error('Getting all fragments without message_id is not currently supported')
+        // Get all fragments with database-level pagination
+        return await fragmentOperations.getAll({
+          limit,
+          offset
+        })
       }
-
-      // Apply pagination
-      const startIndex = input.offset || 0
-      const endIndex = startIndex + (input.limit || 20)
-      
-      return fragments.slice(startIndex, endIndex)
     } catch (error) {
       console.error('Error getting fragments:', error)
       throw new Error('Failed to get fragments')
+    }
+  }
+
+  /**
+   * Search fragments by title with database-level filtering and pagination
+   */
+  static async searchByTitle(params: { title: string; limit?: number; offset?: number }): Promise<Fragment[]> {
+    try {
+      // Validate and sanitize input parameters
+      if (!params.title || typeof params.title !== 'string') {
+        throw new Error('Title parameter is required and must be a string')
+      }
+      
+      const limit = Math.min(Math.max(params.limit || 10, 1), 100)
+      const offset = Math.max(params.offset || 0, 0)
+      
+      // Use database-level search with pagination
+      const fragments = await fragmentOperations.searchByTitle(params.title, {
+        limit,
+        offset
+      })
+      
+      return fragments
+    } catch (error) {
+      console.error('Error searching fragments by title:', error)
+      throw new Error('Failed to search fragments')
     }
   }
 
@@ -125,8 +169,9 @@ export class FragmentService {
    */
   static async getCountByMessage(messageId: string): Promise<number> {
     try {
-      const fragments = await fragmentOperations.getByMessageId(messageId)
-      return fragments.length
+      // Use database-level count for efficiency
+      const count = await fragmentOperations.getCountByMessageId(messageId)
+      return count
     } catch (error) {
       console.error('Error getting fragment count:', error)
       throw new Error('Failed to get fragment count')
@@ -138,7 +183,8 @@ export class FragmentService {
    */
   static async getLatestByMessage(messageId: string): Promise<Fragment | null> {
     try {
-      const fragments = await fragmentOperations.getByMessageId(messageId)
+      // Get only the first fragment (latest) with limit 1 for efficiency
+      const fragments = await fragmentOperations.getByMessageId(messageId, { limit: 1 })
       return fragments.length > 0 ? fragments[0] : null // Already sorted by created_at desc
     } catch (error) {
       console.error('Error getting latest fragment:', error)

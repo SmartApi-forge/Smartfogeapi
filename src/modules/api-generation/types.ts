@@ -71,10 +71,10 @@ export interface JobStatus {
   currentStep: string
   estimatedTimeRemaining: number
   error_message?: string
-  result?: any
-  created_at: string
-  started_at?: string
-  completed_at?: string
+  result?: Record<string, unknown> | unknown[] | null
+  created_at: string | Date
+  started_at?: string | Date
+  completed_at?: string | Date
 }
 
 export interface Template {

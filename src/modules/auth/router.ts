@@ -1,4 +1,5 @@
 import { baseProcedure, protectedProcedure, createTRPCRouter } from '../../trpc/init'
+import { TRPCError } from '@trpc/server'
 import { AuthModuleService } from './service'
 import { signInSchema, verifyOtpSchema, updateProfileSchema } from './types'
 
@@ -22,9 +23,16 @@ export const authRouter = createTRPCRouter({
   // Get current user profile
   getProfile: protectedProcedure
     .query(async ({ ctx }) => {
+      if (!ctx.user.email) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'User email is required but not available'
+        })
+      }
+      
       return await authModuleService.getProfile(
         ctx.user.id,
-        ctx.user.email!,
+        ctx.user.email,
         ctx.user.created_at
       )
     }),
@@ -33,9 +41,16 @@ export const authRouter = createTRPCRouter({
   updateProfile: protectedProcedure
     .input(updateProfileSchema)
     .mutation(async ({ input, ctx }) => {
+      if (!ctx.user.email) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'User email is required but not available'
+        })
+      }
+      
       return await authModuleService.updateProfile(
         ctx.user.id,
-        ctx.user.email!,
+        ctx.user.email,
         ctx.user.created_at,
         input
       )
@@ -43,8 +58,8 @@ export const authRouter = createTRPCRouter({
 
   // Sign out user
   signOut: protectedProcedure
-    .mutation(async () => {
-      return await authModuleService.signOut()
+    .mutation(async ({ ctx }) => {
+      return await authModuleService.signOut(ctx.user.id)
     }),
 
   // Get user's API usage statistics

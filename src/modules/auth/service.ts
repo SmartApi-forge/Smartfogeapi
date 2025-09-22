@@ -7,7 +7,8 @@ import type {
   UpdateProfileInput, 
   AuthResponse, 
   UserProfile, 
-  UsageStats 
+  UsageStats,
+  AuthUpdates 
 } from './types'
 
 export class AuthModuleService {
@@ -58,7 +59,7 @@ export class AuthModuleService {
         success: true,
         user: {
           id: user.id,
-          email: user.email!,
+          email: user.email || '',
           name: user.user_metadata?.full_name || null,
           avatar_url: user.user_metadata?.avatar_url || null,
           created_at: new Date(user.created_at),
@@ -114,7 +115,7 @@ export class AuthModuleService {
   async updateProfile(userId: string, userEmail: string, userCreatedAt: string, input: UpdateProfileInput): Promise<AuthResponse> {
     try {
       // Update Supabase auth metadata
-      const authUpdates: any = {}
+      const authUpdates: AuthUpdates = {}
       if (input.name) authUpdates.full_name = input.name
       if (input.avatar_url) authUpdates.avatar_url = input.avatar_url
       
@@ -123,7 +124,7 @@ export class AuthModuleService {
       }
 
       // Update profile table
-      const profileUpdates: any = {}
+      const profileUpdates: AuthUpdates = {}
       if (input.name) profileUpdates.full_name = input.name
       if (input.avatar_url) profileUpdates.avatar_url = input.avatar_url
 
@@ -153,7 +154,7 @@ export class AuthModuleService {
   /**
    * Sign out user
    */
-  async signOut(): Promise<AuthResponse> {
+  async signOut(userId?: string): Promise<AuthResponse> {
     try {
       const result = await authService.signOut()
       return {

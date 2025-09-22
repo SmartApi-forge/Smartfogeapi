@@ -4,7 +4,9 @@ import type {
   UpdateMessageInput, 
   GetMessageInput, 
   GetMessagesInput,
-  Message 
+  Message,
+  MessageRole,
+  MessageType
 } from './types'
 
 export class MessageService {
@@ -13,11 +15,18 @@ export class MessageService {
    */
   static async create(input: CreateMessageInput): Promise<Message> {
     try {
-      const message = await messageOperations.create(input)
+      // Apply defaults for role and type like the original router
+      const messageData = {
+        content: input.content,
+        role: input.role || 'user' as const,
+        type: input.type || 'result' as const
+      }
+      const message = await messageOperations.create(messageData)
       return message
     } catch (error) {
       console.error('Error creating message:', error)
-      throw new Error('Failed to create message')
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      throw new Error(`Failed to create message: ${errorMessage}`)
     }
   }
 
@@ -39,30 +48,19 @@ export class MessageService {
    */
   static async getAll(input: GetMessagesInput): Promise<Message[]> {
     try {
-      // For now, get all messages and apply client-side filtering
-      // In production, you'd want to implement server-side filtering in Supabase
-      const allMessages = await messageOperations.getAll()
+      // Use server-side filtering and pagination
+      const messages = await messageOperations.getAll({
+        role: input.role,
+        type: input.type,
+        limit: input.limit,
+        offset: input.offset
+      })
       
-      let filteredMessages = allMessages
-
-      // Apply role filter if provided
-      if (input.role) {
-        filteredMessages = filteredMessages.filter(msg => msg.role === input.role)
-      }
-
-      // Apply type filter if provided
-      if (input.type) {
-        filteredMessages = filteredMessages.filter(msg => msg.type === input.type)
-      }
-
-      // Apply pagination
-      const startIndex = input.offset || 0
-      const endIndex = startIndex + (input.limit || 20)
-      
-      return filteredMessages.slice(startIndex, endIndex)
+      return messages
     } catch (error) {
       console.error('Error getting messages:', error)
-      throw new Error('Failed to get messages')
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      throw new Error(`Failed to get messages: ${errorMessage}`)
     }
   }
 
@@ -97,22 +95,11 @@ export class MessageService {
    */
   static async getCount(filters?: { role?: string; type?: string }): Promise<number> {
     try {
-      const allMessages = await messageOperations.getAll()
-      
-      let filteredMessages = allMessages
-      
-      if (filters?.role) {
-        filteredMessages = filteredMessages.filter(msg => msg.role === filters.role)
-      }
-      
-      if (filters?.type) {
-        filteredMessages = filteredMessages.filter(msg => msg.type === filters.type)
-      }
-      
-      return filteredMessages.length
+      return await messageOperations.getCount(filters as { role?: 'user' | 'assistant'; type?: 'result' | 'error' })
     } catch (error) {
       console.error('Error getting message count:', error)
-      throw new Error('Failed to get message count')
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      throw new Error(`Failed to get message count: ${errorMessage}`)
     }
   }
 
@@ -121,46 +108,45 @@ export class MessageService {
    */
   static async getRecent(input: { limit: number; offset: number }): Promise<Message[]> {
     try {
-      const allMessages = await messageOperations.getAll()
-      // Sort by created_at descending (most recent first)
-      const sortedMessages = allMessages.sort((a, b) => 
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )
-      
-      return sortedMessages.slice(input.offset, input.offset + input.limit)
+      return await messageOperations.getRecent(input.limit, input.offset)
     } catch (error) {
       console.error('Error getting recent messages:', error)
-      throw new Error('Failed to get recent messages')
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      throw new Error(`Failed to get recent messages: ${errorMessage}`)
     }
   }
 
   /**
    * Get messages by role with pagination
    */
-  static async getByRole(input: { role: string; limit: number; offset: number }): Promise<Message[]> {
+  static async getByRole(input: { role: MessageRole; limit: number; offset: number }): Promise<Message[]> {
     try {
-      const allMessages = await messageOperations.getAll()
-      const filteredMessages = allMessages.filter(msg => msg.role === input.role)
-      
-      return filteredMessages.slice(input.offset, input.offset + input.limit)
+      return await this.getAll({
+        role: input.role,
+        limit: input.limit,
+        offset: input.offset
+      })
     } catch (error) {
       console.error('Error getting messages by role:', error)
-      throw new Error('Failed to get messages by role')
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      throw new Error(`Failed to get messages by role: ${errorMessage}`)
     }
   }
 
   /**
    * Get messages by type with pagination
    */
-  static async getByType(input: { type: string; limit: number; offset: number }): Promise<Message[]> {
+  static async getByType(input: { type: MessageType; limit: number; offset: number }): Promise<Message[]> {
     try {
-      const allMessages = await messageOperations.getAll()
-      const filteredMessages = allMessages.filter(msg => msg.type === input.type)
-      
-      return filteredMessages.slice(input.offset, input.offset + input.limit)
+      return await this.getAll({
+        type: input.type,
+        limit: input.limit,
+        offset: input.offset
+      })
     } catch (error) {
       console.error('Error getting messages by type:', error)
-      throw new Error('Failed to get messages by type')
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      throw new Error(`Failed to get messages by type: ${errorMessage}`)
     }
   }
 }

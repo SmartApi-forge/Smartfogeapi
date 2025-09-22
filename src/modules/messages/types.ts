@@ -17,8 +17,8 @@ export const MessageSchema = z.object({
 // Input schemas for TRPC procedures
 export const CreateMessageSchema = z.object({
   content: z.string().min(1, 'Content is required'),
-  role: MessageRoleSchema,
-  type: MessageTypeSchema,
+  role: MessageRoleSchema.optional(),
+  type: MessageTypeSchema.optional(),
 })
 
 export const UpdateMessageSchema = z.object({

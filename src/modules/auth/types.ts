@@ -42,6 +42,11 @@ export interface AuthResponse {
   error?: string
 }
 
+export interface AuthUpdates {
+  full_name?: string
+  avatar_url?: string
+}
+
 export interface UserProfile extends User {
   subscription_tier: string
   api_quota: {

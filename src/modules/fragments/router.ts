@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { TRPCError } from '@trpc/server'
 import { createTRPCRouter, baseProcedure } from '../../trpc/init'
 import { FragmentService } from './service'
 import {
@@ -124,38 +125,52 @@ export const fragmentsRouter = createTRPCRouter({
     }),
 
   /**
-   * Bulk create fragments (simplified)
+   * Bulk create fragments with transaction support and error handling
    */
   bulkCreate: baseProcedure
     .input(z.array(CreateFragmentSchema))
     .mutation(async ({ input }) => {
-      const results = []
-      for (const fragmentData of input) {
-        const fragment = await FragmentService.create(fragmentData)
-        results.push(fragment)
+      try {
+        // Use the new bulkCreate service method for atomic transaction
+        const fragments = await FragmentService.bulkCreate(input)
+        return {
+          success: true,
+          fragments,
+          count: fragments.length
+        }
+      } catch (error) {
+        console.error('Bulk create failed:', error)
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to bulk create fragments'
+        })
       }
-      return results
     }),
 
   /**
-   * Search fragments by title with pagination
+   * Search fragments by title with database-level filtering and pagination
    */
   searchByTitle: baseProcedure
     .input(z.object({
-      title: z.string(),
-      limit: z.number().optional(),
-      offset: z.number().optional()
+      title: z.string().min(1, 'Title search query is required'),
+      limit: z.number().min(1).max(100).optional(),
+      offset: z.number().min(0).optional()
     }))
     .query(async ({ input }) => {
-      const params = {
-        title: input.title,
-        limit: input.limit ?? 10,
-        offset: input.offset ?? 0
+      try {
+        const params = {
+          title: input.title,
+          limit: input.limit ?? 10,
+          offset: input.offset ?? 0
+        }
+        // Use database-level search instead of client-side filtering
+        return await FragmentService.searchByTitle(params)
+      } catch (error) {
+        console.error('Search by title failed:', error)
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to search fragments by title'
+        })
       }
-      // Filter fragments by title from all fragments
-      const allFragments = await FragmentService.getAll(params)
-      return allFragments.filter(fragment => 
-        fragment.title?.toLowerCase().includes(input.title.toLowerCase())
-      )
     }),
 })

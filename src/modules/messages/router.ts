@@ -2,19 +2,14 @@ import { z } from 'zod'
 import { createTRPCRouter, baseProcedure } from '../../trpc/init'
 import { MessageService } from './service'
 import { inngest } from '../../inngest/client'
-import { createClient } from '@supabase/supabase-js'
 import {
   CreateMessageSchema,
   UpdateMessageSchema,
   GetMessageSchema,
   GetMessagesSchema,
+  MessageRoleSchema,
+  MessageTypeSchema,
 } from './types'
-
-// Initialize Supabase client for direct database operations
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 export const messagesRouter = createTRPCRouter({
   /**
@@ -23,23 +18,8 @@ export const messagesRouter = createTRPCRouter({
   create: baseProcedure
     .input(CreateMessageSchema)
     .mutation(async ({ input }) => {
-      // Destructure the input like in the YouTube tutorial
-      const { content, role, type } = input
-      
-      // Create a new message using Supabase (instead of Prisma)
-      const { data: createdMessage, error } = await supabase
-        .from('messages')
-        .insert({
-          content: content,
-          role: role || 'user',  // Default to 'user' like in tutorial
-          type: type || 'result' // Default to 'result' like in tutorial
-        })
-        .select()
-        .single()
-        
-      if (error) {
-        throw new Error(`Failed to create message: ${error.message}`)
-      }
+      // Create a new message using MessageService
+      const createdMessage = await MessageService.create(input)
       
       // Invoke background job like in the YouTube tutorial
       await inngest.send({
@@ -126,7 +106,7 @@ export const messagesRouter = createTRPCRouter({
   // Get messages by role
   getByRole: baseProcedure
     .input(z.object({
-      role: z.string(),
+      role: MessageRoleSchema,
       limit: z.number().optional(),
       offset: z.number().optional()
     }))
@@ -142,7 +122,7 @@ export const messagesRouter = createTRPCRouter({
   // Get messages by type
   getByType: baseProcedure
     .input(z.object({
-      type: z.string(),
+      type: MessageTypeSchema,
       limit: z.number().optional(),
       offset: z.number().optional()
     }))

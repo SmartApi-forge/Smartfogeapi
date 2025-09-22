@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { Geist } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
 import { TRPCReactProvider } from "@/src/trpc/client"
+import { AuthInitializer } from "@/components/auth-initializer"
 import "./globals.css"
 
 const geist = Geist({
@@ -26,6 +27,7 @@ export default function RootLayout({
     <html lang="en" className={`${geist.variable} antialiased`}>
       <body className="font-sans">
         <TRPCReactProvider>
+          <AuthInitializer />
           <ThemeProvider
             attribute="class"
             defaultTheme="system"

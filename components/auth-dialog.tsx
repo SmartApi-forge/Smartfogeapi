@@ -141,8 +141,8 @@ export default function AuthDialog() {
                     // Supabase automatically handles session storage
                     // Set cookies for server-side access
                     if (data.session) {
-                      document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`
-                      document.cookie = `sb-refresh-token=${data.session.refresh_token}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`
+                      const { setAuthCookies } = await import('../lib/auth-handler')
+                      setAuthCookies(data.session)
                     }
                     
                     localStorage.setItem("user", JSON.stringify({

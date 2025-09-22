@@ -45,12 +45,36 @@ export const messageOperations = {
     return message as Message
   },
 
-  // Get all messages
-  async getAll() {
-    const { data: messages, error } = await supabaseServer
+  // Get all messages with optional filtering and pagination
+  async getAll(options?: {
+    role?: 'user' | 'assistant';
+    type?: 'result' | 'error';
+    limit?: number;
+    offset?: number;
+  }) {
+    let query = supabaseServer
       .from('messages')
       .select('*')
       .order('created_at', { ascending: false })
+    
+    // Apply role filter if provided
+    if (options?.role) {
+      query = query.eq('role', options.role)
+    }
+    
+    // Apply type filter if provided
+    if (options?.type) {
+      query = query.eq('type', options.type)
+    }
+    
+    // Apply pagination
+    if (options?.limit !== undefined || options?.offset !== undefined) {
+      const limit = options.limit ?? 20
+      const offset = options.offset ?? 0
+      query = query.range(offset, offset + limit - 1)
+    }
+    
+    const { data: messages, error } = await query
     
     if (error) throw error
     return messages as Message[]
@@ -89,6 +113,40 @@ export const messageOperations = {
       .eq('id', id)
     
     if (error) throw error
+  },
+
+  // Get count of messages with optional filtering
+  async getCount(filters?: { role?: 'user' | 'assistant'; type?: 'result' | 'error' }) {
+    let query = supabaseServer
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+    
+    // Apply role filter if provided
+    if (filters?.role) {
+      query = query.eq('role', filters.role)
+    }
+    
+    // Apply type filter if provided
+    if (filters?.type) {
+      query = query.eq('type', filters.type)
+    }
+    
+    const { count, error } = await query
+    
+    if (error) throw error
+    return count || 0
+  },
+
+  // Get recent messages with pagination (optimized with ORDER BY and LIMIT/OFFSET)
+  async getRecent(limit: number, offset: number) {
+    const { data: messages, error } = await supabaseServer
+      .from('messages')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1)
+    
+    if (error) throw error
+    return messages as Message[]
   }
 }
 
@@ -105,13 +163,56 @@ export const fragmentOperations = {
     return fragment as Fragment
   },
 
-  // Get fragments by message ID
-  async getByMessageId(messageId: string) {
+  // Bulk create fragments with transaction support
+  async bulkCreate(dataArray: Omit<Fragment, 'id' | 'created_at' | 'updated_at'>[]): Promise<Fragment[]> {
     const { data: fragments, error } = await supabaseServer
+      .from('fragments')
+      .insert(dataArray)
+      .select()
+    
+    if (error) throw error
+    return fragments as Fragment[]
+  },
+
+  // Get fragments by message ID with optional pagination
+  async getByMessageId(messageId: string, options?: { limit?: number; offset?: number }) {
+    let query = supabaseServer
       .from('fragments')
       .select('*')
       .eq('message_id', messageId)
       .order('created_at', { ascending: false })
+    
+    // Apply pagination if provided
+    if (options?.limit !== undefined) {
+      query = query.limit(options.limit)
+    }
+    if (options?.offset !== undefined) {
+      query = query.range(options.offset, options.offset + (options.limit || 20) - 1)
+    }
+    
+    const { data: fragments, error } = await query
+    
+    if (error) throw error
+    return fragments as Fragment[]
+  },
+
+  // Search fragments by title with case-insensitive matching and pagination
+  async searchByTitle(title: string, options?: { limit?: number; offset?: number }) {
+    // Sanitize input to prevent injection
+    const sanitizedTitle = title.replace(/[%_]/g, '\\$&')
+    
+    let query = supabaseServer
+      .from('fragments')
+      .select('*')
+      .ilike('title', `%${sanitizedTitle}%`)
+      .order('created_at', { ascending: false })
+    
+    // Apply pagination
+    const limit = options?.limit || 10
+    const offset = options?.offset || 0
+    query = query.range(offset, offset + limit - 1)
+    
+    const { data: fragments, error } = await query
     
     if (error) throw error
     return fragments as Fragment[]
@@ -150,5 +251,37 @@ export const fragmentOperations = {
       .eq('id', id)
     
     if (error) throw error
+  },
+
+  // Get count of fragments by message ID
+  async getCountByMessageId(messageId: string): Promise<number> {
+    const { count, error } = await supabaseServer
+      .from('fragments')
+      .select('*', { count: 'exact', head: true })
+      .eq('message_id', messageId)
+    
+    if (error) throw error
+    return count || 0
+  },
+
+  // Get all fragments with optional pagination
+  async getAll(options?: { limit?: number; offset?: number }) {
+    let query = supabaseServer
+      .from('fragments')
+      .select('*')
+      .order('created_at', { ascending: false })
+    
+    // Apply pagination if provided
+    if (options?.limit !== undefined) {
+      query = query.limit(options.limit)
+    }
+    if (options?.offset !== undefined) {
+      query = query.range(options.offset, options.offset + (options.limit || 20) - 1)
+    }
+    
+    const { data: fragments, error } = await query
+    
+    if (error) throw error
+    return fragments as Fragment[]
   }
 }
