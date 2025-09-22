@@ -4,13 +4,45 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
 import { Sparkles, Zap, ArrowRight } from "lucide-react"
+import { api } from "@/lib/trpc-client"
+import { toast } from "sonner"
 
 export const AIInputSection = () => {
   const [prompt, setPrompt] = React.useState("")
+  const [isGenerating, setIsGenerating] = React.useState(false)
 
-  const handleGenerate = () => {
-    console.log("[v0] Generating API for prompt:", prompt)
-    // TODO: Implement API generation logic
+  const createMessage = api.messages.create.useMutation({
+    onSuccess: (data: any) => {
+      console.log("Message created successfully:", data)
+      toast.success("API generation started! Check your dashboard for progress.")
+      setPrompt("")
+      setIsGenerating(false)
+    },
+    onError: (error: any) => {
+      console.error("Error creating message:", error)
+      toast.error(`Failed to start API generation: ${error.message}`)
+      setIsGenerating(false)
+    }
+  })
+
+  const handleGenerate = async () => {
+    if (!prompt.trim()) {
+      toast.error("Please enter a description for your API")
+      return
+    }
+
+    setIsGenerating(true)
+    
+    try {
+      await createMessage.mutateAsync({
+        content: prompt,
+        role: "user",
+        type: "text"
+      })
+    } catch (error) {
+      console.error("Error in handleGenerate:", error)
+      // Error is already handled in onError callback
+    }
   }
 
   return (
@@ -39,10 +71,10 @@ export const AIInputSection = () => {
               size="lg"
               className="h-12 flex-1 text-base font-semibold"
               onClick={handleGenerate}
-              disabled={!prompt.trim()}
+              disabled={!prompt.trim() || isGenerating}
             >
               <Zap className="mr-2 size-5" />
-              Generate API
+              {isGenerating ? "Generating..." : "Generate API"}
               <ArrowRight className="ml-2 size-5" />
             </Button>
             <Button variant="outline" size="lg" className="h-12 bg-transparent text-base">

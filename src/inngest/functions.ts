@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import { Sandbox } from 'e2b';
 import { Octokit } from '@octokit/rest';
 import { createClient } from '@supabase/supabase-js';
+import { AgentState, AIResult } from './types';
 
 // Initialize OpenAI client with API key from environment
 const openaiClient = new OpenAI({
@@ -247,6 +248,7 @@ You MUST respond with valid JSON in this exact structure:
                 }
               }
             }
+            }
           }
         },
         "500": {
@@ -348,31 +350,93 @@ EXAMPLE STRUCTURE:
         const parsed = JSON.parse(jsonStr);
         
         // Ensure expected fields have defaults
-        const result = {
-          openApiSpec: parsed.openApiSpec || {},
-          implementationCode: parsed.implementationCode || {},
-          requirements: parsed.requirements || [],
-          description: parsed.description || "",
+        const result: AIResult = {
+          state: {
+            data: {
+              summary: parsed.description || "",
+              files: parsed.implementationCode || {}
+            } as AgentState
+          }
         };
         
+        // Error detection logic
+        const isError = !result.state.data.summary || !Object.keys(result.state.data.files ?? {}).length;
+        
+        if (isError) {
+          console.log('❌ Error detected in AI result - missing summary or files');
+          
+          // Save error message to database using the new service method
+          const { MessageService } = await import('../modules/messages/service');
+          await MessageService.saveAIResult(result, jobId);
+          
+          // Update job status to failed if job tracking is available
+          if (jobId) {
+            await supabase
+              .from('jobs')
+              .update({
+                status: 'failed',
+                error: 'AI generation failed - missing required data',
+                completed_at: new Date().toISOString()
+              })
+              .eq('id', jobId);
+          }
+          
+          // Return early - do not proceed with validation or fragment creation
+          return {
+            success: false,
+            error: 'AI generation failed - missing required data',
+            jobId
+          };
+        }
+        
         console.log('🤖 AI Generated Result:');
-        console.log('- OpenAPI spec keys:', Object.keys(result.openApiSpec));
-        console.log('- Implementation files:', Object.keys(result.implementationCode));
-        console.log('- Requirements count:', result.requirements.length);
+        console.log('- Summary:', result.state.data.summary);
+        console.log('- Implementation files:', Object.keys(result.state.data.files));
+        console.log('- Files count:', Object.keys(result.state.data.files).length);
         
         return result;
       } catch (error) {
         console.error("Failed to parse generated API code:", error);
-        // Return a fallback structure instead of throwing
+        
+        // Create error result for database saving
+        const errorResult: AIResult = {
+          state: {
+            data: {
+              summary: "Failed to parse API generation result",
+              files: {}
+            } as AgentState
+          }
+        };
+        
+        // Save error message to database
+        const { MessageService } = await import('../modules/messages/service');
+        await MessageService.saveAIResult(errorResult, jobId);
+        
+        // Update job status to failed if job tracking is available
+        if (jobId) {
+          await supabase
+            .from('jobs')
+            .update({
+              status: 'failed',
+              error: `Failed to parse AI result: ${error}`,
+              completed_at: new Date().toISOString()
+            })
+            .eq('id', jobId);
+        }
+        
+        // Return early - do not proceed with validation
         return {
-          openApiSpec: {},
-          implementationCode: {},
-          requirements: [],
-          description: "Failed to parse API generation result",
-          error: String(error),
+          success: false,
+          error: `Failed to parse AI result: ${error}`,
+          jobId
         };
       }
     });
+
+    // Check if API generation failed - if so, return early
+    if (!('state' in apiResult) || !apiResult.state?.data?.summary) {
+      return apiResult;
+    }
 
     // Step 4: Comprehensive sandbox validation
     const validationResult = await step.run("validate-code-in-sandbox", async () => {
@@ -386,10 +450,15 @@ EXAMPLE STRUCTURE:
         });
         
         // Write OpenAPI spec to sandbox
-        await sandbox.files.write('/home/user/openapi.json', JSON.stringify(apiResult.openApiSpec, null, 2));
+        if (!('state' in apiResult) || !apiResult.state?.data) {
+          throw new Error('Invalid API result structure for sandbox setup');
+        }
+        
+        const openApiSpec = apiResult.state.data.files['openapi.yaml'] || apiResult.state.data.files['openapi.json'] || '';
+        await sandbox.files.write('/home/user/openapi.json', openApiSpec);
         
         // Write implementation files to sandbox
-        const implementationFiles = apiResult.implementationCode || {};
+        const implementationFiles = apiResult.state.data.files || {};
         console.log('📁 Writing implementation files:', Object.keys(implementationFiles));
         
         for (const [filename, content] of Object.entries(implementationFiles)) {
@@ -844,10 +913,21 @@ EXAMPLE STRUCTURE:
             
             // Test a few API endpoints from the OpenAPI spec using the working port
             const endpoints: any[] = [];
-            if (workingPort && apiResult.openApiSpec?.paths) {
-              const paths = Object.keys(apiResult.openApiSpec.paths).slice(0, 3); // Test first 3 endpoints
-              for (const path of paths) {
-                const methods = Object.keys((apiResult.openApiSpec.paths as any)[path]);
+            if (!('state' in apiResult) || !apiResult.state?.data) {
+              console.log('Invalid API result structure for endpoint testing');
+            } else {
+              const openApiSpecContent = apiResult.state.data.files['openapi.yaml'] || apiResult.state.data.files['openapi.json'] || '';
+              let parsedSpec: any = null;
+              try {
+                parsedSpec = JSON.parse(openApiSpecContent);
+              } catch (e) {
+                console.log('Could not parse OpenAPI spec for endpoint testing');
+              }
+              
+              if (workingPort && parsedSpec?.paths) {
+                const paths = Object.keys(parsedSpec.paths).slice(0, 3); // Test first 3 endpoints
+                for (const path of paths) {
+                  const methods = Object.keys((parsedSpec.paths as any)[path]);
                 const method = methods.find(m => ['get', 'post'].includes(m.toLowerCase())) || methods[0];
                 
                 if (method) {
@@ -877,6 +957,7 @@ EXAMPLE STRUCTURE:
                   }
                 }
               }
+            }
             }
             
             executionResult = {
@@ -1008,14 +1089,19 @@ EXAMPLE STRUCTURE:
     // Step 6: Save the generated API to database
     const savedApi = await step.run("save-api", async () => {
       try {
+        // Type guard to check if apiResult has the expected structure
+        if (!('state' in apiResult) || !apiResult.state?.data) {
+          throw new Error('Invalid API result structure');
+        }
+
         const { data, error } = await supabase
           .from('api_fragments')
           .insert({
             job_id: jobId || null, // Allow null if no job tracking
-            openapi_spec: apiResult.openApiSpec,
-            implementation_code: apiResult.implementationCode,
-            requirements: apiResult.requirements,
-            description: apiResult.description,
+            openapi_spec: apiResult.state.data.files['openapi.yaml'] || apiResult.state.data.files['openapi.json'] || '',
+            implementation_code: JSON.stringify(apiResult.state.data.files),
+            requirements: apiResult.state.data.summary,
+            description: apiResult.state.data.summary,
             validation_results: validationResult,
             pr_url: prUrl,
             created_at: new Date().toISOString()
@@ -1031,10 +1117,10 @@ EXAMPLE STRUCTURE:
             const { data: retryData, error: retryError } = await supabase
               .from('api_fragments')
               .insert({
-                openapi_spec: apiResult.openApiSpec,
-                implementation_code: apiResult.implementationCode,
-                requirements: apiResult.requirements,
-                description: apiResult.description,
+                openapi_spec: apiResult.state.data.files['openapi.yaml'] || '',
+                implementation_code: apiResult.state.data.files['index.js'] || '',
+                requirements: apiResult.state.data.summary,
+                description: apiResult.state.data.summary,
                 validation_results: validationResult,
                 pr_url: prUrl,
                 created_at: new Date().toISOString()

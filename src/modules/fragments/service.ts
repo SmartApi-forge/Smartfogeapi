@@ -113,7 +113,7 @@ export class FragmentService {
       const offset = Math.max(params.offset || 0, 0)
       
       // Use database-level search with pagination
-      const fragments = await fragmentOperations.searchByTitle(params.title, {
+      const fragments = await fragmentOperations.searchByContent(params.title, {
         limit,
         offset
       })

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { createTRPCRouter, baseProcedure } from '../../trpc/init'
+import { TRPCError } from '@trpc/server'
 import { MessageService } from './service'
 import { inngest } from '../../inngest/client'
 import {
@@ -9,6 +10,7 @@ import {
   GetMessagesSchema,
   MessageRoleSchema,
   MessageTypeSchema,
+  SaveResultInputSchema,
 } from './types'
 
 export const messagesRouter = createTRPCRouter({
@@ -37,6 +39,30 @@ export const messagesRouter = createTRPCRouter({
     }),
 
   /**
+   * Get many messages with their related fragments
+   */
+  getMany: baseProcedure
+    .input(z.object({
+      limit: z.number().min(1).max(100).default(50).optional(),
+      includeFragment: z.boolean().optional(),
+    }))
+    .query(async ({ input }) => {
+      try {
+        return await MessageService.getMany({
+          limit: input.limit ?? 50,
+          includeFragment: input.includeFragment
+        })
+      } catch (error) {
+        console.error('Error in getMany procedure:', error)
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch messages',
+          cause: error
+        })
+      }
+    }),
+
+  /**
    * Get a message by ID
    */
   getById: baseProcedure
@@ -55,7 +81,8 @@ export const messagesRouter = createTRPCRouter({
         limit: input.limit ?? 10,
         offset: input.offset ?? 0,
         role: input.role,
-        type: input.type
+        type: input.type,
+        includeFragment: input.includeFragment
       }
       return await MessageService.getAll(params)
     }),
@@ -66,7 +93,8 @@ export const messagesRouter = createTRPCRouter({
   update: baseProcedure
     .input(UpdateMessageSchema)
     .mutation(async ({ input }) => {
-      return await MessageService.update(input)
+      const { id, ...updateData } = input
+      return await MessageService.update(id, updateData)
     }),
 
   /**
@@ -133,5 +161,42 @@ export const messagesRouter = createTRPCRouter({
         offset: input.offset ?? 0
       }
       return await MessageService.getByType(params)
+    }),
+
+  /**
+   * Save AI assistant result with message and fragment
+   */
+  saveResult: baseProcedure
+    .input(SaveResultInputSchema)
+    .mutation(async ({ input }) => {
+      try {
+        const result = await MessageService.saveResult(input)
+        
+        // Invoke background job for the created message
+        await inngest.send({
+          name: "message/created",
+          data: {
+            messageId: result.message.id,
+            content: result.message.content,
+            role: result.message.role,
+            type: result.message.type,
+            fragmentId: result.fragment.id
+          }
+        })
+        
+        return result
+      } catch (error) {
+        console.error('Error in saveResult procedure:', error)
+        // Re-throw TRPCError if it's already a TRPCError
+        if (error instanceof TRPCError) {
+          throw error
+        }
+        // Otherwise wrap in TRPCError
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to save result',
+          cause: error
+        })
+      }
     }),
 })
