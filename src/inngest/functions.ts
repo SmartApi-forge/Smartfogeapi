@@ -404,11 +404,22 @@ EXAMPLE STRUCTURE:
         const parsed = JSON.parse(jsonStr);
         
         // Ensure expected fields have defaults
+        const files = parsed.implementationCode || {};
+        
+        // Add OpenAPI spec to files if it exists
+        if (parsed.openApiSpec) {
+          files['openapi.json'] = JSON.stringify(parsed.openApiSpec, null, 2);
+        }
+        
+        // Also add requirements if they exist
+        const requirements = Array.isArray(parsed.requirements) ? parsed.requirements : [];
+        
         const result: AIResult = {
           state: {
             data: {
               summary: parsed.description || "",
-              files: parsed.implementationCode || {}
+              files: files,
+              requirements: requirements
             } as AgentState
           }
         };
@@ -1162,15 +1173,42 @@ EXAMPLE STRUCTURE:
           throw new Error('Invalid API result structure');
         }
 
+        // Safely serialize data to prevent malformed array literals
+        const safeStringify = (obj: any): string => {
+          try {
+            return JSON.stringify(obj);
+          } catch (error) {
+            console.error('JSON stringify error:', error);
+            return '{"error": "Failed to serialize data"}';
+          }
+        };
+
+        // Safely sanitize text for database insertion
+        const sanitizeText = (text: string): string => {
+          if (typeof text !== 'string') return 'Generated API';
+          // Remove or replace problematic characters that could cause SQL issues
+          return text
+            .replace(/["'`]/g, '') // Remove quotes entirely
+            .replace(/[\r\n\t]/g, ' ') // Replace line breaks and tabs with spaces
+            .replace(/\s+/g, ' ') // Normalize multiple spaces
+            .trim()
+            .substring(0, 500); // Limit length to prevent issues
+        };
+
+        const safeSummary = sanitizeText(apiResult.state.data.summary || 'Generated API');
+        const requirementsArray = Array.isArray(apiResult.state.data.requirements) && apiResult.state.data.requirements.length > 0
+          ? apiResult.state.data.requirements 
+          : [safeSummary];
+
         const { data, error } = await supabase
           .from('api_fragments')
           .insert({
             job_id: jobId || null, // Allow null if no job tracking
             openapi_spec: apiResult.state.data.files['openapi.yaml'] || apiResult.state.data.files['openapi.json'] || '',
-            implementation_code: JSON.stringify(apiResult.state.data.files),
-            requirements: apiResult.state.data.summary,
-            description: apiResult.state.data.summary,
-            validation_results: validationResult,
+            implementation_code: safeStringify(apiResult.state.data.files),
+            requirements: requirementsArray,
+            description: safeSummary,
+            validation_results: safeStringify(validationResult),
             pr_url: prUrl,
             created_at: new Date().toISOString()
           })
@@ -1182,14 +1220,18 @@ EXAMPLE STRUCTURE:
           // If job_id constraint fails and we don't have a jobId, try without job_id
           if (error.code === '23502' && error.message.includes('job_id') && !jobId) {
             console.log('Retrying API save without job_id constraint...');
+            const retryRequirementsArray = Array.isArray(apiResult.state.data.requirements) && apiResult.state.data.requirements.length > 0
+              ? apiResult.state.data.requirements 
+              : [sanitizeText(apiResult.state.data.summary || 'Generated API')];
+            
             const { data: retryData, error: retryError } = await supabase
               .from('api_fragments')
               .insert({
                 openapi_spec: apiResult.state.data.files['openapi.yaml'] || '',
-                implementation_code: apiResult.state.data.files['index.js'] || '',
-                requirements: apiResult.state.data.summary,
-                description: apiResult.state.data.summary,
-                validation_results: validationResult,
+                implementation_code: safeStringify(apiResult.state.data.files['index.js'] || {}),
+                requirements: retryRequirementsArray,
+                description: sanitizeText(apiResult.state.data.summary || 'Generated API'),
+                validation_results: safeStringify(validationResult),
                 pr_url: prUrl,
                 created_at: new Date().toISOString()
               })
