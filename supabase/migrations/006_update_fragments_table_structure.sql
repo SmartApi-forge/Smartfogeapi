@@ -10,7 +10,7 @@ ADD COLUMN IF NOT EXISTS files JSONB DEFAULT '{}';
 -- Update existing records to have default values for new columns
 UPDATE public.fragments 
 SET 
-  sandbox_url = COALESCE(sandbox_url, ''),
+  sandbox_url = COALESCE(sandbox_url, 'https://example.com'),
   title = COALESCE(title, 'fragment'),
   files = COALESCE(files, '{}');
 

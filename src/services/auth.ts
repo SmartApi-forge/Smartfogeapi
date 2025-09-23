@@ -117,10 +117,15 @@ export const authService = {
   },
 
   // Update user profile
-  async updateProfile(updates: { full_name?: string; avatar_url?: string }) {
+  async updateProfile(updates: { name?: string; avatar_url?: string }) {
     try {
+      // Map name to full_name for Supabase auth metadata
+      const authUpdates: { full_name?: string; avatar_url?: string } = {}
+      if (updates.name) authUpdates.full_name = updates.name
+      if (updates.avatar_url) authUpdates.avatar_url = updates.avatar_url
+
       const { data, error } = await supabase.auth.updateUser({
-        data: updates
+        data: authUpdates
       })
 
       if (error) {

@@ -49,8 +49,7 @@ export const messagesRouter = createTRPCRouter({
     .query(async ({ input }) => {
       try {
         return await MessageService.getMany({
-          limit: input.limit ?? 50,
-          includeFragment: input.includeFragment
+          limit: input.limit ?? 50
         })
       } catch (error) {
         console.error('Error in getMany procedure:', error)
@@ -93,8 +92,7 @@ export const messagesRouter = createTRPCRouter({
   update: baseProcedure
     .input(UpdateMessageSchema)
     .mutation(async ({ input }) => {
-      const { id, ...updateData } = input
-      return await MessageService.update(id, updateData)
+      return await MessageService.update(input)
     }),
 
   /**

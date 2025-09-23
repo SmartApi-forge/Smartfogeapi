@@ -6,6 +6,8 @@ export const FragmentSchema = z.object({
   message_id: z.string().uuid(),
   sandbox_url: z.string().url(),
   title: z.string(),
+  content: z.string(),
+  order_index: z.number(),
   files: z.record(z.string(), z.any()), // JSONB field for file paths/content
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
@@ -16,6 +18,8 @@ export const CreateFragmentSchema = z.object({
   message_id: z.string().uuid(),
   sandbox_url: z.string().url(),
   title: z.string().min(1, 'Title is required'),
+  content: z.string(),
+  order_index: z.number(),
   files: z.record(z.string(), z.any()).default({}),
 })
 
@@ -24,6 +28,8 @@ export const UpdateFragmentSchema = z.object({
   message_id: z.string().uuid().optional(),
   sandbox_url: z.string().url().optional(),
   title: z.string().min(1, 'Title is required').optional(),
+  content: z.string().optional(),
+  order_index: z.number().optional(),
   files: z.record(z.string(), z.any()).optional(),
 })
 

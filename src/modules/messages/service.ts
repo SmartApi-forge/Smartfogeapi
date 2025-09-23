@@ -1,9 +1,9 @@
+import { messageOperations, fragmentOperations } from '../../../lib/supabase-server'
 import { TRPCError } from '@trpc/server'
-import { messageOperations, fragmentOperations, supabaseAdmin } from '../../../lib/supabase-server'
 import type { 
   CreateMessageInput, 
   UpdateMessageInput, 
-  GetMessageInput,
+  GetMessageInput, 
   GetMessagesInput,
   Message,
   MessageWithFragments,
@@ -12,7 +12,6 @@ import type {
   SaveResultInput,
   SaveResultResponse
 } from './types'
-import type { AgentState, AIResult } from '../../inngest/types'
 
 export class MessageService {
   /**
@@ -31,7 +30,11 @@ export class MessageService {
     } catch (error) {
       console.error('Error creating message:', error)
       const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new Error(`Failed to create message: ${errorMessage}`)
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to create message: ${errorMessage}`,
+        cause: error
+      })
     }
   }
 
@@ -44,7 +47,11 @@ export class MessageService {
       return message
     } catch (error) {
       console.error('Error getting message:', error)
-      throw new Error('Message not found')
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Message not found',
+        cause: error
+      })
     }
   }
 
@@ -66,20 +73,29 @@ export class MessageService {
     } catch (error) {
       console.error('Error getting messages:', error)
       const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new Error(`Failed to get messages: ${errorMessage}`)
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to get messages: ${errorMessage}`,
+        cause: error
+      })
     }
   }
 
   /**
    * Update a message
    */
-  static async update(id: string, input: UpdateMessageInput): Promise<Message> {
+  static async update(input: UpdateMessageInput & { id: string }): Promise<Message> {
     try {
-      const message = await messageOperations.update(id, input)
+      const { id, ...updateData } = input
+      const message = await messageOperations.update(id, updateData)
       return message
     } catch (error) {
       console.error('Error updating message:', error)
-      throw new Error('Failed to update message')
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to update message',
+        cause: error
+      })
     }
   }
 
@@ -91,7 +107,11 @@ export class MessageService {
       await messageOperations.delete(input.id)
     } catch (error) {
       console.error('Error deleting message:', error)
-      throw new Error('Failed to delete message')
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to delete message',
+        cause: error
+      })
     }
   }
 
@@ -104,32 +124,33 @@ export class MessageService {
     } catch (error) {
       console.error('Error getting message count:', error)
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      throw new Error(`Failed to get message count: ${errorMessage}`)
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to get message count: ${errorMessage}`,
+        cause: error
+      })
     }
   }
 
   /**
    * Get messages with their related fragments
    */
-  static async getMany(input: { limit?: number; includeFragment?: boolean }): Promise<Message[] | MessageWithFragments[]> {
+  static async getMany(input: { limit?: number }): Promise<(Message & { fragments: any[] })[]> {
     try {
-      if (input.includeFragment) {
-        const messages = await messageOperations.getWithFragments({
-          limit: input.limit ?? 50,
-          offset: 0
-        })
-        return messages
-      } else {
-        const messages = await messageOperations.getAll({
-          limit: input.limit ?? 50,
-          offset: 0
-        })
-        return messages
-      }
+      const messages = await messageOperations.getWithFragments({
+        limit: input.limit ?? 50,
+        offset: 0
+      })
+      
+      return messages
     } catch (error) {
-      console.error('Error getting messages:', error)
+      console.error('Error getting messages with fragments:', error)
       const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new Error(`Failed to get messages: ${errorMessage}`)
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to get messages: ${errorMessage}`,
+        cause: error
+      })
     }
   }
 
@@ -142,7 +163,11 @@ export class MessageService {
     } catch (error) {
       console.error('Error getting recent messages:', error)
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      throw new Error(`Failed to get recent messages: ${errorMessage}`)
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to get recent messages: ${errorMessage}`,
+        cause: error
+      })
     }
   }
 
@@ -151,15 +176,22 @@ export class MessageService {
    */
   static async getByRole(input: { role: MessageRole; limit: number; offset: number }): Promise<Message[]> {
     try {
-      return await this.getAll({
+      const result = await this.getAll({
         role: input.role,
         limit: input.limit,
-        offset: input.offset
+        offset: input.offset,
+        includeFragment: false // Explicitly set to false to ensure Message[] return type
       })
+      // Type assertion is safe because includeFragment is false
+      return result as Message[]
     } catch (error) {
       console.error('Error getting messages by role:', error)
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      throw new Error(`Failed to get messages by role: ${errorMessage}`)
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to get messages by role: ${errorMessage}`,
+        cause: error
+      })
     }
   }
 
@@ -168,27 +200,36 @@ export class MessageService {
    */
   static async getByType(input: { type: MessageType; limit: number; offset: number }): Promise<Message[]> {
     try {
-      return await this.getAll({
+      const result = await this.getAll({
         type: input.type,
         limit: input.limit,
-        offset: input.offset
+        offset: input.offset,
+        includeFragment: false // Explicitly set to false to ensure Message[] return type
       })
+      // Type assertion is safe because includeFragment is false
+      return result as Message[]
     } catch (error) {
       console.error('Error getting messages by type:', error)
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      throw new Error(`Failed to get messages by type: ${errorMessage}`)
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to get messages by type: ${errorMessage}`,
+        cause: error
+      })
     }
   }
 
   /**
    * Save AI assistant result with message and fragment
-   * Creates a message and associated fragment in a transaction-like manner
-   * Includes error detection for AI results
+   * Creates a message and associated fragment with proper error handling and cleanup
+   * Ensures atomicity by rolling back message creation if fragment creation fails
    */
   static async saveResult(input: SaveResultInput): Promise<SaveResultResponse> {
+    let createdMessage: Message | null = null
+    
     try {
       // Create the message first
-      const message = await messageOperations.create({
+      createdMessage = await messageOperations.create({
         content: input.content,
         role: input.role,
         type: input.type
@@ -196,18 +237,31 @@ export class MessageService {
 
       // Create the associated fragment
       const fragment = await fragmentOperations.create({
-        message_id: message.id,
+        message_id: createdMessage.id,
         sandbox_url: input.sandboxUrl,
         title: input.title,
+        content: input.content,
+        order_index: 0,
         files: input.files
       })
 
       return {
-        message,
+        message: createdMessage,
         fragment
       }
     } catch (error) {
       console.error('Error saving result:', error)
+      
+      // Cleanup: If message was created but fragment creation failed, delete the message
+      if (createdMessage) {
+        try {
+          await messageOperations.delete(createdMessage.id)
+          console.log(`Cleaned up orphaned message with ID: ${createdMessage.id}`)
+        } catch (cleanupError) {
+          console.error('Failed to cleanup orphaned message:', cleanupError)
+          // Continue with original error - cleanup failure shouldn't mask the original issue
+        }
+      }
       
       // Throw TRPCError for proper error handling in tRPC context
       if (error instanceof Error) {
@@ -222,93 +276,6 @@ export class MessageService {
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to save result: Unknown error occurred'
       })
-    }
-  }
-
-  /**
-   * Save AI result with error detection and proper typing
-   * Handles AI-generated results from network with error checking
-   */
-  static async saveAIResult(result: AIResult, jobId?: string): Promise<void> {
-    try {
-      // Error detection logic
-      const isError = !result.state.data.summary || !Object.keys(result.state.data.files ?? {}).length;
-      
-      if (isError) {
-        // Save error message to Supabase without creating fragments
-        const { error } = await supabaseAdmin
-          .from('messages')
-          .insert({
-            content: 'Something went wrong. Please try again.',
-            role: 'assistant' as const,
-            type: 'error' as const
-          });
-          
-        if (error) {
-          console.error('Failed to save error message:', error);
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to save error message',
-            cause: error
-          });
-        }
-        
-        return; // Return early - do not create fragments
-      }
-      
-      // If no error, save the AI result with fragments
-      const agentState: AgentState = result.state.data;
-      
-      // Create message for successful AI result
-      const { data: message, error: messageError } = await supabaseAdmin
-        .from('messages')
-        .insert({
-          content: agentState.summary,
-          role: 'assistant' as const,
-          type: 'result' as const
-        })
-        .select()
-        .single();
-        
-      if (messageError) {
-        console.error('Failed to save AI result message:', messageError);
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to save AI result message',
-          cause: messageError
-        });
-      }
-      
-      // Create fragments for each file
-       const fragmentInserts = Object.entries(agentState.files).map(([path, content]) => ({
-         message_id: message.id,
-         sandbox_url: '',
-         title: path,
-         files: { [path]: content }
-       }));
-      
-      if (fragmentInserts.length > 0) {
-        const { error: fragmentError } = await supabaseAdmin
-          .from('fragments')
-          .insert(fragmentInserts);
-          
-        if (fragmentError) {
-          console.error('Failed to save fragments:', fragmentError);
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to save fragments',
-            cause: fragmentError
-          });
-        }
-      }
-      
-    } catch (error) {
-      console.error('Error in saveAIResult:', error);
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to save AI result',
-        cause: error
-      });
     }
   }
 }

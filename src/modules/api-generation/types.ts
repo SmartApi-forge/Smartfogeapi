@@ -18,6 +18,10 @@ export const projectSchema = z.object({
   updated_at: z.date(),
   deploy_url: z.string().optional(),
   swagger_url: z.string().optional(),
+  openapi_spec: z.string().optional(),
+  code_url: z.string().optional(),
+  prompt: z.string().optional(),
+  advanced: z.boolean().optional(),
 })
 
 export const jobStatusSchema = z.object({

@@ -1,9 +1,27 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Server-side Supabase client with service role key for elevated permissions
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+// Validate required environment variables
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
+if (!supabaseUrl || supabaseUrl.trim() === '') {
+  throw new Error(
+    'Missing NEXT_PUBLIC_SUPABASE_URL environment variable. ' +
+    'This should be set to your Supabase project URL (e.g., https://your-project.supabase.co). ' +
+    'Please add it to your .env.local file or deployment environment.'
+  )
+}
+
+if (!supabaseServiceRoleKey || supabaseServiceRoleKey.trim() === '') {
+  throw new Error(
+    'Missing SUPABASE_SERVICE_ROLE_KEY environment variable. ' +
+    'This should be set to your Supabase service role key for server-side operations. ' +
+    'You can find this in your Supabase project settings under API keys. ' +
+    'Please add it to your .env.local file or deployment environment.'
+  )
+}
+
+// Server-side Supabase client with service role key for elevated permissions
 export const supabaseServer = createClient(supabaseUrl, supabaseServiceRoleKey, {
   auth: {
     autoRefreshToken: false,
@@ -29,6 +47,8 @@ export interface Fragment {
   message_id: string
   sandbox_url: string
   title: string
+  content: string
+  order_index: number
   files: Record<string, any>
   created_at: string
   updated_at: string

@@ -43,9 +43,18 @@ export const profileService = {
   },
 
   async updateProfile(userId: string, updates: Partial<Profile>): Promise<Profile> {
+    // Map name field to full_name for database compatibility
+    const dbUpdates = { ...updates }
+    if ('name' in updates) {
+      // @ts-ignore - We know this is safe since we're mapping the field
+      dbUpdates.full_name = updates.name
+      // @ts-ignore - Remove the name field since it doesn't exist in the database
+      delete dbUpdates.name
+    }
+
     const { data, error } = await supabase
       .from('profiles')
-      .update(updates)
+      .update(dbUpdates)
       .eq('id', userId)
       .select()
       .single()

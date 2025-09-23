@@ -140,7 +140,21 @@ const AnimatedPlaceholder = ({ isFocused }: { isFocused: boolean }) => {
   )
 }
 
-export function AiInput({ isAuthenticated = false }: { isAuthenticated?: boolean }) {
+interface AiInputProps {
+  isAuthenticated?: boolean
+  role?: 'user' | 'assistant' | 'system'
+  type?: 'text' | 'image' | 'file' | 'code' | 'result' | 'error'
+  repoUrl?: string
+  metadata?: Record<string, any>
+}
+
+export function AiInput({ 
+  isAuthenticated = false, 
+  role = 'user', 
+  type = 'result',
+  repoUrl,
+  metadata 
+}: AiInputProps) {
   const [value, setValue] = useState("")
   const [isFocused, setIsFocused] = useState(false)
   const { textareaRef, adjustHeight } = useAutoResizeTextarea({
@@ -151,7 +165,7 @@ export function AiInput({ isAuthenticated = false }: { isAuthenticated?: boolean
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
-  // tRPC hook for message creation (following YouTube tutorial pattern)
+  // Create message using tRPC
   const createMessage = api.messages.create.useMutation({
     onSuccess: () => {
       console.log("Message created successfully!")
@@ -185,12 +199,24 @@ export function AiInput({ isAuthenticated = false }: { isAuthenticated?: boolean
     
     if (!value.trim()) return
     
-    // Create message using trpc.messages.create (following YouTube tutorial pattern)
-    createMessage.mutate({ 
+    // Create message using tRPC
+    // Expected message shape: { content: string, role: 'user'|'assistant'|'system', type: 'text'|'image'|'file'|'code'|'result'|'error', repoUrl?: string, metadata?: Record<string, any> }
+    // Defaults: role='user', type='result'
+    const messagePayload: any = { 
       content: value,
-      role: 'user',
-      type: 'result'
-    })
+      role,
+      type
+    }
+    
+    // Preserve contextual fields if provided
+    if (repoUrl) {
+      messagePayload.repoUrl = repoUrl
+    }
+    if (metadata) {
+      messagePayload.metadata = metadata
+    }
+    
+    createMessage.mutate(messagePayload)
     
     // Clear the input after submission
     setValue("")
