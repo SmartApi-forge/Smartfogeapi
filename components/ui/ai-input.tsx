@@ -140,7 +140,21 @@ const AnimatedPlaceholder = ({ isFocused }: { isFocused: boolean }) => {
   )
 }
 
-export function AiInput({ isAuthenticated = false }: { isAuthenticated?: boolean }) {
+interface AiInputProps {
+  isAuthenticated?: boolean
+  role?: 'user' | 'assistant' | 'system'
+  type?: 'text' | 'image' | 'file' | 'code' | 'result' | 'error'
+  repoUrl?: string
+  metadata?: Record<string, any>
+}
+
+export function AiInput({ 
+  isAuthenticated = false, 
+  role = 'user', 
+  type = 'result',
+  repoUrl,
+  metadata 
+}: AiInputProps) {
   const [value, setValue] = useState("")
   const [isFocused, setIsFocused] = useState(false)
   const { textareaRef, adjustHeight } = useAutoResizeTextarea({
@@ -151,13 +165,13 @@ export function AiInput({ isAuthenticated = false }: { isAuthenticated?: boolean
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
-  // tRPC hook for automatic Inngest invocation
-  const invokeInngest = api.apiGeneration.invoke.useMutation({
+  // Create message using tRPC
+  const createMessage = api.messages.create.useMutation({
     onSuccess: () => {
-      console.log("Inngest function invoked successfully!")
+      console.log("Message created successfully!")
     },
     onError: (error: any) => {
-      console.error("Failed to invoke Inngest function:", error)
+      console.error("Failed to create message:", error)
     }
   })
 
@@ -185,12 +199,24 @@ export function AiInput({ isAuthenticated = false }: { isAuthenticated?: boolean
     
     if (!value.trim()) return
     
-    // Automatically invoke Inngest function with the user's input
-    invokeInngest.mutate({ 
-      text: value,
-      mode: 'direct', // Default to direct mode
-      repoUrl: undefined // No repo URL for basic input
-    })
+    // Create message using tRPC
+    // Expected message shape: { content: string, role: 'user'|'assistant'|'system', type: 'text'|'image'|'file'|'code'|'result'|'error', repoUrl?: string, metadata?: Record<string, any> }
+    // Defaults: role='user', type='result'
+    const messagePayload: any = { 
+      content: value,
+      role,
+      type
+    }
+    
+    // Preserve contextual fields if provided
+    if (repoUrl) {
+      messagePayload.repoUrl = repoUrl
+    }
+    if (metadata) {
+      messagePayload.metadata = metadata
+    }
+    
+    createMessage.mutate(messagePayload)
     
     // Clear the input after submission
     setValue("")
@@ -289,15 +315,15 @@ export function AiInput({ isAuthenticated = false }: { isAuthenticated?: boolean
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={invokeInngest.isLoading}
+                disabled={createMessage.isPending}
                 className={cn(
                   "rounded-full p-2 transition-colors",
-                  value && !invokeInngest.isLoading
+                  value && !createMessage.isPending
                     ? "bg-blue-600 hover:bg-blue-700 text-white shadow-lg"
                     : "bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80"
                 )}
               >
-                {invokeInngest.isLoading ? (
+                {createMessage.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <Send className="w-4 h-4" />

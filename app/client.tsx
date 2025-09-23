@@ -23,7 +23,7 @@ export function ClientContent() {
 
   // tRPC hook for createApi
   const createApi = api.apiGeneration.createApi.useQuery(
-    { text: prompt },
+    undefined,
     { enabled: false } // Only run when manually triggered
   );
 

@@ -19,15 +19,13 @@ export const createTRPCContext = cache(async (): Promise<Context> => {
     const accessToken = cookieStore.get('sb-access-token')?.value;
     const refreshToken = cookieStore.get('sb-refresh-token')?.value;
 
-    if (accessToken && refreshToken) {
-      // Set the session in Supabase
-      const { data: { user }, error } = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      });
+    if (accessToken) {
+      // Verify the access token by getting user info
+      // Don't use setSession as it consumes the refresh token
+      const { data: { user }, error } = await supabase.auth.getUser(accessToken);
 
       if (error) {
-        console.error('Error setting Supabase session:', error);
+        console.error('Error verifying access token:', error);
         return { user: null };
       }
 

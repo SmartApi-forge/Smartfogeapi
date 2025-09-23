@@ -13,6 +13,7 @@ const supabase = createClient(
 
 export type Context = {
   user: User | null;
+  supabase: typeof supabase;
 };
 
 /**
@@ -52,15 +53,15 @@ export const createTRPCContext = async (opts: FetchCreateContextFnOptions): Prom
 
       if (error) {
         console.error('Error setting Supabase session:', error);
-        return { user: null };
+        return { user: null, supabase };
       }
 
-      return { user };
+      return { user, supabase };
     }
-    return { user: null };
+    return { user: null, supabase };
   } catch (error) {
     console.error('Error creating tRPC context:', error);
-    return { user: null };
+    return { user: null, supabase };
   }
 };
 

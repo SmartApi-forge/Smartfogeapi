@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import { Sandbox } from 'e2b';
 import { Octokit } from '@octokit/rest';
 import { createClient } from '@supabase/supabase-js';
+import { AgentState, AIResult } from './types';
 
 // Initialize OpenAI client with API key from environment
 const openaiClient = new OpenAI({
@@ -18,6 +19,81 @@ const supabase = createClient(
 const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN,
 });
+
+// New message created background job (following YouTube tutorial pattern)
+export const messageCreated = inngest.createFunction(
+  { id: "message-created" },
+  { event: "message/created" },
+  async ({ event, step }) => {
+    // Input validation for event.data
+    if (!event || !event.data) {
+      console.error('Invalid event: missing event or event.data');
+      throw new Error('Invalid event: missing event or event.data');
+    }
+
+    const { messageId, content, role, type } = event.data;
+
+    // Validate required fields
+    if (!messageId || typeof messageId !== 'string' || messageId.trim() === '') {
+      console.error('Invalid messageId: must be a non-empty string');
+      throw new Error('Invalid messageId: must be a non-empty string');
+    }
+
+    if (!content || typeof content !== 'string' || content.trim() === '') {
+      console.error('Invalid content: must be a non-empty string');
+      throw new Error('Invalid content: must be a non-empty string');
+    }
+
+    if (!role || typeof role !== 'string') {
+      console.error('Invalid role: must be a string');
+      throw new Error('Invalid role: must be a string');
+    }
+
+    if (!type || typeof type !== 'string') {
+      console.error('Invalid type: must be a string');
+      throw new Error('Invalid type: must be a string');
+    }
+
+    // Optional: Validate role and type against allowed values
+    const allowedRoles = ['user', 'assistant', 'system'];
+    const allowedTypes = ['text', 'image', 'file', 'code', 'result', 'error'];
+    
+    if (!allowedRoles.includes(role)) {
+      console.error(`Invalid role: ${role}. Must be one of: ${allowedRoles.join(', ')}`);
+      throw new Error(`Invalid role: ${role}. Must be one of: ${allowedRoles.join(', ')}`);
+    }
+
+    if (!allowedTypes.includes(type)) {
+      console.error(`Invalid type: ${type}. Must be one of: ${allowedTypes.join(', ')}`);
+      throw new Error(`Invalid type: ${type}. Must be one of: ${allowedTypes.join(', ')}`);
+    }
+    
+    console.log(`Processing new message: ${messageId}`);
+    console.log(`Content: ${content}`);
+    console.log(`Role: ${role}, Type: ${type}`);
+    
+    // Here you can add any background processing logic
+    // For example: AI processing, notifications, analytics, etc.
+    
+    await step.run("process-message", async () => {
+      // Update message status or add processing results
+      const { error } = await supabase
+        .from('messages')
+        .update({ 
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', messageId);
+        
+      if (error) {
+        console.error('Failed to update message:', error);
+        throw new Error(`Failed to update message: ${error.message}`);
+      }
+      
+      console.log(`Message ${messageId} processed successfully`);
+      return { success: true, messageId };
+    });
+  }
+);
 
 export const generateAPI = inngest.createFunction(
   { id: "generate-api" },
@@ -59,17 +135,30 @@ export const generateAPI = inngest.createFunction(
         let sandbox: Sandbox | null = null;
         
         try {
-          // Validate and sanitize repository URL
+          // Enhanced validation and sanitization of repository URL
           const urlPattern = /^https:\/\/(github\.com|gitlab\.com|bitbucket\.org)\/[\w\-\.]+\/[\w\-\.]+(\.git)?$/;
           if (!urlPattern.test(repoUrl)) {
             throw new Error(`Invalid repository URL format: ${repoUrl}`);
           }
           
+          // Additional security checks
+          if (repoUrl.includes('..') || repoUrl.includes(';') || repoUrl.includes('|') || repoUrl.includes('&')) {
+            throw new Error(`Repository URL contains potentially dangerous characters: ${repoUrl}`);
+          }
+          
           // Create sandbox for repository analysis - assign immediately
           sandbox = await Sandbox.create('smart-forge-api-sandbox');
           
-          // Clone the repository using argument array to prevent command injection
-          const cloneResult = await sandbox.commands.run('git', ['clone', repoUrl, '/home/user/repo']);
+          // Enhanced URL escaping to prevent command injection
+          // Handle single quotes, double quotes, backticks, and other shell metacharacters
+          const escapedUrl = repoUrl
+            .replace(/'/g, "'\\''")           // Handle single quotes
+            .replace(/"/g, '\\"')             // Handle double quotes  
+            .replace(/`/g, '\\`')             // Handle backticks
+            .replace(/\$/g, '\\$')            // Handle dollar signs
+            .replace(/\\/g, '\\\\');          // Handle backslashes
+          
+          const cloneResult = await sandbox.commands.run(`git clone '${escapedUrl}' /home/user/repo`);
           if (cloneResult.exitCode !== 0) {
             throw new Error(`Failed to clone repository (exit code: ${cloneResult.exitCode}): ${cloneResult.stderr || cloneResult.stdout}`);
           }
@@ -84,7 +173,7 @@ export const generateAPI = inngest.createFunction(
           }
           
           // Get directory structure
-          const dirStructure = await sandbox.commands.run('find', ['/home/user/repo', '-type', 'f', '-name', '*.js', '-o', '-name', '*.ts', '-o', '-name', '*.json', '-o', '-name', '*.md']);
+          const dirStructure = await sandbox.commands.run(`find /home/user/repo -type f -name '*.js' -o -name '*.ts' -o -name '*.json' -o -name '*.md'`);
           
           // Analyze main files
           const mainFiles = [];
@@ -213,6 +302,7 @@ You MUST respond with valid JSON in this exact structure:
                 }
               }
             }
+            }
           }
         },
         "500": {
@@ -314,31 +404,107 @@ EXAMPLE STRUCTURE:
         const parsed = JSON.parse(jsonStr);
         
         // Ensure expected fields have defaults
-        const result = {
-          openApiSpec: parsed.openApiSpec || {},
-          implementationCode: parsed.implementationCode || {},
-          requirements: parsed.requirements || [],
-          description: parsed.description || "",
+        const result: AIResult = {
+          state: {
+            data: {
+              summary: parsed.description || "",
+              files: parsed.implementationCode || {}
+            } as AgentState
+          }
         };
         
+        // Error detection logic
+        const isError = !result.state.data.summary || !Object.keys(result.state.data.files ?? {}).length;
+        
+        if (isError) {
+          console.log('❌ Error detected in AI result - missing summary or files');
+          
+          // Save error message to database using the new service method
+          const { MessageService } = await import('../modules/messages/service');
+          await MessageService.saveResult({
+            content: result.state.data.summary || 'AI generation failed - missing required data',
+            role: 'assistant',
+            type: 'error',
+            sandboxUrl: 'https://example.com/error',
+            title: 'AI Generation Error',
+            files: result.state.data.files || {}
+          });
+          
+          // Update job status to failed if job tracking is available
+          if (jobId) {
+            await supabase
+              .from('jobs')
+              .update({
+                status: 'failed',
+                error: 'AI generation failed - missing required data',
+                completed_at: new Date().toISOString()
+              })
+              .eq('id', jobId);
+          }
+          
+          // Return early - do not proceed with validation or fragment creation
+          return {
+            success: false,
+            error: 'AI generation failed - missing required data',
+            jobId
+          };
+        }
+        
         console.log('🤖 AI Generated Result:');
-        console.log('- OpenAPI spec keys:', Object.keys(result.openApiSpec));
-        console.log('- Implementation files:', Object.keys(result.implementationCode));
-        console.log('- Requirements count:', result.requirements.length);
+        console.log('- Summary:', result.state.data.summary);
+        console.log('- Implementation files:', Object.keys(result.state.data.files));
+        console.log('- Files count:', Object.keys(result.state.data.files).length);
         
         return result;
       } catch (error) {
         console.error("Failed to parse generated API code:", error);
-        // Return a fallback structure instead of throwing
+        
+        // Create error result for database saving
+        const errorResult: AIResult = {
+          state: {
+            data: {
+              summary: "Failed to parse API generation result",
+              files: {}
+            } as AgentState
+          }
+        };
+        
+        // Save error message to database
+        const { MessageService } = await import('../modules/messages/service');
+        await MessageService.saveResult({
+          content: errorResult.state.data.summary || `Failed to parse AI result: ${error}`,
+          role: 'assistant',
+          type: 'error',
+          sandboxUrl: 'https://example.com/error',
+          title: 'AI Parsing Error',
+          files: errorResult.state.data.files || {}
+        });
+        
+        // Update job status to failed if job tracking is available
+        if (jobId) {
+          await supabase
+            .from('jobs')
+            .update({
+              status: 'failed',
+              error: `Failed to parse AI result: ${error}`,
+              completed_at: new Date().toISOString()
+            })
+            .eq('id', jobId);
+        }
+        
+        // Return early - do not proceed with validation
         return {
-          openApiSpec: {},
-          implementationCode: {},
-          requirements: [],
-          description: "Failed to parse API generation result",
-          error: String(error),
+          success: false,
+          error: `Failed to parse AI result: ${error}`,
+          jobId
         };
       }
     });
+
+    // Check if API generation failed - if so, return early
+    if (!('state' in apiResult) || !apiResult.state?.data?.summary) {
+      return apiResult;
+    }
 
     // Step 4: Comprehensive sandbox validation
     const validationResult = await step.run("validate-code-in-sandbox", async () => {
@@ -352,10 +518,15 @@ EXAMPLE STRUCTURE:
         });
         
         // Write OpenAPI spec to sandbox
-        await sandbox.files.write('/home/user/openapi.json', JSON.stringify(apiResult.openApiSpec, null, 2));
+        if (!('state' in apiResult) || !apiResult.state?.data) {
+          throw new Error('Invalid API result structure for sandbox setup');
+        }
+        
+        const openApiSpec = apiResult.state.data.files['openapi.yaml'] || apiResult.state.data.files['openapi.json'] || '';
+        await sandbox.files.write('/home/user/openapi.json', openApiSpec);
         
         // Write implementation files to sandbox
-        const implementationFiles = apiResult.implementationCode || {};
+        const implementationFiles = apiResult.state.data.files || {};
         console.log('📁 Writing implementation files:', Object.keys(implementationFiles));
         
         for (const [filename, content] of Object.entries(implementationFiles)) {
@@ -810,10 +981,21 @@ EXAMPLE STRUCTURE:
             
             // Test a few API endpoints from the OpenAPI spec using the working port
             const endpoints: any[] = [];
-            if (workingPort && apiResult.openApiSpec?.paths) {
-              const paths = Object.keys(apiResult.openApiSpec.paths).slice(0, 3); // Test first 3 endpoints
-              for (const path of paths) {
-                const methods = Object.keys((apiResult.openApiSpec.paths as any)[path]);
+            if (!('state' in apiResult) || !apiResult.state?.data) {
+              console.log('Invalid API result structure for endpoint testing');
+            } else {
+              const openApiSpecContent = apiResult.state.data.files['openapi.yaml'] || apiResult.state.data.files['openapi.json'] || '';
+              let parsedSpec: any = null;
+              try {
+                parsedSpec = JSON.parse(openApiSpecContent);
+              } catch (e) {
+                console.log('Could not parse OpenAPI spec for endpoint testing');
+              }
+              
+              if (workingPort && parsedSpec?.paths) {
+                const paths = Object.keys(parsedSpec.paths).slice(0, 3); // Test first 3 endpoints
+                for (const path of paths) {
+                  const methods = Object.keys((parsedSpec.paths as any)[path]);
                 const method = methods.find(m => ['get', 'post'].includes(m.toLowerCase())) || methods[0];
                 
                 if (method) {
@@ -843,6 +1025,7 @@ EXAMPLE STRUCTURE:
                   }
                 }
               }
+            }
             }
             
             executionResult = {
@@ -974,14 +1157,19 @@ EXAMPLE STRUCTURE:
     // Step 6: Save the generated API to database
     const savedApi = await step.run("save-api", async () => {
       try {
+        // Type guard to check if apiResult has the expected structure
+        if (!('state' in apiResult) || !apiResult.state?.data) {
+          throw new Error('Invalid API result structure');
+        }
+
         const { data, error } = await supabase
           .from('api_fragments')
           .insert({
             job_id: jobId || null, // Allow null if no job tracking
-            openapi_spec: apiResult.openApiSpec,
-            implementation_code: apiResult.implementationCode,
-            requirements: apiResult.requirements,
-            description: apiResult.description,
+            openapi_spec: apiResult.state.data.files['openapi.yaml'] || apiResult.state.data.files['openapi.json'] || '',
+            implementation_code: JSON.stringify(apiResult.state.data.files),
+            requirements: apiResult.state.data.summary,
+            description: apiResult.state.data.summary,
             validation_results: validationResult,
             pr_url: prUrl,
             created_at: new Date().toISOString()
@@ -997,10 +1185,10 @@ EXAMPLE STRUCTURE:
             const { data: retryData, error: retryError } = await supabase
               .from('api_fragments')
               .insert({
-                openapi_spec: apiResult.openApiSpec,
-                implementation_code: apiResult.implementationCode,
-                requirements: apiResult.requirements,
-                description: apiResult.description,
+                openapi_spec: apiResult.state.data.files['openapi.yaml'] || '',
+                implementation_code: apiResult.state.data.files['index.js'] || '',
+                requirements: apiResult.state.data.summary,
+                description: apiResult.state.data.summary,
                 validation_results: validationResult,
                 pr_url: prUrl,
                 created_at: new Date().toISOString()
