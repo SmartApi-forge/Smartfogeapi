@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense } from "react"
+import { Suspense, useState } from "react"
 import { HeroHeader } from "@/components/header"
 import AuthDialog from "@/components/auth-dialog"
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,7 @@ import PricingSection from "@/components/pricing-section"
 import FAQSection from "@/components/faq-section"
 import Footer from "@/components/footer"
 import NewsletterCTA from "@/components/newsletter-cta"
+import MessageInterface, { Message } from "@/components/message-interface"
 import Link from "next/link"
 import { motion } from "@/components/motion-wrapper"
 import BelowFooterBanner from "@/components/below-footer-banner"
@@ -21,6 +22,59 @@ import BelowFooterBanner from "@/components/below-footer-banner"
 
 
 export default function HomePage() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const handleSendMessage = (userInput: string) => {
+    const userMessage: Message = {
+      id: `user-${Date.now()}`,
+      type: "user",
+      content: userInput,
+      timestamp: new Date(),
+    };
+
+    const systemMessage: Message = {
+      id: `system-${Date.now()}`,
+      type: "system",
+      content: "",
+      timestamp: new Date(),
+      status: "pending",
+      metadata: {
+        estimatedTime: 60, // From env variable
+        progress: 0,
+      },
+    };
+
+    setMessages([userMessage, systemMessage]);
+    setIsGenerating(true);
+
+    // Simulate API generation process
+    setTimeout(() => {
+      setMessages(prev => prev.map(msg => 
+        msg.id === systemMessage.id 
+          ? { ...msg, status: "processing", metadata: { ...msg.metadata, progress: 25 } }
+          : msg
+      ));
+    }, 1000);
+
+    setTimeout(() => {
+      setMessages(prev => prev.map(msg => 
+        msg.id === systemMessage.id 
+          ? { ...msg, status: "processing", metadata: { ...msg.metadata, progress: 75 } }
+          : msg
+      ));
+    }, 3000);
+
+    setTimeout(() => {
+      setMessages(prev => prev.map(msg => 
+        msg.id === systemMessage.id 
+          ? { ...msg, status: "completed", content: "Your API has been generated successfully!" }
+          : msg
+      ));
+      setIsGenerating(false);
+    }, 5000);
+  };
+
   return (
     <div className="min-h-screen bg-background overflow-x-clip">
       <HeroHeader />
@@ -84,8 +138,20 @@ export default function HomePage() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, delay: 0.4 }}
                 >
-                  <PromptInputBox />
+                  <PromptInputBox onSend={handleSendMessage} isLoading={isGenerating} />
                 </motion.div>
+
+                {/* Message Interface */}
+                {messages.length > 0 && (
+                  <motion.div 
+                    className="w-full max-w-4xl mx-auto px-3 sm:px-0 mt-8"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5 }}
+                  >
+                    <MessageInterface messages={messages} />
+                  </motion.div>
+                )}
 
                 {/* Supporting text with precise line breaks */}
                 <motion.div 
