@@ -10,6 +10,8 @@ export const FragmentSchema = z.object({
   message_id: z.string().uuid(),
   sandbox_url: z.string().url(),
   title: z.string(),
+  content: z.string(),
+  order_index: z.number(),
   files: z.record(z.string(), z.any()), // JSONB field for file paths/content
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
@@ -111,6 +113,8 @@ export const SaveResultResponseSchema = z.object({
     message_id: z.string().uuid(),
     sandbox_url: z.string().url(),
     title: z.string(),
+    content: z.string(),
+    order_index: z.number(),
     files: z.record(z.string(), z.any()),
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),

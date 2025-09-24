@@ -64,8 +64,8 @@ export const authRouter = createTRPCRouter({
 
   // Get user's API usage statistics
   getUsageStats: protectedProcedure
-    .query(async () => {
-      return await authModuleService.getUsageStats()
+    .query(async ({ ctx }) => {
+      return await authModuleService.getUsageStats(ctx.user.id)
     }),
 })
 

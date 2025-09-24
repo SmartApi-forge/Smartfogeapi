@@ -1,5 +1,9 @@
 import React, { useState } from 'react'
 import { api } from '../lib/trpc-client' // Adjust path based on your TRPC client setup
+import type { MessageWithFragments, Fragment } from '../src/modules/messages/types'
+
+// Type the messages properly
+type MessagesWithFragments = MessageWithFragments[]
 
 /**
  * Example component showing how to use the messages.getMany procedure
@@ -22,6 +26,9 @@ export function MessagesExample() {
     limit: 10,
     includeFragment: true
   })
+
+  // Type the messages data properly
+  const typedMessages = messages as MessageWithFragments[] | undefined
 
   // Usage with enabled/disabled based on condition
   const [shouldFetch, setShouldFetch] = useState(true)
@@ -60,7 +67,7 @@ export function MessagesExample() {
       </button>
 
       {/* Display messages count */}
-      <p>Total messages loaded: {messages?.length || 0}</p>
+      <p>Total messages loaded: {typedMessages?.length || 0}</p>
 
       {/* Raw JSON display for debugging */}
       <details>
@@ -72,13 +79,13 @@ export function MessagesExample() {
           overflow: 'auto',
           maxHeight: '400px'
         }}>
-          {JSON.stringify(messages, null, 2)}
+          {JSON.stringify(typedMessages, null, 2)}
         </pre>
       </details>
 
       {/* Formatted display of messages */}
       <div className="messages-list">
-        {messages?.map((message) => (
+        {typedMessages?.map((message) => (
           <div key={message.id} className="message-card" style={{
             border: '1px solid #ddd',
             borderRadius: '8px',
@@ -97,11 +104,11 @@ export function MessagesExample() {
               <p>{message.content}</p>
             </div>
 
-            {/* Display associated fragments */}
-            {(message as any).fragments && (message as any).fragments.length > 0 && (
+            {/* Display associated fragments with proper typing */}
+            {message.fragments && message.fragments.length > 0 && (
               <div className="fragments-section">
-                <h4>Fragments ({(message as any).fragments.length}):</h4>
-                {(message as any).fragments.map((fragment: any, index: number) => (
+                <h4>Fragments ({message.fragments.length}):</h4>
+                {message.fragments.map((fragment: Fragment, index: number) => (
                   <div key={fragment.id || index} style={{
                     backgroundColor: '#fff',
                     padding: '0.5rem',
@@ -110,10 +117,11 @@ export function MessagesExample() {
                     borderRadius: '4px'
                   }}>
                     <div><strong>Fragment {index + 1}:</strong></div>
-                    <div>{fragment.content}</div>
-                    {fragment.metadata && (
+                    <div><strong>Title:</strong> {fragment.title}</div>
+                    <div><strong>Sandbox URL:</strong> {fragment.sandbox_url}</div>
+                    {fragment.files && Object.keys(fragment.files).length > 0 && (
                       <div style={{ fontSize: '0.8em', color: '#666', marginTop: '0.25rem' }}>
-                        Metadata: {JSON.stringify(fragment.metadata)}
+                        Files: {Object.keys(fragment.files).join(', ')}
                       </div>
                     )}
                   </div>

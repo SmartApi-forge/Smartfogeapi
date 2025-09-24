@@ -116,7 +116,7 @@ export class AuthModuleService {
     try {
       // Update Supabase auth metadata
       const authUpdates: AuthUpdates = {}
-      if (input.name) authUpdates.full_name = input.name
+      if (input.name) authUpdates.name = input.name
       if (input.avatar_url) authUpdates.avatar_url = input.avatar_url
       
       if (Object.keys(authUpdates).length > 0) {
@@ -125,7 +125,7 @@ export class AuthModuleService {
 
       // Update profile table
       const profileUpdates: AuthUpdates = {}
-      if (input.name) profileUpdates.full_name = input.name
+      if (input.name) profileUpdates.name = input.name
       if (input.avatar_url) profileUpdates.avatar_url = input.avatar_url
 
       if (Object.keys(profileUpdates).length > 0) {
@@ -174,10 +174,15 @@ export class AuthModuleService {
   /**
    * Get user's API usage statistics
    */
-  async getUsageStats(): Promise<UsageStats> {
+  async getUsageStats(userId: string): Promise<UsageStats> {
     try {
-      // TODO: Implement proper analytics from database
+      // TODO: Implement proper analytics from database using userId
       // For now, return mock data that matches PRD requirements
+      // In the future, query database for user-specific stats:
+      // - Count projects by user_id
+      // - Calculate deployment success rates
+      // - Track API generation times
+      // - Monitor monthly usage limits
       
       return {
         apis_generated: 12,

@@ -4,6 +4,8 @@ CREATE TABLE public.messages (
   content TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
   type TEXT NOT NULL CHECK (type IN ('result', 'error')),
+  sender_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  receiver_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -11,18 +13,26 @@ CREATE TABLE public.messages (
 -- Enable RLS for messages
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
--- RLS policies for messages (public access for now, can be restricted later)
-CREATE POLICY "Anyone can view messages" ON public.messages
-  FOR SELECT USING (true);
+-- RLS policies for messages - user-scoped access
+CREATE POLICY "Users can view messages they sent or received" ON public.messages
+  FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
 
-CREATE POLICY "Anyone can create messages" ON public.messages
-  FOR INSERT WITH CHECK (true);
+CREATE POLICY "Users can create messages as sender" ON public.messages
+  FOR INSERT WITH CHECK (
+    auth.uid() = sender_id AND
+    (receiver_id IS NULL OR EXISTS (SELECT 1 FROM auth.users WHERE id = receiver_id))
+  );
 
-CREATE POLICY "Anyone can update messages" ON public.messages
-  FOR UPDATE USING (true);
+CREATE POLICY "Users can update messages they sent or received" ON public.messages
+  FOR UPDATE USING (auth.uid() = sender_id OR auth.uid() = receiver_id)
+  WITH CHECK (
+    auth.uid() = sender_id OR auth.uid() = receiver_id AND
+    sender_id = OLD.sender_id AND -- Prevent changing sender_id
+    created_at = OLD.created_at -- Prevent changing created_at
+  );
 
-CREATE POLICY "Anyone can delete messages" ON public.messages
-  FOR DELETE USING (true);
+CREATE POLICY "Users can delete messages they sent" ON public.messages
+  FOR DELETE USING (auth.uid() = sender_id);
 
 -- Add trigger for updated_at
 CREATE TRIGGER handle_messages_updated_at

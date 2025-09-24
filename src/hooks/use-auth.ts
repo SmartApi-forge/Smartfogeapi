@@ -11,10 +11,17 @@ export const useAuthState = () => {
 
   useEffect(() => {
     // Get initial session
-    authService.getCurrentUser().then(({ user }) => {
-      setUser(user)
-      setLoading(false)
-    })
+    authService.getCurrentUser()
+      .then(({ user }) => {
+        setUser(user)
+      })
+      .catch((error) => {
+        console.error('Failed to get current user:', error)
+        setUser(null)
+      })
+      .finally(() => {
+        setLoading(false)
+      })
 
     // Listen for auth changes
     const { data: { subscription } } = authService.onAuthStateChange((event, session) => {

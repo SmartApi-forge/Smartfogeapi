@@ -81,12 +81,34 @@ export const apiGenerationRouter = createTRPCRouter({
 
   // Background job procedures
   triggerBackgroundJob: protectedProcedure
-    .input(z.object({
-      jobType: z.enum(['generate_api', 'analyze_repo', 'deploy_project']),
-      payload: z.record(z.any())
-    }))
+    .input(z.discriminatedUnion('jobType', [
+      z.object({
+        jobType: z.literal('generate_api'),
+        payload: z.object({
+          prompt: z.string().min(10, "Prompt must be at least 10 characters"),
+          framework: z.enum(['fastapi', 'express']).default('fastapi'),
+          advanced: z.boolean().default(false),
+          template: z.string().optional(),
+          mode: z.enum(['direct', 'github']).optional(),
+          repoUrl: z.string().optional()
+        })
+      }),
+      z.object({
+        jobType: z.literal('analyze_repo'),
+        payload: z.object({
+          repoUrl: z.string().url("Must be a valid URL")
+        })
+      }),
+      z.object({
+        jobType: z.literal('deploy_project'),
+        payload: z.object({
+          projectId: z.string().min(1, "Project ID is required"),
+          deploymentTarget: z.enum(['vercel', 'fly', 'railway']).default('vercel')
+        })
+      })
+    ]))
     .mutation(async ({ input, ctx }) => {
-      const eventName = `api/${input.jobType.replace('_', '/')}`
+      const eventName = `api/${input.jobType.replaceAll('_', '/')}`
       
       await inngest.send({
         name: eventName,

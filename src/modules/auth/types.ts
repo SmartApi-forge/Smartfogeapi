@@ -43,7 +43,7 @@ export interface AuthResponse {
 }
 
 export interface AuthUpdates {
-  full_name?: string
+  name?: string
   avatar_url?: string
 }
 

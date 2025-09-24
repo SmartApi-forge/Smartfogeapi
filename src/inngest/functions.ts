@@ -25,7 +25,48 @@ export const messageCreated = inngest.createFunction(
   { id: "message-created" },
   { event: "message/created" },
   async ({ event, step }) => {
+    // Input validation for event.data
+    if (!event || !event.data) {
+      console.error('Invalid event: missing event or event.data');
+      throw new Error('Invalid event: missing event or event.data');
+    }
+
     const { messageId, content, role, type } = event.data;
+
+    // Validate required fields
+    if (!messageId || typeof messageId !== 'string' || messageId.trim() === '') {
+      console.error('Invalid messageId: must be a non-empty string');
+      throw new Error('Invalid messageId: must be a non-empty string');
+    }
+
+    if (!content || typeof content !== 'string' || content.trim() === '') {
+      console.error('Invalid content: must be a non-empty string');
+      throw new Error('Invalid content: must be a non-empty string');
+    }
+
+    if (!role || typeof role !== 'string') {
+      console.error('Invalid role: must be a string');
+      throw new Error('Invalid role: must be a string');
+    }
+
+    if (!type || typeof type !== 'string') {
+      console.error('Invalid type: must be a string');
+      throw new Error('Invalid type: must be a string');
+    }
+
+    // Optional: Validate role and type against allowed values
+    const allowedRoles = ['user', 'assistant', 'system'];
+    const allowedTypes = ['text', 'image', 'file', 'code', 'result', 'error'];
+    
+    if (!allowedRoles.includes(role)) {
+      console.error(`Invalid role: ${role}. Must be one of: ${allowedRoles.join(', ')}`);
+      throw new Error(`Invalid role: ${role}. Must be one of: ${allowedRoles.join(', ')}`);
+    }
+
+    if (!allowedTypes.includes(type)) {
+      console.error(`Invalid type: ${type}. Must be one of: ${allowedTypes.join(', ')}`);
+      throw new Error(`Invalid type: ${type}. Must be one of: ${allowedTypes.join(', ')}`);
+    }
     
     console.log(`Processing new message: ${messageId}`);
     console.log(`Content: ${content}`);
@@ -94,17 +135,30 @@ export const generateAPI = inngest.createFunction(
         let sandbox: Sandbox | null = null;
         
         try {
-          // Validate and sanitize repository URL
+          // Enhanced validation and sanitization of repository URL
           const urlPattern = /^https:\/\/(github\.com|gitlab\.com|bitbucket\.org)\/[\w\-\.]+\/[\w\-\.]+(\.git)?$/;
           if (!urlPattern.test(repoUrl)) {
             throw new Error(`Invalid repository URL format: ${repoUrl}`);
           }
           
+          // Additional security checks
+          if (repoUrl.includes('..') || repoUrl.includes(';') || repoUrl.includes('|') || repoUrl.includes('&')) {
+            throw new Error(`Repository URL contains potentially dangerous characters: ${repoUrl}`);
+          }
+          
           // Create sandbox for repository analysis - assign immediately
           sandbox = await Sandbox.create('smart-forge-api-sandbox');
           
-          // Clone the repository using argument array to prevent command injection
-          const cloneResult = await sandbox.commands.run(`git clone ${repoUrl} /home/user/repo`);
+          // Enhanced URL escaping to prevent command injection
+          // Handle single quotes, double quotes, backticks, and other shell metacharacters
+          const escapedUrl = repoUrl
+            .replace(/'/g, "'\\''")           // Handle single quotes
+            .replace(/"/g, '\\"')             // Handle double quotes  
+            .replace(/`/g, '\\`')             // Handle backticks
+            .replace(/\$/g, '\\$')            // Handle dollar signs
+            .replace(/\\/g, '\\\\');          // Handle backslashes
+          
+          const cloneResult = await sandbox.commands.run(`git clone '${escapedUrl}' /home/user/repo`);
           if (cloneResult.exitCode !== 0) {
             throw new Error(`Failed to clone repository (exit code: ${cloneResult.exitCode}): ${cloneResult.stderr || cloneResult.stdout}`);
           }
@@ -367,7 +421,14 @@ EXAMPLE STRUCTURE:
           
           // Save error message to database using the new service method
           const { MessageService } = await import('../modules/messages/service');
-          await MessageService.saveAIResult(result, jobId);
+          await MessageService.saveResult({
+            content: result.state.data.summary || 'AI generation failed - missing required data',
+            role: 'assistant',
+            type: 'error',
+            sandboxUrl: 'https://example.com/error',
+            title: 'AI Generation Error',
+            files: result.state.data.files || {}
+          });
           
           // Update job status to failed if job tracking is available
           if (jobId) {
@@ -410,7 +471,14 @@ EXAMPLE STRUCTURE:
         
         // Save error message to database
         const { MessageService } = await import('../modules/messages/service');
-        await MessageService.saveAIResult(errorResult, jobId);
+        await MessageService.saveResult({
+          content: errorResult.state.data.summary || `Failed to parse AI result: ${error}`,
+          role: 'assistant',
+          type: 'error',
+          sandboxUrl: 'https://example.com/error',
+          title: 'AI Parsing Error',
+          files: errorResult.state.data.files || {}
+        });
         
         // Update job status to failed if job tracking is available
         if (jobId) {
