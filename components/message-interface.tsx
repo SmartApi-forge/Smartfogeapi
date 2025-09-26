@@ -66,17 +66,22 @@ const MessageBubble: React.FC<{ message: Message; index: number }> = ({ message,
       )}
     >
       {!isUser && (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg">
+        <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-lg" style={{ backgroundColor: '#333333' }}>
           <Bot className="h-4 w-4 text-white" />
         </div>
       )}
       
       <div className={cn(
-        "max-w-[80%] rounded-2xl px-4 py-3 shadow-lg",
+        "max-w-[80%] rounded-2xl px-4 py-3 shadow-lg font-neue-500",
         isUser 
-          ? "bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-blue-600/20" 
-          : "bg-gradient-to-br from-[#2A2D31] to-[#25282C] text-gray-100 border border-[#444444]/50 shadow-black/20"
-      )}>
+          ? "text-white shadow-black/20" 
+          : "text-gray-100 border border-[#444444]/50 shadow-black/20"
+      )}
+      style={{
+        backgroundColor: '#333333',
+        fontSize: '14px',
+        lineHeight: '24px'
+      }}>
         <div className="text-sm leading-relaxed">
           {isUser ? message.content : getStatusText()}
         </div>
@@ -117,7 +122,7 @@ const MessageBubble: React.FC<{ message: Message; index: number }> = ({ message,
       </div>
 
       {isUser && (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-gray-600 to-gray-700 flex items-center justify-center shadow-lg">
+        <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-lg" style={{ backgroundColor: '#333333' }}>
           <User className="h-4 w-4 text-white" />
         </div>
       )}
@@ -149,13 +154,14 @@ export const MessageInterface: React.FC<MessageInterfaceProps> = ({
       animate={{ opacity: 1, height: "auto" }}
       transition={{ duration: 0.5 }}
       className={cn(
-        "w-full max-w-4xl mx-auto bg-gradient-to-br from-[#1F2023] to-[#1A1D21] rounded-xl border border-[#444444]/50 shadow-2xl backdrop-blur-sm",
+        "w-full max-w-4xl mx-auto rounded-xl border border-[#444444]/50 shadow-2xl backdrop-blur-sm",
         className
       )}
+      style={{ backgroundColor: '#0E100F' }}
     >
       <div className="p-6">
         <div className="flex items-center gap-3 mb-6 pb-4 border-b border-[#444444]/50">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center shadow-lg" style={{ backgroundColor: '#333333' }}>
             <Bot className="h-5 w-5 text-white" />
           </div>
           <div>
