@@ -11,15 +11,15 @@ function updateAuthCookies(session: Session | null) {
     const accessTokenExpiry = new Date(session.expires_at! * 1000)
     const refreshTokenExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
     
-    // Access token with Secure, HttpOnly, and SameSite=Lax for general API access
-    document.cookie = `sb-access-token=${session.access_token}; path=/; expires=${accessTokenExpiry.toUTCString()}; SameSite=Lax; Secure; HttpOnly`
+    // Access token with Secure and SameSite=Lax for general API access
+    document.cookie = `sb-access-token=${session.access_token}; path=/; expires=${accessTokenExpiry.toUTCString()}; SameSite=Lax; Secure`
     
-    // Refresh token with Secure, HttpOnly, and SameSite=Strict for enhanced CSRF protection
-    document.cookie = `sb-refresh-token=${session.refresh_token}; path=/; expires=${refreshTokenExpiry.toUTCString()}; SameSite=Strict; Secure; HttpOnly`
+    // Refresh token with Secure and SameSite=Strict for enhanced CSRF protection
+    document.cookie = `sb-refresh-token=${session.refresh_token}; path=/; expires=${refreshTokenExpiry.toUTCString()}; SameSite=Strict; Secure`
   } else {
     // Clear cookies on sign out with security flags
-    document.cookie = 'sb-access-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; HttpOnly'
-    document.cookie = 'sb-refresh-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; HttpOnly'
+    document.cookie = 'sb-access-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure'
+    document.cookie = 'sb-refresh-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure'
   }
 }
 

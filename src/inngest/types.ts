@@ -9,6 +9,7 @@
 export interface AgentState {
   summary: string;
   files: { [path: string]: string }; // key = file path, value = content
+  requirements?: string[]; // Optional requirements array
 }
 
 /**
