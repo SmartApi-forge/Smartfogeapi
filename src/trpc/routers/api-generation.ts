@@ -30,16 +30,58 @@ export const apiGenerationRouter = createTRPCRouter({
     .mutation(async ({ input, ctx }) => {
 
       try {
-        // Create project record
+        // Create project record (without storing prompt here)
         const project = await projectService.createProject({
           user_id: ctx.user.id,
           name: `API from prompt: ${input.prompt.substring(0, 50)}...`,
-          description: input.prompt,
-          prompt: input.prompt,
+          description: `API generated from user prompt`,
           framework: input.framework,
           advanced: input.advanced,
           status: 'generating'
         });
+
+        // Store user prompt in messages table
+        const { data: message, error: messageError } = await ctx.supabase
+          .from('messages')
+          .insert({
+            content: input.prompt,
+            role: 'user',
+            type: 'text',
+            project_id: project.id,
+            sender_id: ctx.user.id
+          })
+          .select()
+          .single();
+
+        if (messageError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to store user message',
+            cause: messageError
+          });
+        }
+
+        // Create corresponding fragment for the user message
+        const { data: fragment, error: fragmentError } = await ctx.supabase
+          .from('fragments')
+          .insert({
+            message_id: message.id,
+            content: input.prompt,
+            fragment_type: 'text',
+            order_index: 0,
+            metadata: {
+              source: 'user_prompt',
+              framework: input.framework,
+              advanced: input.advanced
+            }
+          })
+          .select()
+          .single();
+
+        if (fragmentError) {
+          console.error('Failed to create fragment for user message:', fragmentError);
+          // Don't throw error here - message creation succeeded, fragment is optional
+        }
 
         // Create job record
         const job = await jobService.createJob({
