@@ -76,6 +76,46 @@ export const messageCreated = inngest.createFunction(
     // For example: AI processing, notifications, analytics, etc.
     
     await step.run("process-message", async () => {
+      // Create fragment for the message if it doesn't exist
+      const { data: existingFragments, error: fragmentCheckError } = await supabase
+        .from('fragments')
+        .select('id')
+        .eq('message_id', messageId)
+        .limit(1);
+
+      if (fragmentCheckError) {
+        console.error('Failed to check existing fragments:', fragmentCheckError);
+      }
+
+      // Only create fragment if none exists for this message
+      if (!existingFragments || existingFragments.length === 0) {
+        const { data: fragment, error: fragmentError } = await supabase
+          .from('fragments')
+          .insert({
+            message_id: messageId,
+            content: content,
+            fragment_type: type === 'code' ? 'code' : 'text',
+            order_index: 0,
+            metadata: {
+              source: 'message_created_event',
+              role: role,
+              type: type,
+              created_by: 'inngest'
+            }
+          })
+          .select()
+          .single();
+
+        if (fragmentError) {
+          console.error('Failed to create fragment for message:', fragmentError);
+          // Don't throw error - message processing can continue without fragment
+        } else {
+          console.log(`Fragment created for message ${messageId}: ${fragment.id}`);
+        }
+      } else {
+        console.log(`Fragment already exists for message ${messageId}, skipping creation`);
+      }
+
       // Update message status or add processing results
       const { error } = await supabase
         .from('messages')
@@ -99,34 +139,112 @@ export const generateAPI = inngest.createFunction(
   { id: "generate-api" },
   { event: "api/generate" },
   async ({ event, step }) => {
-    const { prompt, mode, repoUrl, userId } = event.data;
+    const { prompt, mode, repoUrl, userId, projectId, jobId: eventJobId } = event.data;
     
-    let jobId: string | undefined;
+    let jobId: string | undefined = eventJobId;
     
     try {
     
-      // Step 1: Create job record
-      jobId = await step.run("create-job", async () => {
-      const { data, error } = await supabase
-        .from("jobs")
-        .insert({
-          user_id: userId || 'anonymous', // Use anonymous if no userId provided
-          type: "generate_api",
-          status: "running",
-          payload: {
-            mode: mode,
-            repo_url: repoUrl || null,
-          },
-        })
-        .select("id")
-        .single();
-        
-      if (error) {
-        console.warn(`Failed to create job (continuing without job tracking): ${error.message}`);
-        return null; // Continue without job tracking if database fails
+      // Step 1: Create job record (only if not already provided)
+      if (!jobId) {
+        jobId = await step.run("create-job", async () => {
+        // Store AI-generated result as assistant message in messages table
+        const { data: assistantMessage, error: messageError } = await supabase
+          .from('messages')
+          .insert({
+            content: safeSummary,
+            role: 'assistant',
+            type: 'result',
+            project_id: projectId || null,
+            sender_id: null, // AI-generated, no human sender
+            created_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (messageError) {
+          console.error('Failed to store assistant message:', messageError);
+        }
+
+        // Store detailed AI result in fragments table
+        if (assistantMessage) {
+          const fragmentsToInsert = [
+            {
+              message_id: assistantMessage.id,
+              content: apiResult.state.data.files['openapi.yaml'] || apiResult.state.data.files['openapi.json'] || '',
+              fragment_type: 'code',
+              order_index: 0,
+              metadata: { type: 'openapi_spec' }
+            },
+            {
+              message_id: assistantMessage.id,
+              content: safeStringify(apiResult.state.data.files),
+              fragment_type: 'code',
+              order_index: 1,
+              metadata: { type: 'implementation_code' }
+            },
+            {
+              message_id: assistantMessage.id,
+              content: JSON.stringify(requirementsArray),
+              fragment_type: 'json',
+              order_index: 2,
+              metadata: { type: 'requirements' }
+            },
+            {
+              message_id: assistantMessage.id,
+              content: safeStringify(validationResult),
+              fragment_type: 'json',
+              order_index: 3,
+              metadata: { type: 'validation_results' }
+            }
+          ];
+
+          const { error: fragmentsError } = await supabase
+            .from('fragments')
+            .insert(fragmentsToInsert);
+
+          if (fragmentsError) {
+            console.error('Failed to store fragments:', fragmentsError);
+          }
+        }
+
+        // Still save to api_fragments for backward compatibility
+        const { data, error } = await supabase
+          .from("jobs")
+          .insert({
+            project_id: projectId || null,
+            user_id: userId || 'anonymous', // Use anonymous if no userId provided
+            type: "generate_api",
+            status: "running",
+            payload: {
+              mode: mode,
+              repo_url: repoUrl || null,
+            },
+          })
+          .select("id")
+          .single();
+          
+        if (error) {
+          console.warn(`Failed to create job (continuing without job tracking): ${error.message}`);
+          return null; // Continue without job tracking if database fails
+        }
+        return data.id;
+      });
+      } else {
+        // Update existing job status to running
+        await step.run("update-job-status", async () => {
+          if (jobId) {
+            const { error } = await supabase
+              .from("jobs")
+              .update({ status: "running" })
+              .eq("id", jobId);
+            
+            if (error) {
+              console.warn(`Failed to update job status: ${error.message}`);
+            }
+          }
+        });
       }
-      return data.id;
-    });
 
     // Step 2: Handle repository if GitHub mode
     let repoAnalysis = null;
@@ -424,10 +542,7 @@ EXAMPLE STRUCTURE:
           await MessageService.saveResult({
             content: result.state.data.summary || 'AI generation failed - missing required data',
             role: 'assistant',
-            type: 'error',
-            sandboxUrl: 'https://example.com/error',
-            title: 'AI Generation Error',
-            files: result.state.data.files || {}
+            type: 'error'
           });
           
           // Update job status to failed if job tracking is available
@@ -474,10 +589,7 @@ EXAMPLE STRUCTURE:
         await MessageService.saveResult({
           content: errorResult.state.data.summary || `Failed to parse AI result: ${error}`,
           role: 'assistant',
-          type: 'error',
-          sandboxUrl: 'https://example.com/error',
-          title: 'AI Parsing Error',
-          files: errorResult.state.data.files || {}
+          type: 'error'
         });
         
         // Update job status to failed if job tracking is available
@@ -1165,6 +1277,7 @@ EXAMPLE STRUCTURE:
         const { data, error } = await supabase
           .from('api_fragments')
           .insert({
+            project_id: projectId || null,
             job_id: jobId || null, // Allow null if no job tracking
             openapi_spec: apiResult.state.data.files['openapi.yaml'] || apiResult.state.data.files['openapi.json'] || '',
             implementation_code: JSON.stringify(apiResult.state.data.files),
@@ -1185,6 +1298,7 @@ EXAMPLE STRUCTURE:
             const { data: retryData, error: retryError } = await supabase
               .from('api_fragments')
               .insert({
+                project_id: projectId || null,
                 openapi_spec: apiResult.state.data.files['openapi.yaml'] || '',
                 implementation_code: apiResult.state.data.files['index.js'] || '',
                 requirements: apiResult.state.data.summary,

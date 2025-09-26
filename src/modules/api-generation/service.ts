@@ -175,8 +175,7 @@ export class ApiGenerationService {
         .insert({
           user_id: userId,
           name: `API from prompt: ${input.prompt.substring(0, 50)}...`,
-          description: input.prompt,
-          prompt: input.prompt,
+          description: `API generated from user prompt`,
           framework: input.framework,
           advanced: input.advanced,
           status: 'generating'
@@ -189,6 +188,24 @@ export class ApiGenerationService {
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to create project'
         })
+      }
+
+      // Store user prompt in messages table
+      const { data: message, error: messageError } = await supabase
+        .from('messages')
+        .insert({
+          content: input.prompt,
+          role: 'user',
+          type: 'text',
+          project_id: project.id,
+          sender_id: userId
+        })
+        .select()
+        .single()
+
+      if (messageError) {
+        console.error('Failed to store user message:', messageError)
+        // Don't throw error here, just log it as it's not critical for the API generation
       }
 
       // Create job record using Supabase MCP
@@ -238,6 +255,13 @@ export class ApiGenerationService {
         estimatedTime: 60, // seconds
       }
     } catch (error) {
+      console.error('API Generation Error:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        cause: error instanceof Error ? error.cause : undefined
+      });
+      
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to start API generation',

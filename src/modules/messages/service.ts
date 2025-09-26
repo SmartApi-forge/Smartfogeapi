@@ -220,48 +220,26 @@ export class MessageService {
   }
 
   /**
-   * Save AI assistant result with message and fragment
-   * Creates a message and associated fragment with proper error handling and cleanup
-   * Ensures atomicity by rolling back message creation if fragment creation fails
+   * Save AI assistant result as a message
+   * Creates a message with proper error handling
    */
   static async saveResult(input: SaveResultInput): Promise<SaveResultResponse> {
-    let createdMessage: Message | null = null
-    
     try {
-      // Create the message first
-      createdMessage = await messageOperations.create({
+      // Create the message
+      const createdMessage = await messageOperations.create({
         content: input.content,
         role: input.role,
-        type: input.type
-      })
-
-      // Create the associated fragment
-      const fragment = await fragmentOperations.create({
-        message_id: createdMessage.id,
-        sandbox_url: input.sandboxUrl,
-        title: input.title,
-        content: input.content,
-        order_index: 0,
-        files: input.files
+        type: input.type,
+        sender_id: input.sender_id,
+        receiver_id: input.receiver_id,
+        project_id: input.project_id
       })
 
       return {
-        message: createdMessage,
-        fragment
+        message: createdMessage
       }
     } catch (error) {
       console.error('Error saving result:', error)
-      
-      // Cleanup: If message was created but fragment creation failed, delete the message
-      if (createdMessage) {
-        try {
-          await messageOperations.delete(createdMessage.id)
-          console.log(`Cleaned up orphaned message with ID: ${createdMessage.id}`)
-        } catch (cleanupError) {
-          console.error('Failed to cleanup orphaned message:', cleanupError)
-          // Continue with original error - cleanup failure shouldn't mask the original issue
-        }
-      }
       
       // Throw TRPCError for proper error handling in tRPC context
       if (error instanceof Error) {
