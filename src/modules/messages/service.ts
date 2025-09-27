@@ -220,10 +220,19 @@ export class MessageService {
   }
 
   /**
-   * Save AI assistant result as a message
-   * Creates a message with proper error handling
+   * Save AI assistant result as a message with corresponding fragment
+   * Creates both message and fragment with proper error handling
    */
-  static async saveResult(input: SaveResultInput): Promise<SaveResultResponse> {
+  static async saveResult(input: SaveResultInput & {
+    fragment?: {
+      title?: string
+      sandbox_url?: string
+      files?: Record<string, any>
+      fragment_type?: string
+      content?: string
+      metadata?: Record<string, any>
+    }
+  }): Promise<SaveResultResponse & { fragment?: any }> {
     try {
       // Create the message
       const createdMessage = await messageOperations.create({
@@ -235,8 +244,30 @@ export class MessageService {
         project_id: input.project_id
       })
 
+      let createdFragment = null
+
+      // Create corresponding fragment if fragment data is provided
+      if (input.fragment) {
+        try {
+          createdFragment = await fragmentOperations.create({
+            message_id: createdMessage.id,
+            content: input.fragment.content || input.content, // Use fragment content if provided, otherwise message content
+            fragment_type: input.fragment.fragment_type || 'text',
+            order_index: 0,
+            metadata: input.fragment.metadata || {},
+            sandbox_url: input.fragment.sandbox_url || '',
+            title: input.fragment.title || 'AI Generated Response',
+            files: input.fragment.files || {}
+          })
+        } catch (fragmentError) {
+          console.error('Failed to create fragment for AI result:', fragmentError)
+          // Don't throw error here - message creation succeeded, fragment is optional
+        }
+      }
+
       return {
-        message: createdMessage
+        message: createdMessage,
+        ...(createdFragment && { fragment: createdFragment })
       }
     } catch (error) {
       console.error('Error saving result:', error)

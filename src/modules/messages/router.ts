@@ -170,15 +170,14 @@ export const messagesRouter = createTRPCRouter({
       try {
         const result = await MessageService.saveResult(input)
         
-        // Invoke background job for the created message
+        // Emit event for message creation
         await inngest.send({
           name: "message/created",
           data: {
             messageId: result.message.id,
             content: result.message.content,
             role: result.message.role,
-            type: result.message.type,
-            fragmentId: result.fragment.id
+            type: result.message.type
           }
         })
         

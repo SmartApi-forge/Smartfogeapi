@@ -99,7 +99,7 @@ export const generateAPI = inngest.createFunction(
   { id: "generate-api" },
   { event: "api/generate" },
   async ({ event, step }) => {
-    const { prompt, mode, repoUrl, userId } = event.data;
+    const { prompt, mode, repoUrl, userId, projectId } = event.data;
     
     let jobId: string | undefined;
     
@@ -111,6 +111,7 @@ export const generateAPI = inngest.createFunction(
         .from("jobs")
         .insert({
           user_id: userId || 'anonymous', // Use anonymous if no userId provided
+          project_id: projectId || null, // Include project_id if available
           type: "generate_api",
           status: "running",
           payload: {
@@ -1251,7 +1252,86 @@ EXAMPLE STRUCTURE:
       }
     });
 
-    // Step 7: Update job status to completed (if job tracking is available)
+    // Step 7: Save AI response to fragments table
+    await step.run("save-ai-response-fragment", async () => {
+      try {
+        let jobData = null;
+        
+        // Try to get user_id and project_id from the job data if jobId exists
+        if (jobId) {
+          const { data: fetchedJobData, error: jobError } = await supabase
+            .from('jobs')
+            .select('user_id, project_id')
+            .eq('id', jobId)
+            .single();
+
+          if (jobError) {
+            console.error('Failed to get job data for fragment creation:', jobError);
+          } else {
+            jobData = fetchedJobData;
+          }
+        }
+
+        // If we don't have job data, use fallback values or skip fragment creation gracefully
+        if (!jobData) {
+          console.log('No job data available, using fallback values for fragment creation');
+          // Use fallback values - you may need to adjust these based on your application logic
+          jobData = {
+            user_id: userId || null, // Use userId from event data if available
+            project_id: projectId || null // Use projectId from event data if available
+          };
+          
+          // If we still don't have the required data, skip fragment creation
+          if (!jobData.user_id && !jobData.project_id) {
+            console.log('Insufficient data for fragment creation, skipping...');
+            return;
+          }
+        }
+
+        const fragmentContent = JSON.stringify({
+          openapi_spec: apiResult.state.data.files['openapi.yaml'] || apiResult.state.data.files['openapi.json'] || '',
+          implementation_code: apiResult.state.data.files,
+          summary: apiResult.state.data.summary || 'Generated API',
+          requirements: apiResult.state.data.requirements || [],
+          validation_results: validationResult
+        });
+
+        // Create a user-friendly message content instead of raw JSON
+        const messageContent = apiResult.state.data.summary || 'Generated API successfully with OpenAPI specification and implementation code.';
+
+        await MessageService.saveResult({
+          content: messageContent,
+          role: 'assistant',
+          type: 'result',
+          sender_id: null, // AI assistant has no sender_id
+          receiver_id: jobData.user_id,
+          project_id: jobData.project_id,
+          fragment: {
+            title: apiResult.state.data.summary || 'AI Generated API',
+            sandbox_url: sandboxUrl || '',
+            files: apiResult.state.data.files || {},
+            fragment_type: 'code',
+            content: fragmentContent, // Store the detailed JSON in fragment content
+            metadata: {
+              api_fragment_id: savedApi.id,
+              job_id: jobId,
+              pr_url: prUrl,
+              validation_status: validationResult.overallValid ? 'valid' : 'invalid',
+              framework: framework,
+              endpoints_count: Object.keys(apiResult.state.data.files).length,
+              generation_timestamp: new Date().toISOString()
+            }
+          }
+        });
+        
+        console.log('AI response saved to fragments table successfully');
+      } catch (error) {
+        console.error('Error saving AI response to fragments:', error);
+        // Don't throw here as the main API generation was successful
+      }
+    });
+
+    // Step 8: Update job status to completed (if job tracking is available)
     await step.run("update-job-completed", async () => {
       if (!jobId) {
         console.log('No job ID available, skipping job status update');
