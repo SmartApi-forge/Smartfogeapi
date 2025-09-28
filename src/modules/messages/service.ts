@@ -1,4 +1,5 @@
 import { messageOperations, fragmentOperations } from '../../../lib/supabase-server'
+import { projectService } from '../../services/database'
 import { TRPCError } from '@trpc/server'
 import type { 
   CreateMessageInput, 
@@ -15,24 +16,37 @@ import type {
 
 export class MessageService {
   /**
-   * Create a new message
+   * Create a new message and optionally create a project if it's a user message without project_id
    */
-  static async create(input: CreateMessageInput): Promise<Message> {
+  static async create(input: CreateMessageInput, userId?: string): Promise<Message> {
     try {
-      // Apply defaults for role and type like the original router
+      let projectId = input.project_id
+
+      // If no project_id provided and this is a user message, create a new project
+       if (!projectId && input.role === 'user' && userId) {
+         const newProject = await projectService.createProject({
+           name: `Project ${new Date().toISOString()}`,
+           description: input.content.substring(0, 100) + '...',
+           prompt: input.content,
+           status: 'generating',
+           framework: 'fastapi',
+           user_id: userId
+         })
+         projectId = newProject.id
+       }
+
       const messageData = {
-        content: input.content,
-        role: input.role || 'user' as const,
-        type: input.type || 'result' as const
+        ...input,
+        project_id: projectId
       }
+
       const message = await messageOperations.create(messageData)
       return message
     } catch (error) {
       console.error('Error creating message:', error)
-      const errorMessage = error instanceof Error ? error.message : String(error)
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
-        message: `Failed to create message: ${errorMessage}`,
+        message: 'Failed to create message',
         cause: error
       })
     }
@@ -223,7 +237,11 @@ export class MessageService {
    * Save AI assistant result as a message
    * Creates a message with proper error handling and optionally creates a fragment
    */
+  /**
+   * Save a result message with optional fragment and project association
+   */
   static async saveResult(input: SaveResultInput & {
+    user_id?: string;
     fragment?: {
       title?: string
       sandbox_url?: string
@@ -234,13 +252,35 @@ export class MessageService {
     }
   }): Promise<SaveResultResponse & { fragment?: any }> {
     try {
+      let projectId = input.project_id
+
+      // If this is a user message without a project_id, create a new project
+      if (input.role === 'user' && !projectId && input.user_id) {
+        try {
+          const project = await projectService.createProject({
+            user_id: input.user_id,
+            name: `Project: ${input.content.substring(0, 50)}${input.content.length > 50 ? '...' : ''}`,
+            description: `Project created from user message: ${input.content.substring(0, 100)}${input.content.length > 100 ? '...' : ''}`,
+            prompt: input.content,
+            status: 'generating',
+            framework: 'fastapi', // Default framework
+            advanced: false
+          })
+          projectId = project.id
+        } catch (projectError) {
+          console.error('Error creating project for message:', projectError)
+          // Continue without project_id if project creation fails
+        }
+      }
+
       // Create the message
       const createdMessage = await messageOperations.create({
         content: input.content,
         role: input.role,
         type: input.type,
         sender_id: input.sender_id,
-        receiver_id: input.receiver_id
+        receiver_id: input.receiver_id,
+        project_id: projectId
       })
 
       let createdFragment = undefined
@@ -254,7 +294,8 @@ export class MessageService {
             sandbox_url: input.fragment.sandbox_url || 'https://example.com/sandbox',
             title: input.fragment.title || 'AI Generated Response',
             files: input.fragment.files || {},
-            order_index: input.fragment.order_index || 0
+            order_index: input.fragment.order_index || 0,
+            project_id: projectId
           })
         } catch (fragmentError) {
           console.error('Error creating fragment:', fragmentError)

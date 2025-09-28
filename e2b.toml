@@ -3,7 +3,7 @@
 
 # Python SDK
 # from e2b import Sandbox, AsyncSandbox
-# sandbox = Sandbox("smart-forge-api-sandbox") # Sync sandbox
+# sandbox = Sandbox.create("smart-forge-api-sandbox") # Sync sandbox
 # sandbox = await AsyncSandbox.create("smart-forge-api-sandbox") # Async sandbox
 
 # JS SDK

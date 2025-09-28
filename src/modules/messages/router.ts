@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { createTRPCRouter, baseProcedure } from '../../trpc/init'
+import { createTRPCRouter, baseProcedure, protectedProcedure } from '../../trpc/init'
 import { TRPCError } from '@trpc/server'
 import { MessageService } from './service'
 import { inngest } from '../../inngest/client'
@@ -17,11 +17,11 @@ export const messagesRouter = createTRPCRouter({
   /**
    * Create a new message
    */
-  create: baseProcedure
+  create: protectedProcedure
     .input(CreateMessageSchema)
-    .mutation(async ({ input }) => {
-      // Create a new message using MessageService
-      const createdMessage = await MessageService.create(input)
+    .mutation(async ({ input, ctx }) => {
+      // Create a new message using MessageService with user_id
+      const createdMessage = await MessageService.create(input, ctx.user.id)
       
       // Invoke background job like in the YouTube tutorial
       await inngest.send({
@@ -30,7 +30,8 @@ export const messagesRouter = createTRPCRouter({
           messageId: createdMessage.id,
           content: createdMessage.content,
           role: createdMessage.role,
-          type: createdMessage.type
+          type: createdMessage.type,
+          project_id: createdMessage.project_id
         }
       })
       
@@ -178,6 +179,7 @@ export const messagesRouter = createTRPCRouter({
             content: result.message.content,
             role: result.message.role,
             type: result.message.type,
+            project_id: result.message.project_id,
             fragmentId: result.fragment?.id
           }
         })

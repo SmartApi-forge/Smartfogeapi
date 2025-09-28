@@ -11,6 +11,7 @@ export const FragmentSchema = z.object({
   sandbox_url: z.string().url().optional(),
   title: z.string().optional(),
   files: z.record(z.string(), z.any()).optional(),
+  project_id: z.string().uuid().optional(),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
 })
@@ -25,6 +26,7 @@ export const CreateFragmentSchema = z.object({
   sandbox_url: z.string().url(),
   title: z.string(),
   files: z.record(z.string(), z.any()),
+  project_id: z.string().uuid().optional(),
 })
 
 export const UpdateFragmentSchema = z.object({
@@ -37,6 +39,7 @@ export const UpdateFragmentSchema = z.object({
   sandbox_url: z.string().url().optional(),
   title: z.string().optional(),
   files: z.record(z.string(), z.any()).optional(),
+  project_id: z.string().uuid().optional(),
 })
 
 export const GetFragmentSchema = z.object({

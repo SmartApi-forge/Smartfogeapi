@@ -31,7 +31,7 @@ export const messageCreated = inngest.createFunction(
       throw new Error('Invalid event: missing event or event.data');
     }
 
-    const { messageId, content, role, type } = event.data;
+    const { messageId, content, role, type, project_id } = event.data;
 
     // Validate required fields
     if (!messageId || typeof messageId !== 'string' || messageId.trim() === '') {
@@ -71,6 +71,7 @@ export const messageCreated = inngest.createFunction(
     console.log(`Processing new message: ${messageId}`);
     console.log(`Content: ${content}`);
     console.log(`Role: ${role}, Type: ${type}`);
+    console.log(`Project ID: ${project_id || 'No project associated'}`);
     
     // Here you can add any background processing logic
     // For example: AI processing, notifications, analytics, etc.
@@ -85,12 +86,12 @@ export const messageCreated = inngest.createFunction(
         .eq('id', messageId);
         
       if (error) {
-        console.error('Failed to update message:', error);
+        console.error(`Failed to update message ${messageId} for project ${project_id || 'unknown'}:`, error);
         throw new Error(`Failed to update message: ${error.message}`);
       }
       
-      console.log(`Message ${messageId} processed successfully`);
-      return { success: true, messageId };
+      console.log(`Message ${messageId} for project ${project_id || 'unknown'} processed successfully`);
+      return { success: true, messageId, project_id };
     });
   }
 );
@@ -436,7 +437,8 @@ EXAMPLE STRUCTURE:
           await MessageService.saveResult({
             content: result.state.data.summary || 'AI generation failed - missing required data',
             role: 'assistant',
-            type: 'error'
+            type: 'error',
+            project_id: projectId // Add project_id for error messages too
           });
           
           // Update job status to failed if job tracking is available
@@ -483,7 +485,8 @@ EXAMPLE STRUCTURE:
         await MessageService.saveResult({
           content: errorResult.state.data.summary || `Failed to parse AI result: ${error}`,
           role: 'assistant',
-          type: 'error'
+          type: 'error',
+          project_id: projectId // Add project_id for error messages too
         });
         
         // Update job status to failed if job tracking is available
@@ -1269,6 +1272,7 @@ EXAMPLE STRUCTURE:
           content: resultContent,
           role: 'assistant',
           type: 'result',
+          project_id: projectId, // Add the project_id from event data
           fragment: {
             title: `Generated API: ${summary.substring(0, 50)}...`,
             sandbox_url: 'https://example.com/sandbox', // Default sandbox URL since validationResult doesn't include this

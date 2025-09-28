@@ -55,6 +55,7 @@ export interface Fragment {
   sandbox_url: string  // Required field based on database schema
   title: string        // Required field based on database schema
   files: Record<string, any>  // Required field based on database schema
+  project_id?: string
   created_at: string
   updated_at: string
 }
