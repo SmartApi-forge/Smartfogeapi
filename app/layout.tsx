@@ -39,6 +39,7 @@ export default function RootLayout({
             {children}
           </ThemeProvider>
         </TRPCReactProvider>
+        <Analytics />
       </body>
     </html>
   )
