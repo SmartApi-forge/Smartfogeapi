@@ -1202,6 +1202,7 @@ EXAMPLE STRUCTURE:
           .from('api_fragments')
           .insert({
             job_id: jobId || null, // Allow null if no job tracking
+            project_id: projectId, // Add project_id from event data
             openapi_spec: apiResult.state.data.files['openapi.yaml'] || apiResult.state.data.files['openapi.json'] || '',
             implementation_code: safeStringify(apiResult.state.data.files),
             requirements: requirementsArray,
@@ -1225,6 +1226,7 @@ EXAMPLE STRUCTURE:
             const { data: retryData, error: retryError } = await supabase
               .from('api_fragments')
               .insert({
+                project_id: projectId, // Add project_id from event data
                 openapi_spec: apiResult.state.data.files['openapi.yaml'] || '',
                 implementation_code: safeStringify(apiResult.state.data.files['index.js'] || {}),
                 requirements: retryRequirementsArray,
