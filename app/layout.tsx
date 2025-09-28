@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { TRPCReactProvider } from "@/src/trpc/client"
 import { AuthInitializer } from "@/components/auth-initializer"
 import { Toaster } from "@/components/ui/sonner"
+import { Analytics } from '@vercel/analytics/next';
 import "./globals.css"
 
 const geist = Geist({
