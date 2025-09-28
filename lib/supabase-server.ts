@@ -40,6 +40,7 @@ export interface Message {
   type: 'text' | 'image' | 'file' | 'code' | 'result' | 'error'
   sender_id?: string
   receiver_id?: string
+  project_id?: string
   created_at: string
   updated_at: string
 }
@@ -47,11 +48,13 @@ export interface Message {
 export interface Fragment {
   id: string
   message_id: string
-  sandbox_url: string
-  title: string
   content: string
+  fragment_type?: string
   order_index: number
-  files: Record<string, any>
+  metadata?: Record<string, any>
+  sandbox_url: string  // Required field based on database schema
+  title: string        // Required field based on database schema
+  files: Record<string, any>  // Required field based on database schema
   created_at: string
   updated_at: string
 }

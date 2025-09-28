@@ -41,45 +41,35 @@ export const apiGenerationRouter = createTRPCRouter({
           status: 'generating'
         });
 
-        // Store user prompt in messages table
-        const { data: message, error: messageError } = await ctx.supabase
-          .from('messages')
-          .insert({
-            content: input.prompt,
-            role: 'user',
-            type: 'text',
-            project_id: project.id,
-            sender_id: ctx.user.id
-          })
-          .select()
-          .single();
-
-        if (messageError) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to store user message',
-            cause: messageError
-          });
-        }
+        // Store the user prompt in the messages table using the service operations
+        const { messageOperations, fragmentOperations } = await import('../../../lib/supabase-server');
+        
+        const message = await messageOperations.create({
+          content: input.prompt,
+          role: 'user',
+          type: 'text',
+          sender_id: ctx.user.id,
+          receiver_id: undefined, // User messages don't have a receiver
+          project_id: project.id
+        });
 
         // Create corresponding fragment for the user message
-        const { data: fragment, error: fragmentError } = await ctx.supabase
-          .from('fragments')
-          .insert({
+        try {
+          const fragment = await fragmentOperations.create({
             message_id: message.id,
             content: input.prompt,
             fragment_type: 'text',
             order_index: 0,
+            title: 'User API Request',
+            sandbox_url: '',
+            files: {},
             metadata: {
-              source: 'user_prompt',
               framework: input.framework,
-              advanced: input.advanced
+              advanced: input.advanced,
+              request_type: 'api_generation'
             }
-          })
-          .select()
-          .single();
-
-        if (fragmentError) {
+          });
+        } catch (fragmentError) {
           console.error('Failed to create fragment for user message:', fragmentError);
           // Don't throw error here - message creation succeeded, fragment is optional
         }

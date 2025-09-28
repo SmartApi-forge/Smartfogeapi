@@ -99,7 +99,7 @@ export const generateAPI = inngest.createFunction(
   { id: "generate-api" },
   { event: "api/generate" },
   async ({ event, step }) => {
-    const { prompt, mode, repoUrl, userId } = event.data;
+    const { prompt, mode, repoUrl, userId, projectId } = event.data;
     
     let jobId: string | undefined;
     
@@ -111,6 +111,7 @@ export const generateAPI = inngest.createFunction(
         .from("jobs")
         .insert({
           user_id: userId || 'anonymous', // Use anonymous if no userId provided
+          project_id: projectId || null, // Include project_id if available
           type: "generate_api",
           status: "running",
           payload: {

@@ -223,7 +223,16 @@ export class MessageService {
    * Save AI assistant result as a message
    * Creates a message with proper error handling and optionally creates a fragment
    */
-  static async saveResult(input: SaveResultInput): Promise<SaveResultResponse> {
+  static async saveResult(input: SaveResultInput & {
+    fragment?: {
+      title?: string
+      sandbox_url?: string
+      files?: Record<string, any>
+      fragment_type?: string
+      content?: string
+      metadata?: Record<string, any>
+    }
+  }): Promise<SaveResultResponse & { fragment?: any }> {
     try {
       // Create the message
       const createdMessage = await messageOperations.create({
@@ -242,8 +251,8 @@ export class MessageService {
           createdFragment = await fragmentOperations.create({
             message_id: createdMessage.id,
             content: input.content, // Use message content for fragment content
-            sandbox_url: input.fragment.sandbox_url,
-            title: input.fragment.title,
+            sandbox_url: input.fragment.sandbox_url || 'https://example.com/sandbox',
+            title: input.fragment.title || 'AI Generated Response',
             files: input.fragment.files || {},
             order_index: input.fragment.order_index || 0
           })
