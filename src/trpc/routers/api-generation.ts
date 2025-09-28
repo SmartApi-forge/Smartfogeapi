@@ -30,16 +30,49 @@ export const apiGenerationRouter = createTRPCRouter({
     .mutation(async ({ input, ctx }) => {
 
       try {
-        // Create project record
+        // Create project record (including prompt as required by database schema)
         const project = await projectService.createProject({
           user_id: ctx.user.id,
           name: `API from prompt: ${input.prompt.substring(0, 50)}...`,
-          description: input.prompt,
-          prompt: input.prompt,
+          description: `API generated from user prompt`,
+          prompt: input.prompt, // Add the required prompt field
           framework: input.framework,
           advanced: input.advanced,
           status: 'generating'
         });
+
+        // Store the user prompt in the messages table using the service operations
+        const { messageOperations, fragmentOperations } = await import('../../../lib/supabase-server');
+        
+        const message = await messageOperations.create({
+          content: input.prompt,
+          role: 'user',
+          type: 'text',
+          sender_id: ctx.user.id,
+          receiver_id: undefined, // User messages don't have a receiver
+          project_id: project.id
+        });
+
+        // Create corresponding fragment for the user message
+        try {
+          const fragment = await fragmentOperations.create({
+            message_id: message.id,
+            content: input.prompt,
+            fragment_type: 'text',
+            order_index: 0,
+            title: 'User API Request',
+            sandbox_url: '',
+            files: {},
+            metadata: {
+              framework: input.framework,
+              advanced: input.advanced,
+              request_type: 'api_generation'
+            }
+          });
+        } catch (fragmentError) {
+          console.error('Failed to create fragment for user message:', fragmentError);
+          // Don't throw error here - message creation succeeded, fragment is optional
+        }
 
         // Create job record
         const job = await jobService.createJob({

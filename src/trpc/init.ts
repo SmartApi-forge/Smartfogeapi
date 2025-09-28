@@ -7,6 +7,7 @@ import type { User } from '@supabase/supabase-js';
 
 export type Context = {
   user: User | null;
+  supabase: typeof supabase;
 };
 
 export const createTRPCContext = cache(async (): Promise<Context> => {
@@ -26,15 +27,15 @@ export const createTRPCContext = cache(async (): Promise<Context> => {
 
       if (error) {
         console.error('Error verifying access token:', error);
-        return { user: null };
+        return { user: null, supabase };
       }
 
-      return { user };
+      return { user, supabase };
     }
-    return { user: null };
+    return { user: null, supabase };
   } catch (error) {
     console.error('Error creating tRPC context:', error);
-    return { user: null };
+    return { user: null, supabase };
   }
 });
 

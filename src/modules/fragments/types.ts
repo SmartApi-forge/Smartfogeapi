@@ -4,11 +4,13 @@ import { z } from 'zod'
 export const FragmentSchema = z.object({
   id: z.string().uuid(),
   message_id: z.string().uuid(),
-  sandbox_url: z.string().url(),
-  title: z.string(),
   content: z.string(),
+  fragment_type: z.string().optional(),
   order_index: z.number(),
-  files: z.record(z.string(), z.any()), // JSONB field for file paths/content
+  metadata: z.record(z.string(), z.any()).optional(),
+  sandbox_url: z.string().url().optional(),
+  title: z.string().optional(),
+  files: z.record(z.string(), z.any()).optional(),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
 })
@@ -16,20 +18,24 @@ export const FragmentSchema = z.object({
 // Input schemas for TRPC procedures
 export const CreateFragmentSchema = z.object({
   message_id: z.string().uuid(),
-  sandbox_url: z.string().url(),
-  title: z.string().min(1, 'Title is required'),
   content: z.string(),
+  fragment_type: z.string().optional(),
   order_index: z.number(),
-  files: z.record(z.string(), z.any()).default({}),
+  metadata: z.record(z.string(), z.any()).optional(),
+  sandbox_url: z.string().url(),
+  title: z.string(),
+  files: z.record(z.string(), z.any()),
 })
 
 export const UpdateFragmentSchema = z.object({
   id: z.string().uuid(),
   message_id: z.string().uuid().optional(),
-  sandbox_url: z.string().url().optional(),
-  title: z.string().min(1, 'Title is required').optional(),
   content: z.string().optional(),
+  fragment_type: z.string().optional(),
   order_index: z.number().optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
+  sandbox_url: z.string().url().optional(),
+  title: z.string().optional(),
   files: z.record(z.string(), z.any()).optional(),
 })
 
