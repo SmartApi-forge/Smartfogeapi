@@ -1251,7 +1251,48 @@ EXAMPLE STRUCTURE:
       }
     });
 
-    // Step 7: Update job status to completed (if job tracking is available)
+    // Step 7: Save successful result to messages and fragments tables
+    await step.run("save-result-to-messages", async () => {
+      try {
+        const { MessageService } = await import('../modules/messages/service');
+        
+        // Create a comprehensive summary of the generated API
+        const summary = apiResult.state.data.summary || 'Generated API successfully';
+        const files = apiResult.state.data.files || {};
+        const filesList = Object.keys(files);
+        
+        const resultContent = `API Generation Complete!\n\n${summary}\n\nGenerated Files:\n${filesList.map(file => `- ${file}`).join('\n')}\n\nValidation: ${validationResult.overallValid ? 'Passed' : 'Failed'}`;
+        
+        // Save the AI response as a message with fragment
+        const result = await MessageService.saveResult({
+          content: resultContent,
+          role: 'assistant',
+          type: 'result',
+          fragment: {
+            title: `Generated API: ${summary.substring(0, 50)}...`,
+            sandbox_url: 'https://example.com/sandbox', // Default sandbox URL since validationResult doesn't include this
+            files: files,
+            fragment_type: 'api_result',
+            order_index: 0,
+            metadata: {
+              api_fragment_id: savedApi.id,
+              validation_results: validationResult,
+              pr_url: prUrl,
+              generated_files: filesList,
+              job_id: jobId
+            }
+          }
+        });
+        
+        console.log('Result saved to messages and fragments:', result.message.id, result.fragment?.id);
+        return result;
+      } catch (error) {
+        console.error('Error saving result to messages/fragments:', error);
+        // Don't throw error here - API generation succeeded, this is just for UI display
+      }
+    });
+
+    // Step 8: Update job status to completed (if job tracking is available)
     await step.run("update-job-completed", async () => {
       if (!jobId) {
         console.log('No job ID available, skipping job status update');

@@ -102,7 +102,7 @@ export type Fragment = z.infer<typeof FragmentSchema>
 export type CreateFragmentInput = z.infer<typeof CreateFragmentInputSchema>
 export type UpdateFragmentInput = z.infer<typeof UpdateFragmentInputSchema>
 
-// Schema for saving AI results - now only creates message, fragments handled separately
+// Schema for saving AI results - creates both message and fragment
 export const SaveResultInputSchema = z.object({
   content: z.string().min(1, 'Content is required'),
   role: MessageRoleSchema.default('assistant'),
@@ -110,10 +110,20 @@ export const SaveResultInputSchema = z.object({
   sender_id: z.string().uuid().optional(),
   receiver_id: z.string().uuid().optional(),
   project_id: z.string().uuid().optional(),
+  // Fragment data for storing in fragments table
+  fragment: z.object({
+    title: z.string().min(1, 'Fragment title is required'),
+    sandbox_url: z.string().url('Valid URL required for sandbox'),
+    files: z.record(z.string(), z.any()).default({}),
+    fragment_type: z.string().default('result'),
+    order_index: z.number().int().min(0).default(0),
+    metadata: z.record(z.any()).optional(),
+  }).optional(),
 })
 
 export const SaveResultResponseSchema = z.object({
   message: MessageSchema,
+  fragment: FragmentSchema.optional(),
 })
 
 export type SaveResultInput = z.infer<typeof SaveResultInputSchema>

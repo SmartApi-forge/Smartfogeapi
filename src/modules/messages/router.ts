@@ -178,7 +178,7 @@ export const messagesRouter = createTRPCRouter({
             content: result.message.content,
             role: result.message.role,
             type: result.message.type,
-            fragmentId: result.fragment.id
+            fragmentId: result.fragment?.id
           }
         })
         

@@ -38,6 +38,8 @@ export interface Message {
   content: string
   role: 'user' | 'assistant' | 'system'
   type: 'text' | 'image' | 'file' | 'code' | 'result' | 'error'
+  sender_id?: string
+  receiver_id?: string
   created_at: string
   updated_at: string
 }
