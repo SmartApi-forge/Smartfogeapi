@@ -25,11 +25,27 @@ export const createTRPCContext = async (opts: FetchCreateContextFnOptions): Prom
   const { req } = opts;
 
   try {
-    // Get cookies from the request headers
-    const cookieHeader = req.headers.get('cookie');
     let accessToken: string | undefined;
     let refreshToken: string | undefined;
 
+    // First, check for Authorization header (Bearer token)
+    const authHeader = req.headers.get('authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      accessToken = authHeader.substring(7); // Remove 'Bearer ' prefix
+      
+      // Verify the access token by getting user info
+      const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+
+      if (error) {
+        console.error('Error verifying access token:', error);
+        return { user: null, supabase };
+      }
+
+      return { user, supabase };
+    }
+
+    // Fallback to cookies if no Authorization header
+    const cookieHeader = req.headers.get('cookie');
     if (cookieHeader) {
       // Parse cookies manually since we're in a fetch context
       const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
@@ -42,22 +58,23 @@ export const createTRPCContext = async (opts: FetchCreateContextFnOptions): Prom
 
       accessToken = cookies['sb-access-token'];
       refreshToken = cookies['sb-refresh-token'];
-    }
 
-    if (accessToken && refreshToken) {
-      // Set the session in Supabase
-      const { data: { user }, error } = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      });
+      if (accessToken && refreshToken) {
+        // Set the session in Supabase
+        const { data: { user }, error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
 
-      if (error) {
-        console.error('Error setting Supabase session:', error);
-        return { user: null, supabase };
+        if (error) {
+          console.error('Error setting Supabase session:', error);
+          return { user: null, supabase };
+        }
+
+        return { user, supabase };
       }
-
-      return { user, supabase };
     }
+
     return { user: null, supabase };
   } catch (error) {
     console.error('Error creating tRPC context:', error);

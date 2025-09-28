@@ -36,7 +36,7 @@ function SocialButtons() {
         type="button" 
         variant="outline" 
         size="default" 
-        className="w-full"
+        className="w-full cursor-pointer"
         onClick={handleGitHubAuth}
         disabled={loading}
       >
@@ -179,7 +179,7 @@ export default function AuthDialog() {
               </div>
               <Button 
                 type="submit" 
-                className="w-full"
+                className="w-full cursor-pointer"
                 disabled={loading}
               >
                 {loading ? 'Loading...' : (auth === "signup" ? "Create Account" : "Sign In")}
@@ -188,7 +188,7 @@ export default function AuthDialog() {
                 <Button
                   type="button"
                   variant="link"
-                  className="px-0 text-sm"
+                  className="px-0 text-sm cursor-pointer"
                   onClick={() => router.replace("/?auth=forgot")}
                 >
                   Forgot password?
@@ -196,9 +196,9 @@ export default function AuthDialog() {
               </div>
               <p className="text-muted-foreground text-sm">
                 {auth === "signup" ? (
-                  <>Already have an account? <Button type="button" variant="link" className="px-1" onClick={() => router.replace("/?auth=login")}>Sign In</Button></>
+                  <>Already have an account? <Button type="button" variant="link" className="px-1 cursor-pointer" onClick={() => router.replace("/?auth=login")}>Sign In</Button></>
                 ) : (
-                  <>Don't have an account? <Button type="button" variant="link" className="px-1" onClick={() => router.replace("/?auth=signup")}>Create account</Button></>
+                  <>Don't have an account? <Button type="button" variant="link" className="px-1 cursor-pointer" onClick={() => router.replace("/?auth=signup")}>Create account</Button></>
                 )}
               </p>
             </form>
@@ -228,11 +228,11 @@ export default function AuthDialog() {
                 <Label htmlFor="f-email" className="block text-sm">Email</Label>
                 <Input id="f-email" name="email" type="email" required className="ring-foreground/15 border-transparent ring-1" placeholder="Your email" />
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" className="w-full cursor-pointer" disabled={loading}>
                 {loading ? 'Sending...' : 'Send Reset Link'}
               </Button>
               <p className="text-muted-foreground text-sm">
-                Remember your password? <Button type="button" variant="link" className="px-1" onClick={() => router.replace("/?auth=login")}>Sign In</Button>
+                Remember your password? <Button type="button" variant="link" className="px-1 cursor-pointer" onClick={() => router.replace("/?auth=login")}>Sign In</Button>
               </p>
             </form>
           )}
