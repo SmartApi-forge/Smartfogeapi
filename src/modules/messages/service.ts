@@ -220,48 +220,55 @@ export class MessageService {
   }
 
   /**
-   * Save AI assistant result with message and fragment
-   * Creates a message and associated fragment with proper error handling and cleanup
-   * Ensures atomicity by rolling back message creation if fragment creation fails
+   * Save AI assistant result as a message
+   * Creates a message with proper error handling and optionally creates a fragment
    */
-  static async saveResult(input: SaveResultInput): Promise<SaveResultResponse> {
-    let createdMessage: Message | null = null
-    
+  static async saveResult(input: SaveResultInput & {
+    fragment?: {
+      title?: string
+      sandbox_url?: string
+      files?: Record<string, any>
+      fragment_type?: string
+      content?: string
+      metadata?: Record<string, any>
+    }
+  }): Promise<SaveResultResponse & { fragment?: any }> {
     try {
-      // Create the message first
-      createdMessage = await messageOperations.create({
+      // Create the message
+      const createdMessage = await messageOperations.create({
         content: input.content,
         role: input.role,
-        type: input.type
+        type: input.type,
+        sender_id: input.sender_id,
+        receiver_id: input.receiver_id
       })
 
-      // Create the associated fragment
-      const fragment = await fragmentOperations.create({
-        message_id: createdMessage.id,
-        sandbox_url: input.sandboxUrl,
-        title: input.title,
-        content: input.content,
-        order_index: 0,
-        files: input.files
-      })
+      let createdFragment = undefined
+
+      // Create fragment if fragment data is provided
+      if (input.fragment) {
+        try {
+          createdFragment = await fragmentOperations.create({
+            message_id: createdMessage.id,
+            content: input.content, // Use message content for fragment content
+            sandbox_url: input.fragment.sandbox_url || 'https://example.com/sandbox',
+            title: input.fragment.title || 'AI Generated Response',
+            files: input.fragment.files || {},
+            order_index: input.fragment.order_index || 0
+          })
+        } catch (fragmentError) {
+          console.error('Error creating fragment:', fragmentError)
+          // Don't throw error here - message creation succeeded, fragment is optional
+          // But log the error for debugging
+        }
+      }
 
       return {
         message: createdMessage,
-        fragment
+        fragment: createdFragment
       }
     } catch (error) {
       console.error('Error saving result:', error)
-      
-      // Cleanup: If message was created but fragment creation failed, delete the message
-      if (createdMessage) {
-        try {
-          await messageOperations.delete(createdMessage.id)
-          console.log(`Cleaned up orphaned message with ID: ${createdMessage.id}`)
-        } catch (cleanupError) {
-          console.error('Failed to cleanup orphaned message:', cleanupError)
-          // Continue with original error - cleanup failure shouldn't mask the original issue
-        }
-      }
       
       // Throw TRPCError for proper error handling in tRPC context
       if (error instanceof Error) {

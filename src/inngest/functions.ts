@@ -99,7 +99,7 @@ export const generateAPI = inngest.createFunction(
   { id: "generate-api" },
   { event: "api/generate" },
   async ({ event, step }) => {
-    const { prompt, mode, repoUrl, userId } = event.data;
+    const { prompt, mode, repoUrl, userId, projectId } = event.data;
     
     let jobId: string | undefined;
     
@@ -111,6 +111,7 @@ export const generateAPI = inngest.createFunction(
         .from("jobs")
         .insert({
           user_id: userId || 'anonymous', // Use anonymous if no userId provided
+          project_id: projectId || null, // Include project_id if available
           type: "generate_api",
           status: "running",
           payload: {
@@ -435,10 +436,7 @@ EXAMPLE STRUCTURE:
           await MessageService.saveResult({
             content: result.state.data.summary || 'AI generation failed - missing required data',
             role: 'assistant',
-            type: 'error',
-            sandboxUrl: 'https://example.com/error',
-            title: 'AI Generation Error',
-            files: result.state.data.files || {}
+            type: 'error'
           });
           
           // Update job status to failed if job tracking is available
@@ -485,10 +483,7 @@ EXAMPLE STRUCTURE:
         await MessageService.saveResult({
           content: errorResult.state.data.summary || `Failed to parse AI result: ${error}`,
           role: 'assistant',
-          type: 'error',
-          sandboxUrl: 'https://example.com/error',
-          title: 'AI Parsing Error',
-          files: errorResult.state.data.files || {}
+          type: 'error'
         });
         
         // Update job status to failed if job tracking is available
@@ -1257,7 +1252,48 @@ EXAMPLE STRUCTURE:
       }
     });
 
-    // Step 7: Update job status to completed (if job tracking is available)
+    // Step 7: Save successful result to messages and fragments tables
+    await step.run("save-result-to-messages", async () => {
+      try {
+        const { MessageService } = await import('../modules/messages/service');
+        
+        // Create a comprehensive summary of the generated API
+        const summary = apiResult.state.data.summary || 'Generated API successfully';
+        const files = apiResult.state.data.files || {};
+        const filesList = Object.keys(files);
+        
+        const resultContent = `API Generation Complete!\n\n${summary}\n\nGenerated Files:\n${filesList.map(file => `- ${file}`).join('\n')}\n\nValidation: ${validationResult.overallValid ? 'Passed' : 'Failed'}`;
+        
+        // Save the AI response as a message with fragment
+        const result = await MessageService.saveResult({
+          content: resultContent,
+          role: 'assistant',
+          type: 'result',
+          fragment: {
+            title: `Generated API: ${summary.substring(0, 50)}...`,
+            sandbox_url: 'https://example.com/sandbox', // Default sandbox URL since validationResult doesn't include this
+            files: files,
+            fragment_type: 'api_result',
+            order_index: 0,
+            metadata: {
+              api_fragment_id: savedApi.id,
+              validation_results: validationResult,
+              pr_url: prUrl,
+              generated_files: filesList,
+              job_id: jobId
+            }
+          }
+        });
+        
+        console.log('Result saved to messages and fragments:', result.message.id, result.fragment?.id);
+        return result;
+      } catch (error) {
+        console.error('Error saving result to messages/fragments:', error);
+        // Don't throw error here - API generation succeeded, this is just for UI display
+      }
+    });
+
+    // Step 8: Update job status to completed (if job tracking is available)
     await step.run("update-job-completed", async () => {
       if (!jobId) {
         console.log('No job ID available, skipping job status update');

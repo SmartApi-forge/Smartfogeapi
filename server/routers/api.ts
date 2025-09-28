@@ -22,13 +22,12 @@ export const apiRouter = createTRPCRouter({
       const { user, supabase } = ctx;
       
       try {
-        // Create a new project record
+        // Create a new project record (without storing prompt here)
         const { data: project, error: projectError } = await supabase
           .from('projects')
           .insert({
             user_id: user.id,
             name: input.name || `API from "${input.prompt.slice(0, 30)}..."`,
-            prompt: input.prompt,
             framework: input.framework,
             advanced: input.advanced,
             status: 'generating',
@@ -42,6 +41,27 @@ export const apiRouter = createTRPCRouter({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to create project',
             cause: projectError,
+          });
+        }
+
+        // Store user prompt in messages table
+        const { data: message, error: messageError } = await supabase
+          .from('messages')
+          .insert({
+            content: input.prompt,
+            role: 'user',
+            type: 'text',
+            project_id: project.id,
+            sender_id: user.id
+          })
+          .select()
+          .single();
+
+        if (messageError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to store user message',
+            cause: messageError,
           });
         }
 

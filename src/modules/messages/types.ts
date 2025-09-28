@@ -23,7 +23,9 @@ export const MessageSchema = z.object({
   role: MessageRoleSchema,
   content: z.string(),
   type: MessageTypeSchema.default('text'),
-  metadata: z.record(z.any()).optional(),
+  sender_id: z.string().uuid().optional(),
+  receiver_id: z.string().uuid().optional(),
+  project_id: z.string().uuid().optional(),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
 })
@@ -37,7 +39,9 @@ export const CreateMessageInputSchema = z.object({
   role: MessageRoleSchema,
   content: z.string().min(1, 'Content is required'),
   type: MessageTypeSchema.default('text'),
-  metadata: z.record(z.any()).optional(),
+  sender_id: z.string().uuid().optional(),
+  receiver_id: z.string().uuid().optional(),
+  project_id: z.string().uuid().optional(),
 })
 
 // Alias for router compatibility
@@ -46,7 +50,9 @@ export const CreateMessageSchema = CreateMessageInputSchema
 export const UpdateMessageInputSchema = z.object({
   content: z.string().min(1, 'Content is required').optional(),
   type: MessageTypeSchema.optional(),
-  metadata: z.record(z.any()).optional(),
+  sender_id: z.string().uuid().optional(),
+  receiver_id: z.string().uuid().optional(),
+  project_id: z.string().uuid().optional(),
 })
 
 // Router compatibility aliases
@@ -96,29 +102,28 @@ export type Fragment = z.infer<typeof FragmentSchema>
 export type CreateFragmentInput = z.infer<typeof CreateFragmentInputSchema>
 export type UpdateFragmentInput = z.infer<typeof UpdateFragmentInputSchema>
 
-// SaveResult functionality types
+// Schema for saving AI results - creates both message and fragment
 export const SaveResultInputSchema = z.object({
   content: z.string().min(1, 'Content is required'),
   role: MessageRoleSchema.default('assistant'),
   type: MessageTypeSchema.default('result'),
-  sandboxUrl: z.string().url('Valid sandbox URL is required'),
-  title: z.string().min(1, 'Title is required').default('fragment'),
-  files: z.record(z.string(), z.any()).default({}),
+  sender_id: z.string().uuid().optional(),
+  receiver_id: z.string().uuid().optional(),
+  project_id: z.string().uuid().optional(),
+  // Fragment data for storing in fragments table
+  fragment: z.object({
+    title: z.string().min(1, 'Fragment title is required'),
+    sandbox_url: z.string().url('Valid URL required for sandbox'),
+    files: z.record(z.string(), z.any()).default({}),
+    fragment_type: z.string().default('result'),
+    order_index: z.number().int().min(0).default(0),
+    metadata: z.record(z.any()).optional(),
+  }).optional(),
 })
 
 export const SaveResultResponseSchema = z.object({
   message: MessageSchema,
-  fragment: z.object({
-    id: z.string().uuid(),
-    message_id: z.string().uuid(),
-    sandbox_url: z.string().url(),
-    title: z.string(),
-    content: z.string(),
-    order_index: z.number(),
-    files: z.record(z.string(), z.any()),
-    created_at: z.string().datetime(),
-    updated_at: z.string().datetime(),
-  }),
+  fragment: FragmentSchema.optional(),
 })
 
 export type SaveResultInput = z.infer<typeof SaveResultInputSchema>
