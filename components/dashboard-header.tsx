@@ -236,7 +236,8 @@ export function DashboardHeader() {
             animate={{ x: 0 }}
             exit={{ x: -300 }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="fixed left-0 top-0 bottom-0 w-72 bg-[#1E1E1E]/95 border-r border-gray-800 z-50 overflow-y-auto hidden md:block"
+            className="fixed left-0 top-0 bottom-0 w-72 border-r border-gray-800 z-50 overflow-y-auto hidden md:block"
+            style={{ backgroundColor: '#1D1D1D' }}
           >
             <div className="flex items-center justify-between p-4">
               <div className="flex items-center gap-2">
@@ -261,7 +262,17 @@ export function DashboardHeader() {
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="w-full justify-start gap-2 text-white hover:bg-gray-800/50 hover:text-white flex items-center py-3"
+                className="w-full justify-start gap-2 text-white hover:text-white flex items-center py-3"
+                style={{ 
+                  backgroundColor: 'transparent',
+                  transition: 'background-color 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#333333'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent'
+                }}
               >
                 <span className="text-purple-400 mr-2">◆</span>
                 New project
@@ -306,10 +317,20 @@ export function DashboardHeader() {
           </nav>
           <div className="mt-auto p-4 border-t border-gray-800">
             <Button 
-              variant="ghost" 
-              size="sm" 
-              className="w-full justify-start gap-2 text-white hover:bg-gray-800/50 hover:text-white flex items-center py-3"
-            >
+                  variant="ghost" 
+                  size="sm" 
+                  className="w-full justify-start gap-2 text-white hover:text-white flex items-center py-3"
+                  style={{ 
+                    backgroundColor: 'transparent',
+                    transition: 'background-color 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#333333'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent'
+                  }}
+                >
               <span className="text-purple-400 mr-2">◆</span>
               New project
             </Button>

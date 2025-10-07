@@ -131,7 +131,11 @@ const AnimatedPlaceholder = ({ isFocused }: { isFocused: boolean }) => {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0.6, y: -2 }}
         transition={{ duration: 0.12 }}
-        className="pointer-events-none text-sm text-muted-foreground text-left whitespace-nowrap overflow-hidden"
+        className="pointer-events-none text-muted-foreground text-left whitespace-nowrap overflow-hidden font-neue-500"
+        style={{
+          fontSize: '14px',
+          lineHeight: '24px'
+        }}
       >
         {text}
         <span className="ml-0.5 inline-block w-[1ch] animate-pulse">|</span>
@@ -244,7 +248,11 @@ export function AiInput({
                 id="ai-input-04"
                 value={value}
                 placeholder=""
-                className="w-full rounded-[24px] rounded-b-none px-4 py-3 bg-card border-none resize-none focus-visible:ring-2 focus-visible:ring-blue-500/20 focus-visible:border-blue-500/50 leading-[1.2] text-foreground placeholder:text-muted-foreground text-left"
+                className="w-full rounded-[24px] rounded-b-none px-4 py-3 bg-card border-none resize-none focus-visible:ring-2 focus-visible:ring-blue-500/20 focus-visible:border-blue-500/50 leading-[1.2] text-foreground placeholder:text-muted-foreground text-left font-neue-500"
+                style={{
+                  fontSize: '14px',
+                  lineHeight: '24px'
+                }}
                 ref={textareaRef}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
