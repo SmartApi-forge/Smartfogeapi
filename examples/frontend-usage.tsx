@@ -6,23 +6,26 @@ import type { MessageWithFragments, Fragment } from '../src/modules/messages/typ
 type MessagesWithFragments = MessageWithFragments[]
 
 /**
- * Example component showing how to use the messages.getMany procedure
+ * Example of how to use the messages.getMany tRPC procedure
  * from the frontend using TRPC React Query hooks
  */
 export function MessagesExample() {
+  const projectId = '550e8400-e29b-41d4-a716-446655440000' // Example project ID
+  
   // Basic usage with default limit (50)
   const { 
     data: messages, 
     isLoading, 
     error, 
     refetch 
-  } = api.messages.getMany.useQuery({ includeFragment: true })
+  } = api.messages.getMany.useQuery({ projectId, includeFragment: true })
 
   // Usage with custom limit
   const { 
     data: limitedMessages, 
     isLoading: isLoadingLimited 
   } = api.messages.getMany.useQuery({ 
+    projectId,
     limit: 10,
     includeFragment: true
   })
@@ -35,7 +38,7 @@ export function MessagesExample() {
   const { 
     data: conditionalMessages 
   } = api.messages.getMany.useQuery(
-    { limit: 25, includeFragment: true },
+    { projectId, limit: 25, includeFragment: true },
     { 
       enabled: shouldFetch,
       refetchInterval: 30000, // Refetch every 30 seconds
@@ -156,7 +159,10 @@ export function MessagesExample() {
  * Alternative simpler example for just displaying messages as JSON
  */
 export function SimpleMessagesDisplay() {
+  const projectId = '550e8400-e29b-41d4-a716-446655440000' // Example project ID
+  
   const { data: messages, isLoading, error } = api.messages.getMany.useQuery({
+    projectId,
     limit: 20,
     includeFragment: true
   })
@@ -188,6 +194,7 @@ export function SimpleMessagesDisplay() {
  */
 export function MessagesWithErrorHandling() {
   const [limit, setLimit] = React.useState(10)
+  const [projectId, setProjectId] = React.useState('550e8400-e29b-41d4-a716-446655440000') // Example project ID
   
   const { 
     data: messages, 
@@ -196,7 +203,7 @@ export function MessagesWithErrorHandling() {
     refetch,
     isFetching 
   } = api.messages.getMany.useQuery(
-    { limit, includeFragment: true },
+    { projectId, limit, includeFragment: true },
     {
       retry: 3,
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),

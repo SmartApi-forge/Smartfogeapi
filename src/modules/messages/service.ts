@@ -149,11 +149,13 @@ export class MessageService {
   /**
    * Get messages with their related fragments
    */
-  static async getMany(input: { limit?: number }): Promise<(Message & { fragments: any[] })[]> {
+  static async getMany(input: { projectId: string; limit?: number; includeFragment?: boolean }): Promise<(Message & { fragments: any[] })[]> {
     try {
       const messages = await messageOperations.getWithFragments({
+        projectId: input.projectId,
         limit: input.limit ?? 50,
-        offset: 0
+        offset: 0,
+        includeFragment: input.includeFragment
       })
       
       return messages

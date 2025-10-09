@@ -191,11 +191,11 @@ export const messageOperations = {
   },
 
   // Get messages with their associated fragments using proper Supabase join
-  async getWithFragments(options?: { limit?: number; offset?: number }) {
+  async getWithFragments(options?: { projectId?: string; limit?: number; offset?: number; includeFragment?: boolean }) {
     const limit = options?.limit || 50
     const offset = options?.offset || 0
     
-    const { data: messages, error } = await supabaseServer
+    let query = supabaseServer
       .from('messages')
       .select(`
         *,
@@ -210,7 +210,15 @@ export const messageOperations = {
         )
       `)
       .order('updated_at', { ascending: false })
-      .range(offset, offset + limit - 1)
+    
+    // Add project filter if provided
+    if (options?.projectId) {
+      query = query.eq('project_id', options.projectId)
+    }
+    
+    query = query.range(offset, offset + limit - 1)
+    
+    const { data: messages, error } = await query
     
     if (error) throw error
     return messages as (Message & { fragments: Fragment[] })[]

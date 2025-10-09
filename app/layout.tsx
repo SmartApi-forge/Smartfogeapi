@@ -27,6 +27,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${geist.variable} antialiased`}>
+      <head>
+        {/* Global tRPC client for browser console testing */}
+        <script src="/trpc-console-helper.js" defer></script>
+      </head>
       <body className="font-sans">
         <TRPCReactProvider>
           <AuthInitializer />

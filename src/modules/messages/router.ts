@@ -44,13 +44,17 @@ export const messagesRouter = createTRPCRouter({
    */
   getMany: baseProcedure
     .input(z.object({
+      projectId: z.string().uuid(),
       limit: z.number().min(1).max(100).default(50).optional(),
       includeFragment: z.boolean().optional(),
     }))
     .query(async ({ input }) => {
       try {
+        const { projectId, limit, includeFragment } = input
         return await MessageService.getMany({
-          limit: input.limit ?? 50
+          projectId,
+          limit: limit ?? 50,
+          includeFragment
         })
       } catch (error) {
         console.error('Error in getMany procedure:', error)
