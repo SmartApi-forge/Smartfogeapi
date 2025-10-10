@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Folder, 
@@ -13,7 +13,9 @@ import {
   Clock,
   CheckCircle,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  Send,
+  Loader2
 } from "lucide-react";
 import { SimpleHeader } from "@/components/simple-header";
 import { Highlight, themes } from "prism-react-renderer";
@@ -103,32 +105,14 @@ function getStatusColor(status: Project['status']) {
   }
 }
 
-function generateFileTreeFromProject(project: Project): TreeNode[] {
+function generateFileTreeFromProject(project: Project, messages: Message[] = []): TreeNode[] {
+  // Start with base tree structure
   const baseTree: TreeNode[] = [
     {
       id: "src",
       name: "src",
       type: "folder",
-      children: [
-        {
-          id: "main.py",
-          name: project.framework === 'fastapi' ? "main.py" : "app.js",
-          type: "file",
-          content: project.framework === 'fastapi' 
-            ? `from fastapi import FastAPI\n\napp = FastAPI(title="${project.name}")\n\n@app.get("/")\ndef read_root():\n    return {"message": "Hello from ${project.name}!"}`
-            : `const express = require('express');\nconst app = express();\n\napp.get('/', (req, res) => {\n  res.json({ message: 'Hello from ${project.name}!' });\n});\n\napp.listen(3000, () => {\n  console.log('Server running on port 3000');\n});`,
-          language: project.framework === 'fastapi' ? 'python' : 'javascript'
-        },
-        {
-          id: "requirements.txt",
-          name: project.framework === 'fastapi' ? "requirements.txt" : "package.json",
-          type: "file",
-          content: project.framework === 'fastapi'
-            ? `fastapi==0.104.1\nuvicorn==0.24.0`
-            : `{\n  "name": "${project.name.toLowerCase().replace(/\s+/g, '-')}",\n  "version": "1.0.0",\n  "dependencies": {\n    "express": "^4.18.2"\n  }\n}`,
-          language: project.framework === 'fastapi' ? 'text' : 'json'
-        }
-      ]
+      children: []
     },
     {
       id: "README.md",
@@ -138,6 +122,134 @@ function generateFileTreeFromProject(project: Project): TreeNode[] {
       language: 'markdown'
     }
   ];
+
+  // Extract all generated files from message fragments
+  const generatedFiles: Record<string, { content: string; language: string }> = {};
+  
+  messages.forEach(message => {
+    if (message.fragments && message.fragments.length > 0) {
+      message.fragments.forEach(fragment => {
+        if (fragment.files && typeof fragment.files === 'object') {
+          Object.entries(fragment.files).forEach(([filename, content]) => {
+            if (typeof content === 'string' && content.trim()) {
+              // Determine language based on file extension
+              let language = 'text';
+              if (filename.endsWith('.py')) language = 'python';
+              else if (filename.endsWith('.js')) language = 'javascript';
+              else if (filename.endsWith('.json')) language = 'json';
+              else if (filename.endsWith('.md')) language = 'markdown';
+              else if (filename.endsWith('.yaml') || filename.endsWith('.yml')) language = 'yaml';
+              else if (filename.endsWith('.html')) language = 'html';
+              else if (filename.endsWith('.css')) language = 'css';
+              else if (filename.endsWith('.ts')) language = 'typescript';
+              else if (filename.endsWith('.jsx')) language = 'jsx';
+              else if (filename.endsWith('.tsx')) language = 'tsx';
+              else if (filename.endsWith('.sql')) language = 'sql';
+              else if (filename.endsWith('.sh')) language = 'bash';
+              else if (filename.endsWith('.dockerfile') || filename === 'Dockerfile') language = 'dockerfile';
+
+              generatedFiles[filename] = {
+                content: content,
+                language: language
+              };
+            }
+          });
+        }
+      });
+    }
+  });
+
+  // Add generated files to the tree structure
+  const srcFolder = baseTree.find(node => node.id === "src");
+  if (srcFolder && srcFolder.children) {
+    // Ensure src folder has children array
+      if (!srcFolder.children) {
+        srcFolder.children = [];
+      }
+      
+      // Add generated files to src folder or root based on filename
+    Object.entries(generatedFiles).forEach(([filename, fileData]) => {
+      const fileNode: TreeNode = {
+        id: filename,
+        name: filename,
+        type: "file",
+        content: fileData.content,
+        language: fileData.language
+      };
+
+      // Determine where to place the file
+      if (filename.includes('/')) {
+        // Handle nested file paths
+        const pathParts = filename.split('/');
+        const fileName = pathParts.pop()!;
+        let currentFolder = srcFolder;
+
+        // Create nested folder structure
+        pathParts.forEach(folderName => {
+          let folder = currentFolder.children?.find(child => child.name === folderName && child.type === 'folder');
+          if (!folder) {
+            folder = {
+              id: `${currentFolder.id}/${folderName}`,
+              name: folderName,
+              type: 'folder',
+              children: []
+            };
+            currentFolder.children = currentFolder.children || [];
+            currentFolder.children.push(folder);
+          }
+          currentFolder = folder;
+        });
+
+        // Add file to the deepest folder
+        currentFolder.children = currentFolder.children || [];
+        currentFolder.children.push({
+          ...fileNode,
+          id: filename,
+          name: fileName
+        });
+      } else {
+        // Add to src folder or root based on file type
+        if (filename === 'README.md' || filename === 'requirements.txt' || filename === 'package.json' || filename === 'Dockerfile') {
+          // Add to root level, replace existing if needed
+          const existingIndex = baseTree.findIndex(node => node.name === filename);
+          if (existingIndex >= 0) {
+            baseTree[existingIndex] = fileNode;
+          } else {
+            baseTree.push(fileNode);
+          }
+        } else {
+          // Add to src folder (ensure children exists)
+          if (srcFolder.children) {
+            srcFolder.children.push(fileNode);
+          }
+        }
+      }
+    });
+  }
+
+  // Add default files if no generated files exist
+  if (Object.keys(generatedFiles).length === 0 && srcFolder && srcFolder.children) {
+    srcFolder.children.push(
+      {
+        id: "main.py",
+        name: project.framework === 'fastapi' ? "main.py" : "app.js",
+        type: "file",
+        content: project.framework === 'fastapi' 
+          ? `from fastapi import FastAPI\n\napp = FastAPI(title="${project.name}")\n\n@app.get("/")\ndef read_root():\n    return {"message": "Hello from ${project.name}!"}`
+          : `const express = require('express');\nconst app = express();\n\napp.get('/', (req, res) => {\n  res.json({ message: 'Hello from ${project.name}!' });\n});\n\napp.listen(3000, () => {\n  console.log('Server running on port 3000');\n});`,
+        language: project.framework === 'fastapi' ? 'python' : 'javascript'
+      },
+      {
+        id: "requirements.txt",
+        name: project.framework === 'fastapi' ? "requirements.txt" : "package.json",
+        type: "file",
+        content: project.framework === 'fastapi'
+          ? `fastapi==0.104.1\nuvicorn==0.24.0`
+          : `{\n  "name": "${project.name.toLowerCase().replace(/\s+/g, '-')}",\n  "version": "1.0.0",\n  "dependencies": {\n    "express": "^4.18.2"\n  }\n}`,
+        language: project.framework === 'fastapi' ? 'text' : 'json'
+      }
+    );
+  }
 
   return baseTree;
 }
@@ -250,39 +362,66 @@ function CodeViewer({
 
   if (!selectedFile || selectedFile.type === 'folder') {
     return (
-      <div className="h-full flex items-center justify-center text-gray-400 text-sm">
-        Select a file to view its contents
+      <div className="h-full flex flex-col">
+        <div className="h-10 border-b px-3 flex items-center text-xs text-gray-300 bg-gray-800/50">
+          <span>No file selected</span>
+        </div>
+        <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
+          Select a file to view its contents
+        </div>
       </div>
     );
   }
 
   return (
     <div className="h-full flex flex-col">
-      <div className="h-8 border-b px-3 flex items-center text-xs text-gray-300 bg-gray-800/50">
+      {/* File header */}
+      <div className="h-10 border-b px-3 flex items-center text-xs text-gray-300 bg-gray-800/50 flex-shrink-0">
         <span className="mr-2">{getFileIcon(selectedFile.name)}</span>
-        {selectedFile.name}
+        <span className="font-medium">{selectedFile.name}</span>
+        <span className="ml-2 text-gray-500">
+          ({selectedFile.language || 'text'})
+        </span>
       </div>
-      <div className="flex-1 overflow-auto p-3">
-        <Highlight
-          theme={themes.vsDark}
-          code={selectedFile.content || '// No content available'}
-          language={selectedFile.language || 'text'}
-        >
-          {({ className, style, tokens, getLineProps, getTokenProps }) => (
-            <pre className={`${className} text-xs leading-relaxed`} style={style}>
-              {tokens.map((line, i) => (
-                <div key={i} {...getLineProps({ line })}>
-                  <span className="inline-block w-8 text-right mr-3 text-gray-500 select-none">
-                    {i + 1}
-                  </span>
-                  {line.map((token, key) => (
-                    <span key={key} {...getTokenProps({ token })} />
-                  ))}
-                </div>
-              ))}
-            </pre>
-          )}
-        </Highlight>
+      
+      {/* Code content with proper scrolling */}
+      <div className="flex-1 overflow-auto">
+        <div className="min-h-full">
+          <Highlight
+            theme={themes.vsDark}
+            code={selectedFile.content || '// No content available'}
+            language={selectedFile.language || 'text'}
+          >
+            {({ className, style, tokens, getLineProps, getTokenProps }) => (
+              <pre 
+                className={`${className} text-sm leading-6 p-4 min-h-full`} 
+                style={{
+                  ...style,
+                  margin: 0,
+                  background: '#1D1D1D',
+                  fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+                }}
+              >
+                {tokens.map((line, i) => (
+                  <div 
+                    key={i} 
+                    {...getLineProps({ line })}
+                    className="flex hover:bg-gray-800/30 transition-colors"
+                  >
+                    <span className="inline-block w-12 text-right mr-4 text-gray-500 select-none flex-shrink-0 text-xs leading-6">
+                      {i + 1}
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      {line.map((token, key) => (
+                        <span key={key} {...getTokenProps({ token })} />
+                      ))}
+                    </span>
+                  </div>
+                ))}
+              </pre>
+            )}
+          </Highlight>
+        </div>
       </div>
     </div>
   );
@@ -296,12 +435,11 @@ export function ProjectPageClient({
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["src"]));
   const [selected, setSelected] = useState<string | null>(null);
   const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Generate file tree from project
-  const fileTree = useMemo(() => generateFileTreeFromProject(project), [project]);
-
-  // Use tRPC query with initial data
-  const { data: messages = initialMessages } = api.messages.getMany.useQuery(
+  // Use tRPC query with initial data and real-time updates
+  const { data: messages = initialMessages, refetch } = api.messages.getMany.useQuery(
     {
       projectId,
       limit: 100,
@@ -309,9 +447,25 @@ export function ProjectPageClient({
     },
     {
       initialData: initialMessages as any,
-      refetchOnWindowFocus: false,
+      refetchOnWindowFocus: true,
+      refetchInterval: 5000, // Refetch every 5 seconds for real-time updates
     }
   );
+
+  // Sort messages by creation date (oldest first, user messages at bottom)
+  const sortedMessages = useMemo(() => {
+    return [...messages].sort((a, b) => 
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+  }, [messages]);
+
+  // Generate file tree from project and messages
+  const fileTree = useMemo(() => generateFileTreeFromProject(project, sortedMessages), [project, sortedMessages]);
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [sortedMessages]);
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
@@ -324,25 +478,50 @@ export function ProjectPageClient({
 
   const select = (id: string) => setSelected(id);
 
-  const send = () => {
+  // Create message mutation
+  const createMessage = api.messages.create.useMutation({
+    onSuccess: () => {
+      refetch(); // Refresh messages after sending
+      setIsLoading(false);
+    },
+    onError: (error) => {
+      console.error('Failed to send message:', error);
+      setIsLoading(false);
+    }
+  });
+
+  const send = async () => {
     const text = input.trim();
-    if (!text) return;
-    // TODO: Implement message sending functionality
+    if (!text || isLoading) return;
+    
+    setIsLoading(true);
     setInput("");
+
+    try {
+      await createMessage.mutateAsync({
+        content: text,
+        role: 'user',
+        type: 'text',
+        project_id: projectId,
+      });
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setInput(text); // Restore input on error
+    }
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col relative">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <SimpleHeader />
       
       {/* Main content */}
-      <div className="flex flex-1 h-[calc(100vh-80px)]">
+      <div className="flex flex-1 h-[calc(100vh-80px)] relative">
         {/* Left: Chat sidebar */}
-        <section className="w-96 flex flex-col h-full overflow-hidden" style={{ backgroundColor: '#09090B' }}>
-          <header className="h-10 shrink-0 px-4 flex items-center gap-2 text-sm font-medium" style={{ backgroundColor: '#09090B' }}>
+        <section className="w-full md:w-96 flex flex-col h-full overflow-hidden border-r" style={{ backgroundColor: '#09090B' }}>
+          <header className="h-12 shrink-0 px-4 flex items-center gap-2 text-sm font-medium border-b border-gray-800">
             <MessageSquare className="size-4 text-white" /> 
-            <span className="text-white">Project: {project.name}</span>
+            <span className="text-white truncate">{project.name}</span>
             <div className="ml-auto flex items-center gap-1">
               {getStatusIcon(project.status)}
               <span className={`text-xs ${getStatusColor(project.status)}`}>
@@ -351,59 +530,100 @@ export function ProjectPageClient({
             </div>
           </header>
           
-          <div className="flex-1 overflow-auto p-4 space-y-3 pb-4" style={{ backgroundColor: '#09090B' }}>
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`text-sm flex gap-3 ${
-                  message.role === "user" ? "flex-row-reverse" : "flex-row"
-                }`}
-              >
-                <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center mt-1" 
-                     style={{ backgroundColor: message.role === "user" ? '#3b82f6' : '#10b981' }}>
-                  {message.role === "user" ? (
-                    <User className="size-3 text-white" />
-                  ) : (
-                    <Bot className="size-3 text-white" />
-                  )}
-                </div>
-                <div
-                  className={`flex-1 rounded-lg px-4 py-3 shadow-sm ${
-                    message.role === "user"
-                      ? "text-white"
-                      : "text-white"
+          {/* Messages container with proper scrolling */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ backgroundColor: '#09090B' }}>
+            <AnimatePresence>
+              {sortedMessages.map((message, index) => (
+                <motion.div
+                  key={message.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3, delay: index * 0.05 }}
+                  className={`text-sm flex gap-3 ${
+                    message.role === "user" ? "flex-row-reverse" : "flex-row"
                   }`}
-                  style={{ 
-                    backgroundColor: message.role === "user" ? '#333333' : '#1a1a1a',
-                    maxWidth: '85%'
-                  }}
                 >
-                  <div className="whitespace-pre-wrap">{message.content}</div>
-                  {message.fragments && message.fragments.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-gray-600">
-                      <div className="text-xs text-gray-400 mb-1">Generated Files:</div>
-                      {message.fragments.map((fragment) => (
-                        <div key={fragment.id} className="text-xs text-blue-300">
-                          {fragment.fragment_type}
-                        </div>
-                      ))}
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center" 
+                       style={{ backgroundColor: message.role === "user" ? '#3b82f6' : '#10b981' }}>
+                    {message.role === "user" ? (
+                      <User className="size-4 text-white" />
+                    ) : (
+                      <Bot className="size-4 text-white" />
+                    )}
+                  </div>
+                  <div
+                    className={`flex-1 rounded-lg px-4 py-3 shadow-sm max-w-[85%] ${
+                      message.role === "user"
+                        ? "text-white"
+                        : "text-white"
+                    }`}
+                    style={{ 
+                      backgroundColor: message.role === "user" ? '#333333' : '#1a1a1a',
+                    }}
+                  >
+                    <div className="whitespace-pre-wrap break-words">{message.content}</div>
+                    {message.fragments && message.fragments.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-gray-600">
+                        <div className="text-xs text-gray-400 mb-2">Generated Files:</div>
+                        {message.fragments.map((fragment) => (
+                          <div key={fragment.id} className="text-xs text-blue-300 mb-1">
+                            📄 {fragment.title}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="text-xs text-gray-500 mt-2">
+                      {new Date(message.created_at).toLocaleTimeString()}
                     </div>
-                  )}
-                </div>
-              </div>
-            ))}
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input at bottom of chat */}
+          <div className="p-4 border-t border-gray-800">
+            <div className="flex items-center gap-2 p-3 rounded-lg border border-gray-600 shadow-lg" style={{ backgroundColor: '#333333' }}>
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
+                placeholder="Continue the conversation..."
+                className="flex-1 bg-transparent text-white placeholder-gray-400 outline-none text-sm"
+                disabled={isLoading}
+              />
+              <button 
+                onClick={send} 
+                disabled={!input.trim() || isLoading}
+                className="px-3 py-2 rounded-md text-sm font-medium text-white transition-colors hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                style={{ backgroundColor: '#3b82f6' }}
+              >
+                {isLoading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Send className="size-4" />
+                )}
+              </button>
+            </div>
           </div>
         </section>
 
-        {/* Right: VS Code-style file explorer and editor */}
-        <section className="flex-1 p-4">
-          <div className="h-full w-full rounded-3xl border bg-card shadow-sm overflow-hidden flex">
+        {/* Right: VS Code-style file explorer and editor - Hidden on mobile, shown on desktop */}
+        <section className="hidden md:flex flex-1 p-4">
+          <div className="h-full w-full rounded-lg border bg-card shadow-sm overflow-hidden flex">
             {/* File Explorer */}
-            <aside className="w-52 border-r" style={{ backgroundColor: '#1D1D1D' }}>
-              <div className="h-8 border-b px-2 flex items-center text-xs uppercase tracking-wide text-muted-foreground font-medium">
+            <aside className="w-64 border-r flex-shrink-0" style={{ backgroundColor: '#1D1D1D' }}>
+              <div className="h-10 border-b px-3 flex items-center text-xs uppercase tracking-wide text-gray-400 font-medium">
                 Explorer
               </div>
-              <div className="p-1 relative">
+              <div className="p-2 overflow-y-auto h-[calc(100%-2.5rem)]">
                 {fileTree.map((node) => (
                   <TreeItem
                     key={node.id}
@@ -417,32 +637,12 @@ export function ProjectPageClient({
               </div>
             </aside>
 
-            {/* Code Editor */}
-            <div className="flex-1 min-w-0" style={{ backgroundColor: '#1D1D1D' }}>
+            {/* Code Editor with improved scrolling */}
+            <div className="flex-1 min-w-0 flex flex-col" style={{ backgroundColor: '#1D1D1D' }}>
               <CodeViewer filename={selected} fileTree={fileTree} />
             </div>
           </div>
         </section>
-      </div>
-      
-      {/* Input at bottom left */}
-      <div className="absolute bottom-4 left-4 w-96 p-4">
-        <div className="flex items-center gap-2 p-3 rounded-full border border-gray-600 shadow-lg" style={{ backgroundColor: '#333333' }}>
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send()}
-            placeholder="Continue the conversation..."
-            className="flex-1 bg-transparent text-white placeholder-gray-400 outline-none text-sm px-3"
-          />
-          <button 
-            onClick={send} 
-            className="px-4 py-2 rounded-full text-sm font-medium text-white transition-colors hover:bg-blue-600 flex-shrink-0"
-            style={{ backgroundColor: '#3b82f6' }}
-          >
-            ↗
-          </button>
-        </div>
       </div>
     </div>
   );

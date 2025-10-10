@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { createCallerFactory, createTRPCContext } from '@/src/trpc/init';
 import { appRouter } from '@/src/trpc/routers/_app';
 import { ProjectPageClient } from './project-page-client';
+import { TRPCError } from '@trpc/server';
 
 interface ProjectPageProps {
   params: Promise<{ projectId: string }>;
@@ -22,25 +23,17 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     const createCaller = createCallerFactory(appRouter);
     const caller = createCaller(ctx);
 
-    // Fetch project messages with fragments
-    const messages = await caller.messages.getMany({
-      projectId,
-      limit: 100,
-      includeFragment: true,
-    });
-
-    // Mock project data - in a real app, you'd fetch this from your projects table
-    const project = {
-      id: projectId,
-      name: `Project ${projectId.slice(0, 8)}`,
-      description: 'API project generated with SmartAPIForge',
-      framework: 'fastapi' as const,
-      status: 'deployed' as const,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      deploy_url: `https://api-${projectId.slice(0, 8)}.vercel.app`,
-      swagger_url: `https://api-${projectId.slice(0, 8)}.vercel.app/docs`,
-    };
+    // Fetch both project data and messages in parallel for better performance
+    const [project, messages] = await Promise.all([
+      // Fetch real project data from database
+      caller.projects.getOne({ id: projectId }),
+      // Fetch project messages with fragments
+      caller.messages.getMany({
+        projectId,
+        limit: 100,
+        includeFragment: true,
+      })
+    ]);
 
     return (
       <ProjectPageClient
@@ -51,6 +44,13 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     );
   } catch (error) {
     console.error('Error fetching project data:', error);
+    
+    // Handle specific error cases
+    if (error instanceof TRPCError && error.code === 'NOT_FOUND') {
+      notFound();
+    }
+    
+    // For other errors, also show not found to avoid exposing internal errors
     notFound();
   }
 }
