@@ -86,6 +86,44 @@ window.addEventListener('DOMContentLoaded', () => {
               return await response.json();
             }
           }
+        },
+        projects: {
+          getOne: {
+            query: async (input) => {
+              const response = await fetch('/api/trpc/projects.getOne', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(await getAuthHeaders()),
+                },
+                body: JSON.stringify(input),
+              });
+              
+              if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+              }
+              
+              return await response.json();
+            }
+          },
+          getMany: {
+            query: async (input) => {
+              const response = await fetch('/api/trpc/projects.getMany', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(await getAuthHeaders()),
+                },
+                body: JSON.stringify(input),
+              });
+              
+              if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+              }
+              
+              return await response.json();
+            }
+          }
         }
       };
     } else {
@@ -94,7 +132,10 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     
     console.log('✅ tRPC client is now available globally as window.trpc');
-    console.log('📝 You can now test with: trpc.messages.getMany.query({projectId: "your-project-id"})');
+    console.log('📝 You can now test with:');
+    console.log('  - trpc.messages.getMany.query({projectId: "your-project-id"})');
+    console.log('  - trpc.projects.getOne.query({id: "your-project-id"})');
+    console.log('  - trpc.projects.getMany.query({limit: 10, offset: 0})');
   } catch (error) {
     console.error('❌ Failed to expose tRPC client globally:', error);
   }
