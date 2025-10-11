@@ -33,8 +33,8 @@ export const apiGenerationRouter = createTRPCRouter({
         // Create project record (including prompt as required by database schema)
         const project = await projectService.createProject({
           user_id: ctx.user.id,
-          name: `API from prompt: ${input.prompt.substring(0, 50)}...`,
-          description: `API generated from user prompt`,
+          name: `API Project ${new Date().toLocaleDateString()}`, // Shorter, cleaner name
+          description: `API generated from user prompt: ${input.prompt.substring(0, 100)}...`,
           prompt: input.prompt, // Add the required prompt field
           framework: input.framework,
           advanced: input.advanced,

@@ -570,9 +570,9 @@ export function ProjectPageClient({
           <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent" 
                style={{ 
                  backgroundColor: '#09090B',
-                 height: 'calc(100vh - 172px)',
-                 maxHeight: 'calc(100vh - 172px)',
-                 minHeight: 'calc(100vh - 172px)'
+                 height: 'calc(100vh - 140px)', // Reduced from 172px to prevent header collision
+                 maxHeight: 'calc(100vh - 140px)',
+                 minHeight: 'calc(100vh - 140px)'
                }}>
             <AnimatePresence>
               {sortedMessages.map((message, index) => (
@@ -595,23 +595,26 @@ export function ProjectPageClient({
                     )}
                   </div>
                   <div
-                    className={`flex-1 rounded-lg px-4 py-3 shadow-sm max-w-[85%] backdrop-blur-sm border border-gray-700/30 ${
+                    className={`rounded-lg px-4 py-3 shadow-sm backdrop-blur-sm border border-gray-700/30 ${
                       message.role === "user"
                         ? "text-white"
                         : "text-white"
                     }`}
                     style={{ 
                       backgroundColor: message.role === "user" ? '#333333' : '#1a1a1a',
+                      width: '280px', // Fixed width for consistent sizing
+                      maxWidth: '280px',
+                      minWidth: '200px'
                     }}
                   >
-                    <div className="whitespace-pre-wrap break-words leading-relaxed">{message.content}</div>
+                    <div className="whitespace-pre-wrap break-words leading-relaxed text-sm">{message.content}</div>
                     {message.fragments && message.fragments.length > 0 && (
                       <div className="mt-3 pt-3 border-t border-gray-600/50">
                         <div className="text-xs text-gray-400 mb-2 font-medium">Generated Files:</div>
                         {message.fragments.map((fragment) => (
                           <div key={fragment.id} className="text-xs text-blue-300 mb-1 flex items-center gap-1">
                             <FileCode className="size-3" />
-                            {fragment.title}
+                            <span className="truncate">{fragment.title}</span>
                           </div>
                         ))}
                       </div>
