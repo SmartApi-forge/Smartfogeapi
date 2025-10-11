@@ -15,7 +15,10 @@ import {
   XCircle,
   AlertCircle,
   Send,
-  Loader2
+  Loader2,
+  Copy,
+  Download,
+  Check
 } from "lucide-react";
 import { SimpleHeader } from "@/components/simple-header";
 import { Highlight, themes } from "prism-react-renderer";
@@ -346,6 +349,8 @@ function CodeViewer({
   filename: string | null;
   fileTree: TreeNode[];
 }) {
+  const [copySuccess, setCopySuccess] = useState(false);
+  
   const selectedFile = useMemo(() => {
     const findFile = (nodes: TreeNode[]): TreeNode | null => {
       for (const node of nodes) {
@@ -360,10 +365,36 @@ function CodeViewer({
     return findFile(fileTree);
   }, [filename, fileTree]);
 
+  const handleCopyCode = async () => {
+    if (!selectedFile?.content) return;
+    
+    try {
+      await navigator.clipboard.writeText(selectedFile.content);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy code:', err);
+    }
+  };
+
+  const handleDownload = () => {
+    if (!selectedFile?.content || !selectedFile?.name) return;
+    
+    const blob = new Blob([selectedFile.content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = selectedFile.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   if (!selectedFile || selectedFile.type === 'folder') {
     return (
       <div className="h-full flex flex-col">
-        <div className="h-10 border-b px-3 flex items-center text-xs text-gray-300 bg-gray-800/50">
+        <div className="h-12 border-b px-4 flex items-center justify-between text-xs text-gray-300 bg-gray-800/50 flex-shrink-0">
           <span>No file selected</span>
         </div>
         <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
@@ -375,17 +406,56 @@ function CodeViewer({
 
   return (
     <div className="h-full flex flex-col">
-      {/* File header */}
-      <div className="h-10 border-b px-3 flex items-center text-xs text-gray-300 bg-gray-800/50 flex-shrink-0">
-        <span className="mr-2">{getFileIcon(selectedFile.name)}</span>
-        <span className="font-medium">{selectedFile.name}</span>
-        <span className="ml-2 text-gray-500">
-          ({selectedFile.language || 'text'})
-        </span>
+      {/* Enhanced file header with action buttons - optimized height */}
+      <div className="h-10 border-b px-3 flex items-center justify-between text-xs text-gray-300 bg-gray-800/50 flex-shrink-0">
+        <div className="flex items-center min-w-0">
+          <span className="mr-2 flex-shrink-0">{getFileIcon(selectedFile.name)}</span>
+          <span className="font-medium truncate">{selectedFile.name}</span>
+          <span className="ml-2 text-gray-500 flex-shrink-0">
+            ({selectedFile.language || 'text'})
+          </span>
+        </div>
+        
+        {/* Compact action buttons */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            onClick={handleCopyCode}
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-gray-700 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500"
+            title="Copy code to clipboard"
+          >
+            {copySuccess ? (
+              <>
+                <Check className="size-3 text-green-400" />
+                <span className="text-green-400 hidden sm:inline">Copied!</span>
+              </>
+            ) : (
+              <>
+                <Copy className="size-3" />
+                <span className="hidden sm:inline">Copy</span>
+              </>
+            )}
+          </button>
+          
+          <button
+            onClick={handleDownload}
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-gray-700 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500"
+            title="Download file"
+          >
+            <Download className="size-3" />
+            <span className="hidden sm:inline">Download</span>
+          </button>
+        </div>
       </div>
       
-      {/* Code content with proper scrolling */}
-      <div className="flex-1 overflow-auto">
+      {/* Code content with optimized scrolling and full viewport utilization */}
+      <div 
+        className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800" 
+        style={{ 
+          minHeight: 0,
+          maxHeight: 'calc(100vh - 10rem)', // Optimized for maximum viewport usage
+          scrollBehavior: 'smooth'
+        }}
+      >
         <div className="min-h-full">
           <Highlight
             theme={themes.vsDark}
@@ -394,12 +464,13 @@ function CodeViewer({
           >
             {({ className, style, tokens, getLineProps, getTokenProps }) => (
               <pre 
-                className={`${className} text-sm leading-6 p-4 min-h-full`} 
+                className={`${className} text-sm leading-5 p-3 min-h-full`} 
                 style={{
                   ...style,
                   margin: 0,
                   background: '#1D1D1D',
                   fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+                  fontSize: 'clamp(11px, 1.5vw, 14px)', // Responsive font sizing
                 }}
               >
                 {tokens.map((line, i) => (
@@ -407,11 +478,15 @@ function CodeViewer({
                     key={i} 
                     {...getLineProps({ line })}
                     className="flex hover:bg-gray-800/30 transition-colors"
+                    style={{ minHeight: '1.25rem' }} // Consistent line height
                   >
-                    <span className="inline-block w-12 text-right mr-4 text-gray-500 select-none flex-shrink-0 text-xs leading-6">
+                    <span 
+                      className="inline-block w-10 text-right mr-3 text-gray-500 select-none flex-shrink-0 text-xs leading-5"
+                      style={{ fontSize: 'clamp(10px, 1.2vw, 12px)' }}
+                    >
                       {i + 1}
                     </span>
-                    <span className="flex-1 min-w-0">
+                    <span className="flex-1 min-w-0 break-all">
                       {line.map((token, key) => (
                         <span key={key} {...getTokenProps({ token })} />
                       ))}
@@ -436,6 +511,7 @@ export function ProjectPageClient({
   const [selected, setSelected] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isMobileExplorerOpen, setIsMobileExplorerOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Use tRPC query with initial data and real-time updates
@@ -511,27 +587,33 @@ export function ProjectPageClient({
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
       {/* Header */}
       <SimpleHeader />
       
-      {/* Main content */}
-      <div className="flex flex-1 h-[calc(100vh-80px)] relative">
-        {/* Left: Chat sidebar */}
-        <section className="w-full md:w-96 flex flex-col h-full overflow-hidden border-r" style={{ backgroundColor: '#09090B' }}>
-          <header className="h-12 shrink-0 px-4 flex items-center gap-2 text-sm font-medium border-b border-gray-800">
-            <MessageSquare className="size-4 text-white" /> 
-            <span className="text-white truncate">{project.name}</span>
-            <div className="ml-auto flex items-center gap-1">
+      {/* Main content - Responsive layout with optimized space utilization */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* Left: Chat sidebar - Responsive width with mobile-first approach */}
+        <section className="w-full sm:w-80 md:w-96 lg:w-[28rem] xl:w-[32rem] flex flex-col h-full overflow-hidden border-r border-gray-800/50 backdrop-blur-sm" 
+                 style={{ backgroundColor: '#09090B' }}>
+          <header className="h-12 shrink-0 px-4 flex items-center gap-2 text-sm font-medium border-b border-gray-800/50">
+            <MessageSquare className="size-4 text-white flex-shrink-0" /> 
+            <span className="text-white truncate flex-1 min-w-0">{project.name}</span>
+            <div className="flex items-center gap-1 flex-shrink-0">
               {getStatusIcon(project.status)}
-              <span className={`text-xs ${getStatusColor(project.status)}`}>
+              <span className={`text-xs ${getStatusColor(project.status)} hidden sm:inline`}>
                 {project.status}
               </span>
             </div>
           </header>
           
-          {/* Messages container with proper scrolling */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ backgroundColor: '#09090B' }}>
+          {/* Messages container with optimized scrolling and space utilization */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent" 
+               style={{ 
+                 backgroundColor: '#09090B',
+                 height: 'calc(100vh - 12rem)', // Precise height calculation
+                 maxHeight: 'calc(100vh - 12rem)'
+               }}>
             <AnimatePresence>
               {sortedMessages.map((message, index) => (
                 <motion.div
@@ -544,7 +626,7 @@ export function ProjectPageClient({
                     message.role === "user" ? "flex-row-reverse" : "flex-row"
                   }`}
                 >
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center" 
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-lg" 
                        style={{ backgroundColor: message.role === "user" ? '#3b82f6' : '#10b981' }}>
                     {message.role === "user" ? (
                       <User className="size-4 text-white" />
@@ -553,7 +635,7 @@ export function ProjectPageClient({
                     )}
                   </div>
                   <div
-                    className={`flex-1 rounded-lg px-4 py-3 shadow-sm max-w-[85%] ${
+                    className={`flex-1 rounded-lg px-4 py-3 shadow-sm max-w-[85%] backdrop-blur-sm border border-gray-700/30 ${
                       message.role === "user"
                         ? "text-white"
                         : "text-white"
@@ -562,18 +644,20 @@ export function ProjectPageClient({
                       backgroundColor: message.role === "user" ? '#333333' : '#1a1a1a',
                     }}
                   >
-                    <div className="whitespace-pre-wrap break-words">{message.content}</div>
+                    <div className="whitespace-pre-wrap break-words leading-relaxed">{message.content}</div>
                     {message.fragments && message.fragments.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-gray-600">
-                        <div className="text-xs text-gray-400 mb-2">Generated Files:</div>
+                      <div className="mt-3 pt-3 border-t border-gray-600/50">
+                        <div className="text-xs text-gray-400 mb-2 font-medium">Generated Files:</div>
                         {message.fragments.map((fragment) => (
-                          <div key={fragment.id} className="text-xs text-blue-300 mb-1">
-                            📄 {fragment.title}
+                          <div key={fragment.id} className="text-xs text-blue-300 mb-1 flex items-center gap-1">
+                            <FileCode className="size-3" />
+                            {fragment.title}
                           </div>
                         ))}
                       </div>
                     )}
-                    <div className="text-xs text-gray-500 mt-2">
+                    <div className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                      <Clock className="size-3" />
                       {new Date(message.created_at).toLocaleTimeString()}
                     </div>
                   </div>
@@ -583,9 +667,10 @@ export function ProjectPageClient({
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input at bottom of chat */}
-          <div className="p-4 border-t border-gray-800">
-            <div className="flex items-center gap-2 p-3 rounded-lg border border-gray-600 shadow-lg" style={{ backgroundColor: '#333333' }}>
+          {/* Fixed input at bottom - Enhanced responsive design */}
+          <div className="shrink-0 p-3 border-t border-gray-800/50 backdrop-blur-sm" style={{ backgroundColor: '#09090B' }}>
+            <div className="flex items-center gap-2 p-3 rounded-lg border border-gray-600/50 shadow-lg backdrop-blur-sm transition-all duration-200 hover:border-gray-500/50 focus-within:border-blue-500/50" 
+                 style={{ backgroundColor: '#333333' }}>
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -596,13 +681,13 @@ export function ProjectPageClient({
                   }
                 }}
                 placeholder="Continue the conversation..."
-                className="flex-1 bg-transparent text-white placeholder-gray-400 outline-none text-sm"
+                className="flex-1 bg-transparent text-white placeholder-gray-400 outline-none text-sm leading-relaxed"
                 disabled={isLoading}
               />
               <button 
                 onClick={send} 
                 disabled={!input.trim() || isLoading}
-                className="px-3 py-2 rounded-md text-sm font-medium text-white transition-colors hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-3 py-2 rounded-md text-sm font-medium text-white transition-all duration-200 hover:bg-blue-600 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2 shadow-md"
                 style={{ backgroundColor: '#3b82f6' }}
               >
                 {isLoading ? (
@@ -615,15 +700,37 @@ export function ProjectPageClient({
           </div>
         </section>
 
-        {/* Right: VS Code-style file explorer and editor - Hidden on mobile, shown on desktop */}
-        <section className="hidden md:flex flex-1 p-4">
-          <div className="h-full w-full rounded-lg border bg-card shadow-sm overflow-hidden flex">
-            {/* File Explorer */}
-            <aside className="w-64 border-r flex-shrink-0" style={{ backgroundColor: '#1D1D1D' }}>
-              <div className="h-10 border-b px-3 flex items-center text-xs uppercase tracking-wide text-gray-400 font-medium">
-                Explorer
+        {/* Right: Enhanced VS Code-style file explorer and editor with full responsiveness */}
+        <section className="hidden sm:flex flex-1 p-3 min-h-0 relative">
+          {/* Mobile explorer toggle button */}
+          <button
+            onClick={() => setIsMobileExplorerOpen(!isMobileExplorerOpen)}
+            className="sm:hidden absolute top-4 left-4 z-50 p-2 rounded-md bg-gray-800 text-white hover:bg-gray-700 transition-colors"
+          >
+            <Folder className="size-4" />
+          </button>
+
+          <div className="h-full w-full rounded-lg border border-gray-700/50 bg-card shadow-xl overflow-hidden flex backdrop-blur-sm">
+            {/* File Explorer - Enhanced responsive design */}
+            <aside className={`
+              w-64 lg:w-72 xl:w-80 border-r border-gray-700/50 flex-shrink-0 transition-all duration-300
+              ${isMobileExplorerOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}
+              sm:relative absolute sm:z-auto z-40 h-full
+            `} style={{ backgroundColor: '#1D1D1D' }}>
+              <div className="h-10 border-b border-gray-700/50 px-3 flex items-center justify-between text-xs uppercase tracking-wide text-gray-400 font-medium backdrop-blur-sm">
+                <span>Explorer</span>
+                <button
+                  onClick={() => setIsMobileExplorerOpen(false)}
+                  className="sm:hidden p-1 hover:bg-gray-700 rounded"
+                >
+                  ×
+                </button>
               </div>
-              <div className="p-2 overflow-y-auto h-[calc(100%-2.5rem)]">
+              <div className="p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent" 
+                   style={{ 
+                     height: 'calc(100% - 2.5rem)',
+                     maxHeight: 'calc(100vh - 8rem)'
+                   }}>
                 {fileTree.map((node) => (
                   <TreeItem
                     key={node.id}
@@ -637,13 +744,99 @@ export function ProjectPageClient({
               </div>
             </aside>
 
-            {/* Code Editor with improved scrolling */}
-            <div className="flex-1 min-w-0 flex flex-col" style={{ backgroundColor: '#1D1D1D' }}>
+            {/* Overlay for mobile explorer */}
+            {isMobileExplorerOpen && (
+              <div
+                className="sm:hidden absolute inset-0 bg-black/50 z-30"
+                onClick={() => setIsMobileExplorerOpen(false)}
+              />
+            )}
+
+            {/* Code Editor with enhanced responsive layout and scroll optimization */}
+            <div className="flex-1 min-w-0 flex flex-col relative" style={{ backgroundColor: '#1D1D1D' }}>
+              <div className="h-full w-full overflow-hidden">
+                <CodeViewer filename={selected} fileTree={fileTree} />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Mobile-only code viewer */}
+        <section className="sm:hidden flex-1 p-2 min-h-0">
+          <div className="h-full w-full rounded-lg border border-gray-700/50 bg-card shadow-xl overflow-hidden" style={{ backgroundColor: '#1D1D1D' }}>
+            <div className="h-10 border-b border-gray-700/50 px-3 flex items-center justify-between text-xs uppercase tracking-wide text-gray-400 font-medium">
+              <span>Code</span>
+              <button
+                onClick={() => setIsMobileExplorerOpen(true)}
+                className="p-1 hover:bg-gray-700 rounded flex items-center gap-1"
+              >
+                <Folder className="size-3" />
+                Files
+              </button>
+            </div>
+            <div className="h-full overflow-hidden" style={{ height: 'calc(100% - 2.5rem)' }}>
               <CodeViewer filename={selected} fileTree={fileTree} />
             </div>
           </div>
         </section>
       </div>
+
+      {/* Custom CSS for enhanced scrollbars and responsive behavior */}
+      <style jsx global>{`
+        .scrollbar-thin {
+          scrollbar-width: thin;
+        }
+        
+        .scrollbar-thumb-gray-600::-webkit-scrollbar-thumb {
+          background-color: #4b5563;
+          border-radius: 0.375rem;
+        }
+        
+        .scrollbar-track-transparent::-webkit-scrollbar-track {
+          background-color: transparent;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+        }
+        
+        /* Enhanced responsive breakpoints */
+        @media (max-width: 640px) {
+          .h-screen {
+            height: 100vh;
+            height: 100dvh; /* Dynamic viewport height for mobile */
+          }
+        }
+        
+        @media (min-width: 1024px) {
+          .scrollbar-thin::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+          }
+        }
+        
+        /* Smooth transitions for all interactive elements */
+        * {
+          transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
+          transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+          transition-duration: 150ms;
+        }
+        
+        /* Enhanced focus states for accessibility */
+        button:focus-visible,
+        input:focus-visible {
+          outline: 2px solid #3b82f6;
+          outline-offset: 2px;
+        }
+        
+        /* Optimized text rendering */
+        body {
+          text-rendering: optimizeLegibility;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+        }
+      `}</style>
     </div>
   );
 }

@@ -8,14 +8,11 @@ export function SimpleHeader() {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-gray-700 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between px-6">
-        {/* Left side - Logo and project name */}
+        {/* Left side - Logo */}
         <div className="flex items-center space-x-4">
           <Link href="/" className="flex items-center space-x-2">
             <Logo />
           </Link>
-          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-            <span>Cluely Website Clone</span>
-          </div>
         </div>
 
         {/* Right side - Action buttons */}
