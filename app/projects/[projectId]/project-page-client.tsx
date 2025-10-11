@@ -24,7 +24,6 @@ import { SimpleHeader } from "@/components/simple-header";
 import { Highlight, themes } from "prism-react-renderer";
 import { api } from "@/lib/trpc-client";
 
-// Types
 interface Message {
   id: string;
   content: string;
@@ -72,7 +71,6 @@ interface ProjectPageClientProps {
   project: Project;
 }
 
-// File tree structure for displaying generated API files
 interface TreeNode {
   id: string;
   name: string;
@@ -85,76 +83,126 @@ interface TreeNode {
 function getStatusIcon(status: Project['status']) {
   switch (status) {
     case 'generating':
-      return <Clock className="size-4 text-yellow-500" />;
+      return <Loader2 className="size-4 animate-spin text-blue-400" />;
     case 'deployed':
-      return <CheckCircle className="size-4 text-green-500" />;
+      return <CheckCircle className="size-4 text-green-400" />;
     case 'failed':
-      return <XCircle className="size-4 text-red-500" />;
+      return <XCircle className="size-4 text-red-400" />;
     default:
-      return <AlertCircle className="size-4 text-blue-500" />;
+      return <Clock className="size-4 text-yellow-400" />;
   }
 }
 
 function getStatusColor(status: Project['status']) {
   switch (status) {
     case 'generating':
-      return 'text-yellow-500';
+      return 'text-blue-400';
     case 'deployed':
-      return 'text-green-500';
+      return 'text-green-400';
     case 'failed':
-      return 'text-red-500';
+      return 'text-red-400';
     default:
-      return 'text-blue-500';
+      return 'text-yellow-400';
   }
 }
 
 function generateFileTreeFromProject(project: Project, messages: Message[] = []): TreeNode[] {
-  // Start with base tree structure
-  const baseTree: TreeNode[] = [
+  const baseStructure: TreeNode[] = [
     {
       id: "src",
       name: "src",
       type: "folder",
-      children: []
+      children: [
+        {
+          id: "main.py",
+          name: "main.py",
+          type: "file",
+          language: "python",
+          content: `# ${project.name} - FastAPI Application
+# Generated API based on: ${project.description || 'No description provided'}
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import uvicorn
+
+app = FastAPI(
+    title="${project.name}",
+    description="${project.description || 'Generated API'}",
+    version="1.0.0"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/")
+async def root():
+    return {"message": "Welcome to ${project.name} API"}
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "service": "${project.name}"}
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+`
+        }
+      ]
     },
     {
-      id: "README.md",
-      name: "README.md",
+      id: "requirements.txt",
+      name: "requirements.txt",
       type: "file",
-      content: `# ${project.name}\n\n${project.description || 'API generated with SmartAPIForge'}\n\n## Framework\n${project.framework}\n\n## Status\n${project.status}\n\n${project.deploy_url ? `## Deployment\n[View Live API](${project.deploy_url})` : ''}`,
-      language: 'markdown'
+      language: "text",
+      content: `fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+python-multipart==0.0.6
+`
     }
   ];
 
-  // Extract all generated files from message fragments
-  const generatedFiles: Record<string, { content: string; language: string }> = {};
-  
-  messages.forEach(message => {
+  // Add generated files from messages
+  messages.forEach((message) => {
     if (message.fragments && message.fragments.length > 0) {
-      message.fragments.forEach(fragment => {
+      message.fragments.forEach((fragment) => {
         if (fragment.files && typeof fragment.files === 'object') {
-          Object.entries(fragment.files).forEach(([filename, content]) => {
-            if (typeof content === 'string' && content.trim()) {
-              // Determine language based on file extension
-              let language = 'text';
-              if (filename.endsWith('.py')) language = 'python';
-              else if (filename.endsWith('.js')) language = 'javascript';
-              else if (filename.endsWith('.json')) language = 'json';
-              else if (filename.endsWith('.md')) language = 'markdown';
-              else if (filename.endsWith('.yaml') || filename.endsWith('.yml')) language = 'yaml';
-              else if (filename.endsWith('.html')) language = 'html';
-              else if (filename.endsWith('.css')) language = 'css';
-              else if (filename.endsWith('.ts')) language = 'typescript';
-              else if (filename.endsWith('.jsx')) language = 'jsx';
-              else if (filename.endsWith('.tsx')) language = 'tsx';
-              else if (filename.endsWith('.sql')) language = 'sql';
-              else if (filename.endsWith('.sh')) language = 'bash';
-              else if (filename.endsWith('.dockerfile') || filename === 'Dockerfile') language = 'dockerfile';
-
-              generatedFiles[filename] = {
-                content: content,
-                language: language
-              };
+          Object.entries(fragment.files).forEach(([filename, fileContent]) => {
+            const pathParts = filename.split('/');
+            let currentLevel = baseStructure;
+            
+            for (let i = 0; i < pathParts.length; i++) {
+              const part = pathParts[i];
+              const isFile = i === pathParts.length - 1;
+              
+              let existingNode = currentLevel.find(node => node.name === part);
+              
+              if (!existingNode) {
+                const newNode: TreeNode = {
+                  id: pathParts.slice(0, i + 1).join('/'),
+                  name: part,
+                  type: isFile ? "file" : "folder",
+                  children: isFile ? undefined : []
+                };
+                
+                if (isFile) {
+                  newNode.content = typeof fileContent === 'string' ? fileContent : JSON.stringify(fileContent, null, 2);
+                  newNode.language = getLanguageFromFilename(filename);
+                }
+                
+                currentLevel.push(newNode);
+                existingNode = newNode;
+              }
+              
+              if (!isFile && existingNode.children) {
+                currentLevel = existingNode.children;
+              }
             }
           });
         }
@@ -162,107 +210,36 @@ function generateFileTreeFromProject(project: Project, messages: Message[] = [])
     }
   });
 
-  // Add generated files to the tree structure
-  const srcFolder = baseTree.find(node => node.id === "src");
-  if (srcFolder && srcFolder.children) {
-    // Ensure src folder has children array
-      if (!srcFolder.children) {
-        srcFolder.children = [];
-      }
-      
-      // Add generated files to src folder or root based on filename
-    Object.entries(generatedFiles).forEach(([filename, fileData]) => {
-      const fileNode: TreeNode = {
-        id: filename,
-        name: filename,
-        type: "file",
-        content: fileData.content,
-        language: fileData.language
-      };
+  return baseStructure;
+}
 
-      // Determine where to place the file
-      if (filename.includes('/')) {
-        // Handle nested file paths
-        const pathParts = filename.split('/');
-        const fileName = pathParts.pop()!;
-        let currentFolder = srcFolder;
-
-        // Create nested folder structure
-        pathParts.forEach(folderName => {
-          let folder = currentFolder.children?.find(child => child.name === folderName && child.type === 'folder');
-          if (!folder) {
-            folder = {
-              id: `${currentFolder.id}/${folderName}`,
-              name: folderName,
-              type: 'folder',
-              children: []
-            };
-            currentFolder.children = currentFolder.children || [];
-            currentFolder.children.push(folder);
-          }
-          currentFolder = folder;
-        });
-
-        // Add file to the deepest folder
-        currentFolder.children = currentFolder.children || [];
-        currentFolder.children.push({
-          ...fileNode,
-          id: filename,
-          name: fileName
-        });
-      } else {
-        // Add to src folder or root based on file type
-        if (filename === 'README.md' || filename === 'requirements.txt' || filename === 'package.json' || filename === 'Dockerfile') {
-          // Add to root level, replace existing if needed
-          const existingIndex = baseTree.findIndex(node => node.name === filename);
-          if (existingIndex >= 0) {
-            baseTree[existingIndex] = fileNode;
-          } else {
-            baseTree.push(fileNode);
-          }
-        } else {
-          // Add to src folder (ensure children exists)
-          if (srcFolder.children) {
-            srcFolder.children.push(fileNode);
-          }
-        }
-      }
-    });
-  }
-
-  // Add default files if no generated files exist
-  if (Object.keys(generatedFiles).length === 0 && srcFolder && srcFolder.children) {
-    srcFolder.children.push(
-      {
-        id: "main.py",
-        name: project.framework === 'fastapi' ? "main.py" : "app.js",
-        type: "file",
-        content: project.framework === 'fastapi' 
-          ? `from fastapi import FastAPI\n\napp = FastAPI(title="${project.name}")\n\n@app.get("/")\ndef read_root():\n    return {"message": "Hello from ${project.name}!"}`
-          : `const express = require('express');\nconst app = express();\n\napp.get('/', (req, res) => {\n  res.json({ message: 'Hello from ${project.name}!' });\n});\n\napp.listen(3000, () => {\n  console.log('Server running on port 3000');\n});`,
-        language: project.framework === 'fastapi' ? 'python' : 'javascript'
-      },
-      {
-        id: "requirements.txt",
-        name: project.framework === 'fastapi' ? "requirements.txt" : "package.json",
-        type: "file",
-        content: project.framework === 'fastapi'
-          ? `fastapi==0.104.1\nuvicorn==0.24.0`
-          : `{\n  "name": "${project.name.toLowerCase().replace(/\s+/g, '-')}",\n  "version": "1.0.0",\n  "dependencies": {\n    "express": "^4.18.2"\n  }\n}`,
-        language: project.framework === 'fastapi' ? 'text' : 'json'
-      }
-    );
-  }
-
-  return baseTree;
+function getLanguageFromFilename(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  const languageMap: Record<string, string> = {
+    'py': 'python',
+    'js': 'javascript',
+    'ts': 'typescript',
+    'tsx': 'tsx',
+    'jsx': 'jsx',
+    'json': 'json',
+    'html': 'html',
+    'css': 'css',
+    'scss': 'scss',
+    'md': 'markdown',
+    'yml': 'yaml',
+    'yaml': 'yaml',
+    'txt': 'text',
+    'sh': 'bash',
+    'dockerfile': 'dockerfile'
+  };
+  return languageMap[ext || ''] || 'text';
 }
 
 function getFileIcon(name: string) {
-  if (name.endsWith('.py')) return '🐍';
-  if (name.endsWith('.js')) return '📜';
-  if (name.endsWith('.json')) return '📋';
-  if (name.endsWith('.md')) return '📝';
-  return '📄';
+  if (name.includes('.')) {
+    return <FileCode className="size-4 text-blue-400" />;
+  }
+  return <Folder className="size-4 text-yellow-400" />;
 }
 
 function TreeItem({ 
@@ -286,58 +263,46 @@ function TreeItem({
   return (
     <div>
       <div
-        className={`flex items-center gap-1 px-1 py-0.5 text-xs cursor-pointer hover:bg-gray-700/50 rounded ${
-          isSelected ? 'bg-blue-600/30 text-blue-300' : 'text-gray-300'
+        className={`flex items-center gap-2 px-2 py-1 text-sm cursor-pointer hover:bg-gray-700/50 transition-colors ${
+          isSelected ? 'bg-blue-600/20 text-blue-300' : 'text-gray-300'
         }`}
-        style={{ paddingLeft: `${depth * 12 + 4}px` }}
+        style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={() => {
-          if (node.type === 'folder') {
+          if (node.type === "folder") {
             toggle(node.id);
           } else {
             select(node.id);
           }
         }}
       >
-        {node.type === 'folder' && (
-          <ChevronRight
-            className={`size-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+        {node.type === "folder" && (
+          <ChevronRight 
+            className={`size-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`} 
           />
         )}
-        {node.type === 'folder' ? (
-          isExpanded ? (
-            <FolderOpen className="size-3" />
-          ) : (
-            <Folder className="size-3" />
-          )
+        {node.type === "folder" ? (
+          isExpanded ? <FolderOpen className="size-4 text-yellow-400" /> : <Folder className="size-4 text-yellow-400" />
         ) : (
-          <span className="text-xs">{getFileIcon(node.name)}</span>
+          getFileIcon(node.name)
         )}
         <span className="truncate">{node.name}</span>
       </div>
       
-      <AnimatePresence>
-        {node.type === 'folder' && isExpanded && node.children && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
-            {node.children.map((child) => (
-              <TreeItem
-                key={child.id}
-                node={child}
-                depth={depth + 1}
-                expanded={expanded}
-                toggle={toggle}
-                select={select}
-                selectedId={selectedId}
-              />
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {node.type === "folder" && isExpanded && node.children && (
+        <div>
+          {node.children.map((child) => (
+            <TreeItem
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              expanded={expanded}
+              toggle={toggle}
+              select={select}
+              selectedId={selectedId}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -350,19 +315,19 @@ function CodeViewer({
   fileTree: TreeNode[];
 }) {
   const [copySuccess, setCopySuccess] = useState(false);
-  
+
   const selectedFile = useMemo(() => {
-    const findFile = (nodes: TreeNode[]): TreeNode | null => {
+    const findFile = (nodes: TreeNode[], id: string): TreeNode | null => {
       for (const node of nodes) {
-        if (node.id === filename) return node;
+        if (node.id === id) return node;
         if (node.children) {
-          const found = findFile(node.children);
+          const found = findFile(node.children, id);
           if (found) return found;
         }
       }
       return null;
     };
-    return findFile(fileTree);
+    return filename ? findFile(fileTree, filename) : null;
   }, [filename, fileTree]);
 
   const handleCopyCode = async () => {
@@ -379,7 +344,7 @@ function CodeViewer({
 
   const handleDownload = () => {
     if (!selectedFile?.content || !selectedFile?.name) return;
-    
+
     const blob = new Blob([selectedFile.content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -393,12 +358,10 @@ function CodeViewer({
 
   if (!selectedFile || selectedFile.type === 'folder') {
     return (
-      <div className="h-full flex flex-col">
-        <div className="h-12 border-b px-4 flex items-center justify-between text-xs text-gray-300 bg-gray-800/50 flex-shrink-0">
-          <span>No file selected</span>
-        </div>
-        <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
-          Select a file to view its contents
+      <div className="h-full flex items-center justify-center text-gray-400">
+        <div className="text-center">
+          <FileCode className="size-12 mx-auto mb-4 opacity-50" />
+          <p>Select a file to view its contents</p>
         </div>
       </div>
     );
@@ -406,7 +369,6 @@ function CodeViewer({
 
   return (
     <div className="h-full flex flex-col">
-      {/* Enhanced file header with action buttons - optimized height */}
       <div className="h-10 border-b px-3 flex items-center justify-between text-xs text-gray-300 bg-gray-800/50 flex-shrink-0">
         <div className="flex items-center min-w-0">
           <span className="mr-2 flex-shrink-0">{getFileIcon(selectedFile.name)}</span>
@@ -416,7 +378,6 @@ function CodeViewer({
           </span>
         </div>
         
-        {/* Compact action buttons */}
         <div className="flex items-center gap-1 flex-shrink-0">
           <button
             onClick={handleCopyCode}
@@ -446,14 +407,16 @@ function CodeViewer({
           </button>
         </div>
       </div>
-      
-      {/* Code content with optimized scrolling and full viewport utilization */}
+
       <div 
         className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800" 
         style={{ 
           minHeight: 0,
-          maxHeight: 'calc(100vh - 10rem)', // Optimized for maximum viewport usage
-          scrollBehavior: 'smooth'
+          height: 'calc(100vh - 140px)',
+          maxHeight: 'calc(100vh - 140px)',
+          scrollBehavior: 'smooth',
+          width: '100%',
+          minWidth: '600px'
         }}
       >
         <div className="min-h-full">
@@ -470,7 +433,7 @@ function CodeViewer({
                   margin: 0,
                   background: '#1D1D1D',
                   fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-                  fontSize: 'clamp(11px, 1.5vw, 14px)', // Responsive font sizing
+                  fontSize: 'clamp(11px, 1.5vw, 14px)',
                 }}
               >
                 {tokens.map((line, i) => (
@@ -478,7 +441,7 @@ function CodeViewer({
                     key={i} 
                     {...getLineProps({ line })}
                     className="flex hover:bg-gray-800/30 transition-colors"
-                    style={{ minHeight: '1.25rem' }} // Consistent line height
+                    style={{ minHeight: '1.25rem' }}
                   >
                     <span 
                       className="inline-block w-10 text-right mr-3 text-gray-500 select-none flex-shrink-0 text-xs leading-5"
@@ -486,7 +449,11 @@ function CodeViewer({
                     >
                       {i + 1}
                     </span>
-                    <span className="flex-1 min-w-0 break-all">
+                    <span className="flex-1 min-w-0 whitespace-pre-wrap break-words" style={{
+                      wordBreak: 'break-word',
+                      overflowWrap: 'break-word',
+                      maxWidth: '100%'
+                    }}>
                       {line.map((token, key) => (
                         <span key={key} {...getTokenProps({ token })} />
                       ))}
@@ -514,7 +481,6 @@ export function ProjectPageClient({
   const [isMobileExplorerOpen, setIsMobileExplorerOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Use tRPC query with initial data and real-time updates
   const { data: messages = initialMessages, refetch } = api.messages.getMany.useQuery(
     {
       projectId,
@@ -524,78 +490,72 @@ export function ProjectPageClient({
     {
       initialData: initialMessages as any,
       refetchOnWindowFocus: true,
-      refetchInterval: 5000, // Refetch every 5 seconds for real-time updates
+      refetchInterval: 5000,
     }
   );
 
-  // Sort messages by creation date (oldest first, user messages at bottom)
   const sortedMessages = useMemo(() => {
     return [...messages].sort((a, b) => 
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
   }, [messages]);
 
-  // Generate file tree from project and messages
   const fileTree = useMemo(() => generateFileTreeFromProject(project, sortedMessages), [project, sortedMessages]);
 
-  // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [sortedMessages]);
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
     });
   };
 
   const select = (id: string) => setSelected(id);
 
-  // Create message mutation
   const createMessage = api.messages.create.useMutation({
     onSuccess: () => {
-      refetch(); // Refresh messages after sending
+      setInput("");
       setIsLoading(false);
+      refetch();
     },
     onError: (error) => {
-      console.error('Failed to send message:', error);
+      console.error("Failed to send message:", error);
       setIsLoading(false);
-    }
+    },
   });
 
   const send = async () => {
-    const text = input.trim();
-    if (!text || isLoading) return;
+    if (!input.trim() || isLoading) return;
     
     setIsLoading(true);
-    setInput("");
-
     try {
       await createMessage.mutateAsync({
-        content: text,
+        content: input.trim(),
         role: 'user',
         type: 'text',
         project_id: projectId,
       });
     } catch (error) {
-      console.error('Error sending message:', error);
-      setInput(text); // Restore input on error
+      console.error("Error sending message:", error);
+      setIsLoading(false);
     }
   };
 
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
-      {/* Header */}
       <SimpleHeader />
-      
-      {/* Main content - Responsive layout with optimized space utilization */}
+
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Left: Chat sidebar - Responsive width with mobile-first approach */}
         <section className="w-full sm:w-80 md:w-96 lg:w-[28rem] xl:w-[32rem] flex flex-col h-full overflow-hidden border-r border-gray-800/50 backdrop-blur-sm" 
-                 style={{ backgroundColor: '#09090B' }}>
+                 style={{ backgroundColor: '#09090B', minWidth: '320px', maxWidth: '512px', width: '400px' }}>
           <header className="h-12 shrink-0 px-4 flex items-center gap-2 text-sm font-medium border-b border-gray-800/50">
             <MessageSquare className="size-4 text-white flex-shrink-0" /> 
             <span className="text-white truncate flex-1 min-w-0">{project.name}</span>
@@ -606,13 +566,13 @@ export function ProjectPageClient({
               </span>
             </div>
           </header>
-          
-          {/* Messages container with optimized scrolling and space utilization */}
+
           <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent" 
                style={{ 
                  backgroundColor: '#09090B',
-                 height: 'calc(100vh - 12rem)', // Precise height calculation
-                 maxHeight: 'calc(100vh - 12rem)'
+                 height: 'calc(100vh - 172px)',
+                 maxHeight: 'calc(100vh - 172px)',
+                 minHeight: 'calc(100vh - 172px)'
                }}>
             <AnimatePresence>
               {sortedMessages.map((message, index) => (
@@ -667,10 +627,9 @@ export function ProjectPageClient({
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Fixed input at bottom - Enhanced responsive design */}
-          <div className="shrink-0 p-3 border-t border-gray-800/50 backdrop-blur-sm" style={{ backgroundColor: '#09090B' }}>
+          <div className="shrink-0 p-3 border-t border-gray-800/50 backdrop-blur-sm" style={{ backgroundColor: '#09090B', height: '80px' }}>
             <div className="flex items-center gap-2 p-3 rounded-lg border border-gray-600/50 shadow-lg backdrop-blur-sm transition-all duration-200 hover:border-gray-500/50 focus-within:border-blue-500/50" 
-                 style={{ backgroundColor: '#333333' }}>
+                 style={{ backgroundColor: '#333333', height: '48px', minHeight: '48px', maxHeight: '48px' }}>
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -682,13 +641,14 @@ export function ProjectPageClient({
                 }}
                 placeholder="Continue the conversation..."
                 className="flex-1 bg-transparent text-white placeholder-gray-400 outline-none text-sm leading-relaxed"
+                style={{ height: '24px', minHeight: '24px', maxHeight: '24px' }}
                 disabled={isLoading}
               />
               <button 
                 onClick={send} 
                 disabled={!input.trim() || isLoading}
                 className="px-3 py-2 rounded-md text-sm font-medium text-white transition-all duration-200 hover:bg-blue-600 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2 shadow-md"
-                style={{ backgroundColor: '#3b82f6' }}
+                style={{ backgroundColor: '#3b82f6', height: '32px', minHeight: '32px', maxHeight: '32px', width: '44px', minWidth: '44px' }}
               >
                 {isLoading ? (
                   <Loader2 className="size-4 animate-spin" />
@@ -700,9 +660,10 @@ export function ProjectPageClient({
           </div>
         </section>
 
-        {/* Right: Enhanced VS Code-style file explorer and editor with full responsiveness */}
-        <section className="hidden sm:flex flex-1 p-3 min-h-0 relative">
-          {/* Mobile explorer toggle button */}
+        <section className="hidden sm:flex flex-1 p-3 min-h-0 relative" style={{
+          minWidth: '800px',
+          width: '100%'
+        }}>
           <button
             onClick={() => setIsMobileExplorerOpen(!isMobileExplorerOpen)}
             className="sm:hidden absolute top-4 left-4 z-50 p-2 rounded-md bg-gray-800 text-white hover:bg-gray-700 transition-colors"
@@ -710,8 +671,10 @@ export function ProjectPageClient({
             <Folder className="size-4" />
           </button>
 
-          <div className="h-full w-full rounded-lg border border-gray-700/50 bg-card shadow-xl overflow-hidden flex backdrop-blur-sm">
-            {/* File Explorer - Enhanced responsive design */}
+          <div className="h-full w-full rounded-lg border border-gray-700/50 bg-card shadow-xl overflow-hidden flex backdrop-blur-sm" style={{
+            minWidth: '750px',
+            width: '100%'
+          }}>
             <aside className={`
               w-64 lg:w-72 xl:w-80 border-r border-gray-700/50 flex-shrink-0 transition-all duration-300
               ${isMobileExplorerOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}
@@ -744,7 +707,6 @@ export function ProjectPageClient({
               </div>
             </aside>
 
-            {/* Overlay for mobile explorer */}
             {isMobileExplorerOpen && (
               <div
                 className="sm:hidden absolute inset-0 bg-black/50 z-30"
@@ -752,8 +714,11 @@ export function ProjectPageClient({
               />
             )}
 
-            {/* Code Editor with enhanced responsive layout and scroll optimization */}
-            <div className="flex-1 min-w-0 flex flex-col relative" style={{ backgroundColor: '#1D1D1D' }}>
+            <div className="flex-1 min-w-0 flex flex-col relative" style={{ 
+              backgroundColor: '#1D1D1D',
+              minWidth: '600px',
+              width: '100%'
+            }}>
               <div className="h-full w-full overflow-hidden">
                 <CodeViewer filename={selected} fileTree={fileTree} />
               </div>
@@ -761,7 +726,6 @@ export function ProjectPageClient({
           </div>
         </section>
 
-        {/* Mobile-only code viewer */}
         <section className="sm:hidden flex-1 p-2 min-h-0">
           <div className="h-full w-full rounded-lg border border-gray-700/50 bg-card shadow-xl overflow-hidden" style={{ backgroundColor: '#1D1D1D' }}>
             <div className="h-10 border-b border-gray-700/50 px-3 flex items-center justify-between text-xs uppercase tracking-wide text-gray-400 font-medium">
@@ -781,7 +745,6 @@ export function ProjectPageClient({
         </section>
       </div>
 
-      {/* Custom CSS for enhanced scrollbars and responsive behavior */}
       <style jsx global>{`
         .scrollbar-thin {
           scrollbar-width: thin;
@@ -801,11 +764,10 @@ export function ProjectPageClient({
           height: 6px;
         }
         
-        /* Enhanced responsive breakpoints */
         @media (max-width: 640px) {
           .h-screen {
             height: 100vh;
-            height: 100dvh; /* Dynamic viewport height for mobile */
+            height: 100dvh;
           }
         }
         
@@ -816,21 +778,18 @@ export function ProjectPageClient({
           }
         }
         
-        /* Smooth transitions for all interactive elements */
         * {
           transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
           transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
           transition-duration: 150ms;
         }
         
-        /* Enhanced focus states for accessibility */
         button:focus-visible,
         input:focus-visible {
           outline: 2px solid #3b82f6;
           outline-offset: 2px;
         }
         
-        /* Optimized text rendering */
         body {
           text-rendering: optimizeLegibility;
           -webkit-font-smoothing: antialiased;
