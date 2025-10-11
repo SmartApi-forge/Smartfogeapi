@@ -676,7 +676,7 @@ export function ProjectPageClient({
             width: '100%'
           }}>
             <aside className={`
-              w-64 lg:w-72 xl:w-80 border-r border-gray-700/50 flex-shrink-0 transition-all duration-300
+              w-48 lg:w-52 xl:w-56 border-r border-gray-700/50 flex-shrink-0 transition-all duration-300
               ${isMobileExplorerOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}
               sm:relative absolute sm:z-auto z-40 h-full
             `} style={{ backgroundColor: '#1D1D1D' }}>
