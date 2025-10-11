@@ -304,7 +304,6 @@ You MUST respond with valid JSON in this exact structure:
                 }
               }
             }
-            }
           }
         },
         "500": {

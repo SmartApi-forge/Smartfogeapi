@@ -1,14 +1,20 @@
 "use client"
 
-
+import { useRouter } from 'next/navigation'
 import { PromptInputBox } from "@/components/ui/ai-prompt-box"
 import { api } from "@/lib/trpc-client"
 
 export function DashboardContent() {
+  const router = useRouter()
+  
   // tRPC hook for automatic Inngest invocation
   const invokeInngest = api.apiGeneration.invoke.useMutation({
-    onSuccess: () => {
-      console.log("Inngest function invoked successfully!")
+    onSuccess: (data) => {
+      console.log("Inngest function invoked successfully!", data)
+      // Redirect to the projects page with the project ID
+      if (data.projectId) {
+        router.push(`/projects/${data.projectId}`)
+      }
     },
     onError: (error: any) => {
       console.error("Failed to invoke Inngest function:", error)
