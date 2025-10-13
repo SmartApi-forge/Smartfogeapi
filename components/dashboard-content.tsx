@@ -11,9 +11,9 @@ export function DashboardContent() {
   const invokeInngest = api.apiGeneration.invoke.useMutation({
     onSuccess: (data) => {
       console.log("Inngest function invoked successfully!", data)
-      // Redirect to the projects page with the project ID
+      // Redirect to the loading page with the project ID
       if (data.projectId) {
-        router.push(`/projects/${data.projectId}`)
+        router.push(`/loading?projectId=${data.projectId}`)
       }
     },
     onError: (error: any) => {
@@ -56,14 +56,7 @@ export function DashboardContent() {
         />
       </div>
 
-      {/* Success Message */}
-      {invokeInngest.isSuccess && (
-        <div className="mt-6 p-4 bg-green-600/20 border border-green-500/30 rounded-lg backdrop-blur-sm">
-          <p className="text-white text-sm text-center">
-            ✅ Your request has been processed! Check back soon for results.
-          </p>
-        </div>
-      )}
+
 
       {/* Error Message */}
       {invokeInngest.isError && (

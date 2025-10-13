@@ -31,9 +31,9 @@ export default function HomePage() {
   const generateAPI = api.apiGeneration.generateAPI.useMutation({
     onSuccess: (result) => {
       console.log('✅ API generation successful, result:', result)
-      // Redirect to the project page with the new project ID
-      console.log('🔄 Redirecting to project page:', `/projects/${result.projectId}`)
-      router.push(`/projects/${result.projectId}`)
+      // Redirect to the loading page with the new project ID
+      console.log('🔄 Redirecting to loading page:', `/loading?projectId=${result.projectId}`)
+      router.push(`/loading?projectId=${result.projectId}`)
       setIsLoading(false)
     },
     onError: (error) => {
