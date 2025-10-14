@@ -109,16 +109,14 @@ function getStatusColor(status: Project['status']) {
   }
 }
 
-function generateFileTreeFromProject(project: Project, messages: Message[] = [], isStreaming: boolean = false): TreeNode[] {
+function generateFileTreeFromProject(project: Project, messages: Message[] = []): TreeNode[] {
   // Check if we have any generated files from messages
   const hasGeneratedFiles = messages.some(
     (message) => message.fragments && message.fragments.length > 0
   );
 
-  // Don't show placeholder files if we're streaming or have real files
-  const shouldShowPlaceholders = !hasGeneratedFiles && !isStreaming;
-
-  const baseStructure: TreeNode[] = shouldShowPlaceholders ? [
+  // Only show placeholder files if we don't have any real generated files
+  const baseStructure: TreeNode[] = hasGeneratedFiles ? [] : [
     {
       id: "src",
       name: "src",
@@ -177,7 +175,7 @@ pydantic==2.5.0
 python-multipart==0.0.6
 `
     }
-  ] : [];
+  ];
 
   // Add generated files from messages
   messages.forEach((message) => {
@@ -619,7 +617,7 @@ export function ProjectPageClient({
     );
   }, [sortedMessages, streamingMessages, streamState.isStreaming, streamState.events.length]);
 
-  const fileTree = useMemo(() => generateFileTreeFromProject(project, sortedMessages, streamState.isStreaming), [project, sortedMessages, streamState.isStreaming]);
+  const fileTree = useMemo(() => generateFileTreeFromProject(project, sortedMessages), [project, sortedMessages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -832,25 +830,16 @@ export function ProjectPageClient({
                      height: 'calc(100% - 2.5rem)',
                      maxHeight: 'calc(100vh - 8rem)'
                    }}>
-                {streamState.isStreaming && fileTree.length === 0 ? (
-                  <div className="flex items-center justify-center h-32 text-muted-foreground">
-                    <div className="text-center">
-                      <Loader2 className="mx-auto h-6 w-6 animate-spin mb-2" />
-                      <p className="text-sm">Generating files...</p>
-                    </div>
-                  </div>
-                ) : (
-                  fileTree.map((node) => (
-                    <TreeItem
-                      key={node.id}
-                      node={node}
-                      expanded={expanded}
-                      toggle={toggle}
-                      select={select}
-                      selectedId={selected}
-                    />
-                  ))
-                )}
+                {fileTree.map((node) => (
+                  <TreeItem
+                    key={node.id}
+                    node={node}
+                    expanded={expanded}
+                    toggle={toggle}
+                    select={select}
+                    selectedId={selected}
+                  />
+                ))}
               </div>
             </aside>
 
@@ -874,14 +863,6 @@ export function ProjectPageClient({
                     isStreaming={streamState.isStreaming}
                     selectedFile={selected || undefined}
                   />
-                ) : streamState.isStreaming && streamState.generatedFiles.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-muted-foreground">
-                    <div className="text-center">
-                      <Loader2 className="mx-auto h-8 w-8 animate-spin mb-4" />
-                      <p>Preparing to generate your API...</p>
-                      <p className="text-sm mt-2">This will only take a moment</p>
-                    </div>
-                  </div>
                 ) : (
                   <CodeViewer filename={selected} fileTree={fileTree} />
                 )}
