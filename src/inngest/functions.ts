@@ -4,6 +4,7 @@ import { Sandbox } from 'e2b';
 import { Octokit } from '@octokit/rest';
 import { createClient } from '@supabase/supabase-js';
 import { AgentState, AIResult } from './types';
+import { streamingService } from '../services/streaming-service';
 
 // Initialize OpenAI client with API key from environment
 const openaiClient = new OpenAI({
@@ -127,6 +128,16 @@ export const generateAPI = inngest.createFunction(
         console.warn(`Failed to create job (continuing without job tracking): ${error.message}`);
         return null; // Continue without job tracking if database fails
       }
+      
+      // Emit project created event for streaming
+      if (projectId) {
+        await streamingService.emit(projectId, {
+          type: 'project:created',
+          projectId,
+          prompt,
+        });
+      }
+      
       return data.id;
     });
 
@@ -253,6 +264,15 @@ export const generateAPI = inngest.createFunction(
 
     // Step 3: Generate API using OpenAI
     const apiResult = await step.run("generate-api-code", async () => {
+      // Emit step start event
+      if (projectId) {
+        await streamingService.emit(projectId, {
+          type: 'step:start',
+          step: 'Planning',
+          message: 'Planning API structure...',
+        });
+      }
+      
       // Enhanced prompt that includes repository context if in GitHub mode
       let enhancedPrompt = prompt;
       if (mode === "github" && repoAnalysis && typeof repoAnalysis === 'object') {
@@ -268,7 +288,8 @@ Repository Analysis:
       }
       
       const completion = await openaiClient.chat.completions.create({
-        model: "gpt-4-turbo",
+        model: "gpt-4o",
+        stream: true,
         messages: [
           {
             role: "system",
@@ -390,9 +411,45 @@ EXAMPLE STRUCTURE:
         response_format: { type: "json_object" },
       });
 
-      // Process and parse the API result
-      const rawOutput = completion.choices[0].message.content;
-      console.log("Raw OpenAI output:", rawOutput);
+      // Emit generation start event
+      if (projectId) {
+        await streamingService.emit(projectId, {
+          type: 'step:complete',
+          step: 'Planning',
+          message: 'API structure planned. Generating code...',
+        });
+        
+        await streamingService.emit(projectId, {
+          type: 'step:start',
+          step: 'Generating',
+          message: 'Generating implementation files...',
+        });
+      }
+
+      // Collect streaming response from OpenAI
+      let rawOutput = '';
+      let chunkCount = 0;
+      
+      for await (const chunk of completion) {
+        const content = chunk.choices[0]?.delta?.content || '';
+        if (content) {
+          rawOutput += content;
+          chunkCount++;
+          
+          // Emit progress updates periodically (every 10 chunks to avoid overwhelming)
+          if (projectId && chunkCount % 10 === 0) {
+            const progress = Math.min(95, Math.round((rawOutput.length / 3000) * 100));
+            await streamingService.emit(projectId, {
+              type: 'code:chunk',
+              filename: 'Generating...',
+              chunk: '',
+              progress,
+            });
+          }
+        }
+      }
+      
+      console.log("Raw OpenAI output:", rawOutput.substring(0, 500));
       
       try {
         // Handle potential markdown-wrapped JSON
@@ -410,6 +467,43 @@ EXAMPLE STRUCTURE:
         // Add OpenAPI spec to files if it exists
         if (parsed.openApiSpec) {
           files['openapi.json'] = JSON.stringify(parsed.openApiSpec, null, 2);
+        }
+        
+        // Stream individual files to frontend
+        if (projectId && Object.keys(files).length > 0) {
+          for (const [filename, content] of Object.entries(files)) {
+            // Emit file generating event
+            await streamingService.emit(projectId, {
+              type: 'file:generating',
+              filename,
+              path: filename,
+            });
+            
+            // Stream code in chunks for typing animation
+            const fileContent = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+            const chunkSize = 200; // characters per chunk (increased for faster streaming)
+            for (let i = 0; i < fileContent.length; i += chunkSize) {
+              const chunk = fileContent.slice(i, i + chunkSize);
+              const progress = Math.round(((i + chunkSize) / fileContent.length) * 100);
+              
+              await streamingService.emit(projectId, {
+                type: 'code:chunk',
+                filename,
+                chunk,
+                progress: Math.min(progress, 100),
+              });
+              
+              // No delay - let the frontend handle the animation speed
+            }
+            
+            // Emit file complete event
+            await streamingService.emit(projectId, {
+              type: 'file:complete',
+              filename,
+              content: fileContent,
+              path: filename,
+            });
+          }
         }
         
         // Also add requirements if they exist
@@ -516,6 +610,20 @@ EXAMPLE STRUCTURE:
 
     // Step 4: Comprehensive sandbox validation
     const validationResult = await step.run("validate-code-in-sandbox", async () => {
+      // Emit validation start event
+      if (projectId) {
+        await streamingService.emit(projectId, {
+          type: 'step:start',
+          step: 'Validating',
+          message: 'Validating generated code...',
+        });
+        
+        await streamingService.emit(projectId, {
+          type: 'validation:start',
+          stage: 'Setting up sandbox environment',
+        });
+      }
+      
       let sandbox: Sandbox | null = null;
       
       try {
@@ -1331,6 +1439,19 @@ EXAMPLE STRUCTURE:
       }
     });
     
+      // Emit completion event
+      if (projectId) {
+        const filesList = Object.keys(apiResult.state.data.files || {});
+        await streamingService.emit(projectId, {
+          type: 'complete',
+          summary: apiResult.state.data.summary || 'API generated successfully!',
+          totalFiles: filesList.length,
+        });
+        
+        // Close streaming connection
+        streamingService.closeProject(projectId);
+      }
+    
       return {
         success: true,
         jobId,
@@ -1340,6 +1461,18 @@ EXAMPLE STRUCTURE:
       };
     } catch (error) {
       console.error('Error in generateAPI function:', error);
+      
+      // Emit error event
+      if (projectId) {
+        await streamingService.emit(projectId, {
+          type: 'error',
+          message: (error as Error).message || 'An error occurred during API generation',
+          stage: 'Generation',
+        });
+        
+        // Close streaming connection
+        streamingService.closeProject(projectId);
+      }
       
       // Update job status to failed (if job tracking is available)
       if (jobId) {

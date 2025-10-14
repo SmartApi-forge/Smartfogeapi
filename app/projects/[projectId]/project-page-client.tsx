@@ -23,6 +23,9 @@ import {
 import { SimpleHeader } from "@/components/simple-header";
 import { Highlight, themes } from "prism-react-renderer";
 import { api } from "@/lib/trpc-client";
+import { useGenerationStream } from "../../../hooks/use-generation-stream";
+import { StreamingCodeViewer } from "../../../components/streaming-code-viewer";
+import { GenerationProgressTracker } from "../../../components/generation-progress-tracker";
 
 interface Message {
   id: string;
@@ -106,8 +109,16 @@ function getStatusColor(status: Project['status']) {
   }
 }
 
-function generateFileTreeFromProject(project: Project, messages: Message[] = []): TreeNode[] {
-  const baseStructure: TreeNode[] = [
+function generateFileTreeFromProject(project: Project, messages: Message[] = [], isStreaming: boolean = false): TreeNode[] {
+  // Check if we have any generated files from messages
+  const hasGeneratedFiles = messages.some(
+    (message) => message.fragments && message.fragments.length > 0
+  );
+
+  // Don't show placeholder files if we're streaming or have real files
+  const shouldShowPlaceholders = !hasGeneratedFiles && !isStreaming;
+
+  const baseStructure: TreeNode[] = shouldShowPlaceholders ? [
     {
       id: "src",
       name: "src",
@@ -166,7 +177,7 @@ pydantic==2.5.0
 python-multipart==0.0.6
 `
     }
-  ];
+  ] : [];
 
   // Add generated files from messages
   messages.forEach((message) => {
@@ -481,6 +492,9 @@ export function ProjectPageClient({
   const [isMobileExplorerOpen, setIsMobileExplorerOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Use streaming hook for real-time updates
+  const streamState = useGenerationStream(projectId);
+
   const { data: messages = initialMessages, refetch } = api.messages.getMany.useQuery(
     {
       projectId,
@@ -490,7 +504,8 @@ export function ProjectPageClient({
     {
       initialData: initialMessages as any,
       refetchOnWindowFocus: true,
-      refetchInterval: 5000,
+      // Reduce polling frequency when streaming is active
+      refetchInterval: streamState.isStreaming ? 10000 : 5000,
     }
   );
 
@@ -500,11 +515,115 @@ export function ProjectPageClient({
     );
   }, [messages]);
 
-  const fileTree = useMemo(() => generateFileTreeFromProject(project, sortedMessages), [project, sortedMessages]);
+  // Combine streaming events with regular messages for display
+  const streamingMessages = useMemo(() => {
+    const msgs: any[] = [];
+    const fileStatusMap = new Map<string, { generating: any; complete: any }>();
+    
+    // First pass: collect file events
+    streamState.events.forEach((event) => {
+      if (event.type === 'file:generating') {
+        if (!fileStatusMap.has(event.filename)) {
+          fileStatusMap.set(event.filename, { generating: event, complete: null });
+        }
+      } else if (event.type === 'file:complete') {
+        const existing = fileStatusMap.get(event.filename);
+        if (existing) {
+          existing.complete = event;
+        } else {
+          fileStatusMap.set(event.filename, { generating: null, complete: event });
+        }
+      }
+    });
+    
+    // Second pass: create messages based on file status
+    fileStatusMap.forEach((status, filename) => {
+      if (status.complete) {
+        // Only show the completed state
+        msgs.push({
+          id: `stream-file-${filename}`,
+          content: `✓ Created ${filename}`,
+          role: 'assistant' as const,
+          type: 'text' as const,
+          created_at: new Date(status.complete.timestamp).toISOString(),
+          updated_at: new Date(status.complete.timestamp).toISOString(),
+          isStreaming: true,
+          icon: 'complete',
+        });
+      } else if (status.generating) {
+        // Show generating state only if not yet complete
+        msgs.push({
+          id: `stream-file-${filename}`,
+          content: `Generating ${filename}...`,
+          role: 'assistant' as const,
+          type: 'text' as const,
+          created_at: new Date(status.generating.timestamp).toISOString(),
+          updated_at: new Date(status.generating.timestamp).toISOString(),
+          isStreaming: true,
+          icon: 'generating',
+        });
+      }
+    });
+    
+    // Add other event types (step:start, complete)
+    streamState.events.forEach((event) => {
+      if (event.type === 'step:start') {
+        msgs.push({
+          id: `stream-step-${event.timestamp}`,
+          content: event.message,
+          role: 'assistant' as const,
+          type: 'text' as const,
+          created_at: new Date(event.timestamp).toISOString(),
+          updated_at: new Date(event.timestamp).toISOString(),
+          isStreaming: true,
+          icon: 'processing',
+        });
+      } else if (event.type === 'complete') {
+        msgs.push({
+          id: `stream-done-${event.timestamp}`,
+          content: `✓ ${event.summary}`,
+          role: 'assistant' as const,
+          type: 'text' as const,
+          created_at: new Date(event.timestamp).toISOString(),
+          updated_at: new Date(event.timestamp).toISOString(),
+          isStreaming: true,
+          icon: 'complete',
+        });
+      }
+    });
+    
+    return msgs;
+  }, [streamState.events]);
+
+  // Merge and sort all messages, avoiding duplicates
+  const allMessages = useMemo(() => {
+    // If we have streaming events, filter out database messages that might be duplicates
+    const filteredDbMessages = streamState.isStreaming || streamState.events.length > 0 
+      ? sortedMessages.filter((dbMsg) => {
+          // Filter out database messages that are likely duplicates of streaming events
+          // Keep user messages and error messages, but filter out AI result messages
+          if (dbMsg.role === 'user') return true;
+          if (dbMsg.type === 'error') return true;
+          
+          // Filter out AI messages that look like completion summaries
+          if (dbMsg.role === 'assistant' && dbMsg.content.includes('API Generation Complete')) {
+            return false; // Skip this, we'll show the streaming completion instead
+          }
+          
+          return true;
+        })
+      : sortedMessages;
+
+    return [...filteredDbMessages, ...streamingMessages].sort((a, b) => 
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+  }, [sortedMessages, streamingMessages, streamState.isStreaming, streamState.events.length]);
+
+  const fileTree = useMemo(() => generateFileTreeFromProject(project, sortedMessages, streamState.isStreaming), [project, sortedMessages, streamState.isStreaming]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [sortedMessages]);
+  }, [allMessages]);
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
@@ -575,57 +694,73 @@ export function ProjectPageClient({
                  minHeight: 'calc(100vh - 140px)'
                }}>
             <AnimatePresence>
-              {sortedMessages.map((message, index) => (
-                <motion.div
-                  key={message.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
-                  className={`text-sm flex gap-3 ${
-                    message.role === "user" ? "flex-row-reverse" : "flex-row"
-                  }`}
-                >
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-lg" 
-                       style={{ backgroundColor: message.role === "user" ? '#3b82f6' : '#10b981' }}>
-                    {message.role === "user" ? (
-                      <User className="size-4 text-white" />
-                    ) : (
-                      <Bot className="size-4 text-white" />
-                    )}
-                  </div>
-                  <div
-                    className={`rounded-lg px-4 py-3 shadow-sm backdrop-blur-sm border border-gray-700/30 ${
-                      message.role === "user"
-                        ? "text-white"
-                        : "text-white"
+              {allMessages.map((message, index) => {
+                const isStreamingMsg = 'isStreaming' in message && message.isStreaming;
+                const streamIcon = 'icon' in message ? message.icon : null;
+                
+                return (
+                  <motion.div
+                    key={message.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3, delay: index * 0.05 }}
+                    className={`text-sm flex gap-3 ${
+                      message.role === "user" ? "flex-row-reverse" : "flex-row"
                     }`}
-                    style={{ 
-                      backgroundColor: message.role === "user" ? '#333333' : '#1a1a1a',
-                      width: '280px', // Fixed width for consistent sizing
-                      maxWidth: '280px',
-                      minWidth: '200px'
-                    }}
                   >
-                    <div className="whitespace-pre-wrap break-words leading-relaxed text-sm">{message.content}</div>
-                    {message.fragments && message.fragments.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-gray-600/50">
-                        <div className="text-xs text-gray-400 mb-2 font-medium">Generated Files:</div>
-                        {message.fragments.map((fragment) => (
-                          <div key={fragment.id} className="text-xs text-blue-300 mb-1 flex items-center gap-1">
-                            <FileCode className="size-3" />
-                            <span className="truncate">{fragment.title}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="text-xs text-gray-500 mt-2 flex items-center gap-1">
-                      <Clock className="size-3" />
-                      {new Date(message.created_at).toLocaleTimeString()}
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-lg" 
+                         style={{ backgroundColor: message.role === "user" ? '#3b82f6' : '#10b981' }}>
+                      {message.role === "user" ? (
+                        <User className="size-4 text-white" />
+                      ) : (
+                        <Bot className="size-4 text-white" />
+                      )}
                     </div>
-                  </div>
-                </motion.div>
-              ))}
+                    <div
+                      className={`rounded-lg px-4 py-3 shadow-sm backdrop-blur-sm border border-gray-700/30 ${
+                        message.role === "user"
+                          ? "text-white"
+                          : "text-white"
+                      }`}
+                      style={{ 
+                        backgroundColor: message.role === "user" ? '#333333' : '#1a1a1a',
+                        width: '280px', // Fixed width for consistent sizing
+                        maxWidth: '280px',
+                        minWidth: '200px'
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        {isStreamingMsg && streamIcon === 'generating' && (
+                          <Loader2 className="size-3 animate-spin text-blue-400" />
+                        )}
+                        {isStreamingMsg && streamIcon === 'complete' && (
+                          <CheckCircle className="size-3 text-green-400" />
+                        )}
+                        {isStreamingMsg && streamIcon === 'processing' && (
+                          <Loader2 className="size-3 animate-spin text-yellow-400" />
+                        )}
+                        <div className="whitespace-pre-wrap break-words leading-relaxed text-sm flex-1">{message.content}</div>
+                      </div>
+                      {message.fragments && message.fragments.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-gray-600/50">
+                          <div className="text-xs text-gray-400 mb-2 font-medium">Generated Files:</div>
+                          {message.fragments.map((fragment) => (
+                            <div key={fragment.id} className="text-xs text-blue-300 mb-1 flex items-center gap-1">
+                              <FileCode className="size-3" />
+                              <span className="truncate">{fragment.title}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                        <Clock className="size-3" />
+                        {new Date(message.created_at).toLocaleTimeString()}
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
             </AnimatePresence>
             <div ref={messagesEndRef} />
           </div>
@@ -697,16 +832,25 @@ export function ProjectPageClient({
                      height: 'calc(100% - 2.5rem)',
                      maxHeight: 'calc(100vh - 8rem)'
                    }}>
-                {fileTree.map((node) => (
-                  <TreeItem
-                    key={node.id}
-                    node={node}
-                    expanded={expanded}
-                    toggle={toggle}
-                    select={select}
-                    selectedId={selected}
-                  />
-                ))}
+                {streamState.isStreaming && fileTree.length === 0 ? (
+                  <div className="flex items-center justify-center h-32 text-muted-foreground">
+                    <div className="text-center">
+                      <Loader2 className="mx-auto h-6 w-6 animate-spin mb-2" />
+                      <p className="text-sm">Generating files...</p>
+                    </div>
+                  </div>
+                ) : (
+                  fileTree.map((node) => (
+                    <TreeItem
+                      key={node.id}
+                      node={node}
+                      expanded={expanded}
+                      toggle={toggle}
+                      select={select}
+                      selectedId={selected}
+                    />
+                  ))
+                )}
               </div>
             </aside>
 
@@ -723,7 +867,24 @@ export function ProjectPageClient({
               width: '100%'
             }}>
               <div className="h-full w-full overflow-hidden">
-                <CodeViewer filename={selected} fileTree={fileTree} />
+                {streamState.isStreaming && streamState.generatedFiles.length > 0 ? (
+                  <StreamingCodeViewer
+                    files={streamState.generatedFiles}
+                    currentFile={streamState.currentFile}
+                    isStreaming={streamState.isStreaming}
+                    selectedFile={selected || undefined}
+                  />
+                ) : streamState.isStreaming && streamState.generatedFiles.length === 0 ? (
+                  <div className="flex h-full items-center justify-center text-muted-foreground">
+                    <div className="text-center">
+                      <Loader2 className="mx-auto h-8 w-8 animate-spin mb-4" />
+                      <p>Preparing to generate your API...</p>
+                      <p className="text-sm mt-2">This will only take a moment</p>
+                    </div>
+                  </div>
+                ) : (
+                  <CodeViewer filename={selected} fileTree={fileTree} />
+                )}
               </div>
             </div>
           </div>
