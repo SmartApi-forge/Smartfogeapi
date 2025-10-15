@@ -777,7 +777,7 @@ export function ProjectPageClient({
                     {message.role === "user" ? (
                       // User message - with card background
                       <div className="flex justify-end mb-1">
-                        <div className="rounded-xl px-4 py-2.5 bg-primary/10 dark:bg-[#262626] border border-primary/20 dark:border-[#262626] max-w-[85%]">
+                        <div className="rounded-xl px-4 py-2.5 bg-muted/40 dark:bg-[#262626] border border-border/30 dark:border-[#262626] max-w-[85%]">
                           <div className="whitespace-pre-wrap break-words leading-relaxed text-[13px] text-foreground font-medium">
                             {message.content}
                           </div>

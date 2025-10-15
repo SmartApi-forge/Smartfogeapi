@@ -5,6 +5,7 @@ import { Highlight, themes } from 'prism-react-renderer';
 import { motion } from 'framer-motion';
 import { Loader2, Copy, Check, Download } from 'lucide-react';
 import { GeneratedFile } from '../src/types/streaming';
+import { useTheme } from 'next-themes';
 
 interface StreamingCodeViewerProps {
   files: GeneratedFile[];
@@ -23,6 +24,7 @@ export function StreamingCodeViewer({
   isStreaming,
   selectedFile,
 }: StreamingCodeViewerProps) {
+  const { resolvedTheme } = useTheme();
   const [displayedContent, setDisplayedContent] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
@@ -127,11 +129,12 @@ export function StreamingCodeViewer({
   }
 
   const language = getLanguageFromFilename(fileToDisplay.filename);
+  const codeTheme = resolvedTheme === 'dark' ? themes.vsDark : themes.github;
 
   return (
     <div className="h-full flex flex-col">
       {/* File header */}
-      <div className="bg-secondary/50 border-b px-4 py-2 flex items-center justify-between">
+      <div className="bg-muted/30 dark:bg-[#1D1D1D] border-b border-border dark:border-[#333433] px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">{fileToDisplay.filename}</span>
           {!fileToDisplay.isComplete && isStreaming && (
@@ -155,7 +158,7 @@ export function StreamingCodeViewer({
           <div className="flex items-center gap-1">
             <button
               onClick={handleCopyCode}
-              className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-gray-700 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-muted dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-1 focus:ring-primary"
               title="Copy code to clipboard"
             >
               {copySuccess ? (
@@ -173,7 +176,7 @@ export function StreamingCodeViewer({
             
             <button
               onClick={handleDownload}
-              className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-gray-700 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-muted dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-1 focus:ring-primary"
               title="Download file"
             >
               <Download className="h-3 w-3" />
@@ -184,9 +187,9 @@ export function StreamingCodeViewer({
       </div>
 
       {/* Code content */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-auto relative">
+      <div ref={scrollContainerRef} className="flex-1 overflow-auto relative bg-muted/30 dark:bg-[#1D1D1D]">
         <Highlight
-          theme={themes.vsDark}
+          theme={codeTheme}
           code={displayedContent || '// Waiting for code...'}
           language={language}
         >
@@ -196,7 +199,7 @@ export function StreamingCodeViewer({
               style={{
                 ...style,
                 margin: 0,
-                background: '#1D1D1D',
+                background: 'transparent',
                 fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
                 fontSize: '14px',
               }}
@@ -205,7 +208,7 @@ export function StreamingCodeViewer({
                 <div
                   key={i}
                   {...getLineProps({ line })}
-                  className="flex hover:bg-gray-800/30 transition-colors"
+                  className="flex hover:bg-muted/20 dark:hover:bg-gray-800/30 transition-colors"
                 >
                   <span className="inline-block w-10 text-right mr-3 text-gray-500 select-none flex-shrink-0 text-xs leading-5">
                     {i + 1}
@@ -232,7 +235,7 @@ export function StreamingCodeViewer({
       </div>
 
       {/* Status bar */}
-      <div className="bg-secondary/30 border-t px-4 py-1 flex items-center justify-between text-xs text-muted-foreground">
+      <div className="bg-muted/30 dark:bg-[#1D1D1D] border-t border-border dark:border-[#333433] px-4 py-1 flex items-center justify-between text-xs text-muted-foreground">
         <span>
           {fileToDisplay.isComplete
             ? 'Ready'
