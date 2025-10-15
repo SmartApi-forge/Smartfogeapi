@@ -514,10 +514,16 @@ export function ProjectPageClient({
   }, [messages]);
 
   // Combine streaming events with regular messages for display
+  // Memoize with explicit dependencies to prevent unnecessary recalculations
   const streamingMessages = useMemo(() => {
     const msgs: any[] = [];
     const fileStatusMap = new Map<string, { generating: any; complete: any }>();
     let validationStatus: { start: any; complete: any } = { start: null, complete: null };
+    
+    // Early return if no events
+    if (streamState.events.length === 0) {
+      return msgs;
+    }
     
     // First pass: collect file events and validation status
     streamState.events.forEach((event) => {

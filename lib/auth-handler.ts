@@ -26,18 +26,36 @@ function updateAuthCookies(session: Session | null) {
 /**
  * Initialize authentication handler
  * Call this once in your app to set up automatic cookie updates
+ * Optimized to prevent blocking the main thread
  */
 export function initAuthHandler() {
-  // Update cookies on initial load if session exists
-  supabase.auth.getSession().then(({ data: { session } }) => {
-    if (session) {
-      updateAuthCookies(session)
-    }
-  })
+  // Defer cookie updates to avoid blocking initial render
+  // Use requestIdleCallback for better INP scores
+  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+    requestIdleCallback(() => {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          updateAuthCookies(session)
+        }
+      })
+    }, { timeout: 2000 })
+  } else {
+    // Fallback for browsers without requestIdleCallback
+    setTimeout(() => {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          updateAuthCookies(session)
+        }
+      })
+    }, 0)
+  }
 
   // Listen for auth state changes and update cookies
   supabase.auth.onAuthStateChange((event, session) => {
-    console.log('Auth state changed:', event)
+    // Only log in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Auth state changed:', event)
+    }
     
     if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
       updateAuthCookies(session)
