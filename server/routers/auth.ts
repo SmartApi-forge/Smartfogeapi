@@ -23,7 +23,7 @@ export const authRouter = createTRPCRouter({
         const { error } = await supabase.auth.signInWithOtp({
           email: input.email,
           options: {
-            emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard`,
+            emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/ask`,
           },
         });
 

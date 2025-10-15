@@ -15,8 +15,8 @@ function LoadingPageContent() {
       if (projectId) {
         router.push(`/projects/${projectId}`);
       } else {
-        // Fallback to dashboard if no projectId
-        router.push("/dashboard");
+        // Fallback to ask page if no projectId
+        router.push("/ask");
       }
     }, 1000);
 
@@ -27,7 +27,7 @@ function LoadingPageContent() {
     if (projectId) {
       router.push(`/projects/${projectId}`);
     } else {
-      router.push("/dashboard");
+      router.push("/ask");
     }
   };
 
