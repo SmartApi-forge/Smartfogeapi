@@ -479,9 +479,12 @@ EXAMPLE STRUCTURE:
               path: filename,
             });
             
+            // Small delay to ensure file:generating event is processed first
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
             // Stream code in chunks for typing animation
             const fileContent = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
-            const chunkSize = 200; // characters per chunk (increased for faster streaming)
+            const chunkSize = 50; // Smaller chunks for smoother typing animation
             for (let i = 0; i < fileContent.length; i += chunkSize) {
               const chunk = fileContent.slice(i, i + chunkSize);
               const progress = Math.round(((i + chunkSize) / fileContent.length) * 100);
@@ -493,7 +496,8 @@ EXAMPLE STRUCTURE:
                 progress: Math.min(progress, 100),
               });
               
-              // No delay - let the frontend handle the animation speed
+              // Small delay between chunks for typing animation
+              await new Promise(resolve => setTimeout(resolve, 30));
             }
             
             // Emit file complete event
@@ -503,6 +507,10 @@ EXAMPLE STRUCTURE:
               content: fileContent,
               path: filename,
             });
+            
+            // Small delay after file completion before starting next file
+            // This ensures the frontend finishes displaying current file before switching
+            await new Promise(resolve => setTimeout(resolve, 300));
           }
         }
         
@@ -612,6 +620,7 @@ EXAMPLE STRUCTURE:
     const validationResult = await step.run("validate-code-in-sandbox", async () => {
       // Emit validation start event
       if (projectId) {
+        // Emit validation events (no database save, handled by streaming)
         await streamingService.emit(projectId, {
           type: 'step:start',
           step: 'Validating',
@@ -1259,6 +1268,15 @@ EXAMPLE STRUCTURE:
         }
       }
     });
+    
+    // Emit validation complete event to frontend
+    if (projectId) {
+      await streamingService.emit(projectId, {
+        type: 'validation:complete',
+        stage: 'Validation completed',
+        summary: validationResult.overallValid ? 'Code validated successfully' : 'Validation completed with warnings'
+      });
+    }
     
     // Step 5: Handle GitHub PR creation if in GitHub mode
     let prUrl = null;

@@ -109,11 +109,11 @@ function getStatusColor(status: Project['status']) {
   }
 }
 
-function generateFileTreeFromProject(project: Project, messages: Message[] = []): TreeNode[] {
-  // Check if we have any generated files from messages
+function generateFileTreeFromProject(project: Project, messages: Message[] = [], streamingFiles: any[] = []): TreeNode[] {
+  // Check if we have any generated files from messages OR streaming
   const hasGeneratedFiles = messages.some(
     (message) => message.fragments && message.fragments.length > 0
-  );
+  ) || streamingFiles.length > 0;
 
   // Only show placeholder files if we don't have any real generated files
   const baseStructure: TreeNode[] = hasGeneratedFiles ? [] : [
@@ -517,8 +517,9 @@ export function ProjectPageClient({
   const streamingMessages = useMemo(() => {
     const msgs: any[] = [];
     const fileStatusMap = new Map<string, { generating: any; complete: any }>();
+    let validationStatus: { start: any; complete: any } = { start: null, complete: null };
     
-    // First pass: collect file events
+    // First pass: collect file events and validation status
     streamState.events.forEach((event) => {
       if (event.type === 'file:generating') {
         if (!fileStatusMap.has(event.filename)) {
@@ -531,6 +532,10 @@ export function ProjectPageClient({
         } else {
           fileStatusMap.set(event.filename, { generating: null, complete: event });
         }
+      } else if (event.type === 'validation:start') {
+        validationStatus.start = event;
+      } else if (event.type === 'validation:complete') {
+        validationStatus.complete = event;
       }
     });
     
@@ -563,9 +568,34 @@ export function ProjectPageClient({
       }
     });
     
+    // Add validation message (transforming from "Validating..." to "✓ Validated")
+    if (validationStatus.complete) {
+      msgs.push({
+        id: 'stream-validation',
+        content: `✓ ${validationStatus.complete.summary || 'Code validated successfully'}`,
+        role: 'assistant' as const,
+        type: 'text' as const,
+        created_at: new Date(validationStatus.complete.timestamp).toISOString(),
+        updated_at: new Date(validationStatus.complete.timestamp).toISOString(),
+        isStreaming: true,
+        icon: 'complete',
+      });
+    } else if (validationStatus.start) {
+      msgs.push({
+        id: 'stream-validation',
+        content: 'Validating generated code...',
+        role: 'assistant' as const,
+        type: 'text' as const,
+        created_at: new Date(validationStatus.start.timestamp).toISOString(),
+        updated_at: new Date(validationStatus.start.timestamp).toISOString(),
+        isStreaming: true,
+        icon: 'processing',
+      });
+    }
+    
     // Add other event types (step:start, complete)
     streamState.events.forEach((event) => {
-      if (event.type === 'step:start') {
+      if (event.type === 'step:start' && event.step !== 'Validating') {
         msgs.push({
           id: `stream-step-${event.timestamp}`,
           content: event.message,
@@ -617,7 +647,37 @@ export function ProjectPageClient({
     );
   }, [sortedMessages, streamingMessages, streamState.isStreaming, streamState.events.length]);
 
-  const fileTree = useMemo(() => generateFileTreeFromProject(project, sortedMessages), [project, sortedMessages]);
+  // Build file tree from streaming files when active, otherwise use database messages
+  const fileTree = useMemo(() => {
+    // If we have generated files from streaming (even if streaming has ended), use them
+    // This prevents showing placeholder files while waiting for database update
+    if (streamState.generatedFiles.length > 0) {
+      // Convert streaming files directly to tree nodes without placeholders
+      const streamingNodes: TreeNode[] = streamState.generatedFiles.map(file => ({
+        id: file.filename,
+        name: file.filename,
+        type: 'file' as const,
+        content: file.content,
+        language: getLanguageFromFilename(file.filename),
+      }));
+      return streamingNodes;
+    }
+    
+    // If streaming is active but no files yet, show empty tree (no placeholders)
+    if (streamState.isStreaming) {
+      return [];
+    }
+    
+    return generateFileTreeFromProject(project, sortedMessages, streamState.generatedFiles);
+  }, [project, sortedMessages, streamState.generatedFiles, streamState.isStreaming]);
+
+  // Auto-select currently generating file during streaming
+  useEffect(() => {
+    if (streamState.isStreaming && streamState.currentFile) {
+      // Always switch to the current file being generated
+      setSelected(streamState.currentFile);
+    }
+  }, [streamState.isStreaming, streamState.currentFile]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -856,7 +916,7 @@ export function ProjectPageClient({
               width: '100%'
             }}>
               <div className="h-full w-full overflow-hidden">
-                {streamState.isStreaming && streamState.generatedFiles.length > 0 ? (
+                {(streamState.isStreaming || streamState.events.length > 0) && streamState.generatedFiles.length > 0 ? (
                   <StreamingCodeViewer
                     files={streamState.generatedFiles}
                     currentFile={streamState.currentFile}

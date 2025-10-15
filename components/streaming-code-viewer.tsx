@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Highlight, themes } from 'prism-react-renderer';
 import { motion } from 'framer-motion';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Copy, Check, Download } from 'lucide-react';
 import { GeneratedFile } from '../src/types/streaming';
 
 interface StreamingCodeViewerProps {
@@ -25,11 +25,39 @@ export function StreamingCodeViewer({
 }: StreamingCodeViewerProps) {
   const [displayedContent, setDisplayedContent] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Determine which file to display
   const fileToDisplay = files.find(
     (f) => f.filename === (selectedFile || currentFile)
   ) || files.find((f) => f.filename === currentFile) || files[files.length - 1];
+
+  const handleCopyCode = async () => {
+    if (!fileToDisplay?.content) return;
+    
+    try {
+      await navigator.clipboard.writeText(fileToDisplay.content);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy code:', err);
+    }
+  };
+
+  const handleDownload = () => {
+    if (!fileToDisplay?.content || !fileToDisplay?.filename) return;
+
+    const blob = new Blob([fileToDisplay.content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileToDisplay.filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     if (!fileToDisplay) {
@@ -72,6 +100,13 @@ export function StreamingCodeViewer({
     }
   }, [fileToDisplay, displayedContent.length, isStreaming]);
 
+  // Auto-scroll to bottom when content updates during streaming
+  useEffect(() => {
+    if (isTyping && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    }
+  }, [displayedContent, isTyping]);
+
   if (files.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
@@ -113,13 +148,43 @@ export function StreamingCodeViewer({
             <span className="text-xs text-green-500">✓ Complete</span>
           )}
         </div>
-        <span className="text-xs text-muted-foreground">
-          {displayedContent.split('\n').length} lines
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted-foreground">
+            {displayedContent.split('\n').length} lines
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleCopyCode}
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-gray-700 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500"
+              title="Copy code to clipboard"
+            >
+              {copySuccess ? (
+                <>
+                  <Check className="h-3 w-3 text-green-400" />
+                  <span className="text-green-400 hidden sm:inline">Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="h-3 w-3" />
+                  <span className="hidden sm:inline">Copy</span>
+                </>
+              )}
+            </button>
+            
+            <button
+              onClick={handleDownload}
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-gray-700 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500"
+              title="Download file"
+            >
+              <Download className="h-3 w-3" />
+              <span className="hidden sm:inline">Download</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Code content */}
-      <div className="flex-1 overflow-auto relative">
+      <div ref={scrollContainerRef} className="flex-1 overflow-auto relative">
         <Highlight
           theme={themes.vsDark}
           code={displayedContent || '// Waiting for code...'}
