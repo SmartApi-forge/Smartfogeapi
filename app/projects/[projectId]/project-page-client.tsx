@@ -755,11 +755,11 @@ export function ProjectPageClient({
       <SimpleHeader />
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        <section className="w-full sm:w-80 md:w-96 lg:w-[28rem] xl:w-[32rem] flex flex-col h-full overflow-hidden bg-card dark:bg-[#0E100F]" 
+        <section className="w-full sm:w-80 md:w-96 lg:w-[28rem] xl:w-[32rem] flex flex-col h-full overflow-hidden bg-white dark:bg-[#0E100F]" 
                  style={{ minWidth: '320px', maxWidth: '512px', width: '400px' }}>
           
           {/* Messages Area - No top header, seamless */}
-          <div className="flex-1 overflow-y-auto px-4 pt-6 pb-3 space-y-3 min-h-0 scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-card dark:bg-[#0E100F] relative scroll-fade">
+          <div className="flex-1 overflow-y-auto px-4 pt-6 pb-3 space-y-3 min-h-0 scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-white dark:bg-[#0E100F] relative scroll-fade">
             <AnimatePresence>
               {allMessages.map((message, index) => {
                 const isStreamingMsg = 'isStreaming' in message && message.isStreaming;
@@ -821,7 +821,7 @@ export function ProjectPageClient({
           </div>
 
           {/* Input Box - Styled like /ask page but compact - grows upward */}
-          <div className="px-4 pb-4 bg-card dark:bg-[#0E100F] flex flex-col justify-end">
+          <div className="px-4 pb-4 bg-white dark:bg-[#0E100F] flex flex-col justify-end">
             <div className="rounded-xl border border-border/50 dark:border-[#444444] bg-background/50 dark:bg-[#1F2023] p-3 shadow-lg flex flex-col">
               <textarea
                 value={input}
@@ -884,7 +884,7 @@ export function ProjectPageClient({
           </div>
         </section>
 
-        <section className="hidden sm:flex flex-1 p-3 min-h-0 relative dark:bg-[#0E100F]" style={{
+        <section className="hidden sm:flex flex-1 p-3 min-h-0 relative bg-white dark:bg-[#0E100F]" style={{
           minWidth: '800px',
           width: '100%'
         }}>
@@ -958,7 +958,7 @@ export function ProjectPageClient({
           </div>
         </section>
 
-        <section className="sm:hidden flex-1 p-2 min-h-0 dark:bg-[#0E100F]">
+        <section className="sm:hidden flex-1 p-2 min-h-0 bg-white dark:bg-[#0E100F]">
           <div className="h-full w-full rounded-lg border border-border bg-card dark:bg-[#1D1D1D] dark:border-[#1D1D1D] shadow-xl overflow-hidden">
             <div className="h-10 border-b border-border dark:border-[#333433] px-3 flex items-center justify-between text-xs uppercase tracking-wide text-muted-foreground font-medium dark:bg-[#1D1D1D]">
               <span>Code</span>
@@ -1060,6 +1060,15 @@ export function ProjectPageClient({
           z-index: 10;
           pointer-events: none;
           display: block;
+        }
+        
+        /* Light mode scroll fade */
+        .scroll-fade::before {
+          background: linear-gradient(to bottom, white 0%, transparent 100%);
+        }
+        
+        .scroll-fade::after {
+          background: linear-gradient(to top, white 0%, transparent 100%);
         }
         
         /* Dark mode scroll fade */
