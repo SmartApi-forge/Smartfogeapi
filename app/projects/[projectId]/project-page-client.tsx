@@ -983,8 +983,9 @@ export function ProjectPageClient({
           }
         }
         
-        * {
-          transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
+        /* Removed global transition to prevent interference with streaming updates */
+        button, a, [role="button"] {
+          transition-property: background-color, border-color, color, opacity, box-shadow, transform;
           transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
           transition-duration: 150ms;
         }

@@ -37,6 +37,11 @@ export function useGenerationStream(projectId: string | undefined): UseGeneratio
     const eventSource = new EventSource(`/api/stream/${projectId}`);
     eventSourceRef.current = eventSource;
 
+    // Track active streaming session globally to prevent view transitions during streaming
+    if (typeof window !== 'undefined') {
+      (window as any).__activeStreamingSessions = ((window as any).__activeStreamingSessions || 0) + 1;
+    }
+
     eventSource.onopen = () => {
       console.log(`[useGenerationStream] Connected to stream`);
       setIsConnected(true);
@@ -156,6 +161,11 @@ export function useGenerationStream(projectId: string | undefined): UseGeneratio
               newState.status = 'complete';
               newState.currentStep = streamEvent.summary;
               newState.currentFile = undefined;
+              
+              // Decrement active streaming sessions counter when generation completes
+              if (typeof window !== 'undefined') {
+                (window as any).__activeStreamingSessions = Math.max(0, ((window as any).__activeStreamingSessions || 1) - 1);
+              }
               break;
 
             case 'error':
@@ -163,6 +173,11 @@ export function useGenerationStream(projectId: string | undefined): UseGeneratio
               newState.error = streamEvent.message;
               newState.currentStep = undefined;
               newState.currentFile = undefined;
+              
+              // Decrement active streaming sessions counter when error occurs
+              if (typeof window !== 'undefined') {
+                (window as any).__activeStreamingSessions = Math.max(0, ((window as any).__activeStreamingSessions || 1) - 1);
+              }
               break;
           }
 
@@ -177,12 +192,22 @@ export function useGenerationStream(projectId: string | undefined): UseGeneratio
       console.log(`[useGenerationStream] Stream closed by server`);
       setIsConnected(false);
       eventSource.close();
+      
+      // Decrement active streaming sessions counter
+      if (typeof window !== 'undefined') {
+        (window as any).__activeStreamingSessions = Math.max(0, ((window as any).__activeStreamingSessions || 1) - 1);
+      }
     });
 
     eventSource.onerror = (error) => {
       console.error('[useGenerationStream] Stream error:', error);
       setIsConnected(false);
       eventSource.close();
+      
+      // Decrement active streaming sessions counter
+      if (typeof window !== 'undefined') {
+        (window as any).__activeStreamingSessions = Math.max(0, ((window as any).__activeStreamingSessions || 1) - 1);
+      }
 
       // Attempt to reconnect after 5 seconds if not complete or error
       if (state.status !== 'complete' && state.status !== 'error') {
@@ -202,6 +227,11 @@ export function useGenerationStream(projectId: string | undefined): UseGeneratio
     return () => {
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
+        
+        // Decrement active streaming sessions counter on cleanup
+        if (typeof window !== 'undefined') {
+          (window as any).__activeStreamingSessions = Math.max(0, ((window as any).__activeStreamingSessions || 1) - 1);
+        }
       }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
