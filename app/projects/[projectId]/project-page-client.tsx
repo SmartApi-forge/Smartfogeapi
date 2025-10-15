@@ -373,7 +373,7 @@ function CodeViewer({
 
   if (!selectedFile || selectedFile.type === 'folder') {
     return (
-      <div className="h-full flex items-center justify-center text-muted-foreground bg-background dark:bg-[#1D1D1D]">
+        <div className="h-full flex items-center justify-center text-muted-foreground bg-muted/30 dark:bg-[#1D1D1D]">
         <div className="text-center">
           <FileCode className="size-12 mx-auto mb-4 opacity-50" />
           <p>Select a file to view its contents</p>
@@ -423,15 +423,15 @@ function CodeViewer({
         </div>
       </div>
 
-      <div 
-        className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-background dark:bg-[#1D1D1D]" 
-        style={{ 
-          minHeight: 0,
-          scrollBehavior: 'smooth',
-          width: '100%',
-          minWidth: '600px'
-        }}
-      >
+            <div 
+              className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-muted/30 dark:bg-[#1D1D1D]" 
+              style={{ 
+                minHeight: 0,
+                scrollBehavior: 'smooth',
+                width: '100%',
+                minWidth: '600px'
+              }}
+            >
         <div>
           <Highlight
             theme={codeTheme}
@@ -895,16 +895,16 @@ export function ProjectPageClient({
             <Folder className="size-4" />
           </button>
 
-          <div className="h-full w-full rounded-lg border border-border bg-card dark:bg-[#1D1D1D] dark:border-[#1D1D1D] shadow-xl overflow-hidden flex backdrop-blur-sm" style={{
+          <div className="h-full w-full rounded-lg border border-border bg-muted/30 dark:bg-[#1D1D1D] dark:border-[#1D1D1D] shadow-xl overflow-hidden flex backdrop-blur-sm" style={{
             minWidth: '750px',
             width: '100%'
           }}>
             <aside className={`
               w-48 lg:w-52 xl:w-56 border-r border-border dark:border-[#333433] flex-shrink-0 transition-all duration-300
               ${isMobileExplorerOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}
-              sm:relative absolute sm:z-auto z-40 h-full bg-card dark:bg-[#1D1D1D]
+              sm:relative absolute sm:z-auto z-40 h-full bg-muted/30 dark:bg-[#1D1D1D]
             `}>
-              <div className="h-10 border-b border-border dark:border-[#333433] px-3 flex items-center justify-between text-xs uppercase tracking-wide text-muted-foreground font-medium backdrop-blur-sm dark:bg-[#1D1D1D]">
+              <div className="h-10 border-b border-border dark:border-[#333433] px-3 flex items-center justify-between text-xs uppercase tracking-wide text-muted-foreground font-medium backdrop-blur-sm bg-muted/30 dark:bg-[#1D1D1D]">
                 <span>Explorer</span>
                 <button
                   onClick={() => setIsMobileExplorerOpen(false)}
@@ -913,7 +913,7 @@ export function ProjectPageClient({
                   ×
                 </button>
               </div>
-              <div className="p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent dark:bg-[#1D1D1D]" 
+              <div className="p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent bg-muted/30 dark:bg-[#1D1D1D]" 
                    style={{ 
                      height: 'calc(100% - 2.5rem)',
                      maxHeight: 'calc(100vh - 8rem)'
@@ -938,7 +938,7 @@ export function ProjectPageClient({
               />
             )}
 
-            <div className="flex-1 min-w-0 flex flex-col relative bg-background" style={{ 
+            <div className="flex-1 min-w-0 flex flex-col relative bg-muted/30" style={{ 
               minWidth: '600px',
               width: '100%'
             }}>
@@ -959,8 +959,8 @@ export function ProjectPageClient({
         </section>
 
         <section className="sm:hidden flex-1 p-2 min-h-0 bg-white dark:bg-[#0E100F]">
-          <div className="h-full w-full rounded-lg border border-border bg-card dark:bg-[#1D1D1D] dark:border-[#1D1D1D] shadow-xl overflow-hidden">
-            <div className="h-10 border-b border-border dark:border-[#333433] px-3 flex items-center justify-between text-xs uppercase tracking-wide text-muted-foreground font-medium dark:bg-[#1D1D1D]">
+          <div className="h-full w-full rounded-lg border border-border bg-muted/30 dark:bg-[#1D1D1D] dark:border-[#1D1D1D] shadow-xl overflow-hidden">
+            <div className="h-10 border-b border-border dark:border-[#333433] px-3 flex items-center justify-between text-xs uppercase tracking-wide text-muted-foreground font-medium bg-muted/30 dark:bg-[#1D1D1D]">
               <span>Code</span>
               <button
                 onClick={() => setIsMobileExplorerOpen(true)}
