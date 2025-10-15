@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { SimpleHeader } from "@/components/simple-header";
 import { Highlight, themes } from "prism-react-renderer";
+import { useTheme } from "next-themes";
 import { api } from "@/lib/trpc-client";
 import { useGenerationStream } from "../../../hooks/use-generation-stream";
 import { StreamingCodeViewer } from "../../../components/streaming-code-viewer";
@@ -246,9 +247,9 @@ function getLanguageFromFilename(filename: string): string {
 
 function getFileIcon(name: string) {
   if (name.includes('.')) {
-    return <FileCode className="size-4 text-blue-400" />;
+    return <FileCode className="size-4 text-blue-500 dark:text-blue-400" />;
   }
-  return <Folder className="size-4 text-yellow-400" />;
+  return <Folder className="size-4 text-yellow-500 dark:text-yellow-400" />;
 }
 
 function TreeItem({ 
@@ -272,8 +273,8 @@ function TreeItem({
   return (
     <div>
       <div
-        className={`flex items-center gap-2 px-2 py-1 text-sm cursor-pointer hover:bg-gray-700/50 transition-colors ${
-          isSelected ? 'bg-blue-600/20 text-blue-300' : 'text-gray-300'
+        className={`flex items-center gap-2 px-2 py-1 text-sm cursor-pointer hover:bg-muted/50 transition-colors rounded-md ${
+          isSelected ? 'bg-primary/10 dark:bg-primary/20 text-primary' : 'text-foreground'
         }`}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={() => {
@@ -290,7 +291,7 @@ function TreeItem({
           />
         )}
         {node.type === "folder" ? (
-          isExpanded ? <FolderOpen className="size-4 text-yellow-400" /> : <Folder className="size-4 text-yellow-400" />
+          isExpanded ? <FolderOpen className="size-4 text-yellow-500 dark:text-yellow-400" /> : <Folder className="size-4 text-yellow-500 dark:text-yellow-400" />
         ) : (
           getFileIcon(node.name)
         )}
@@ -318,10 +319,12 @@ function TreeItem({
 
 function CodeViewer({ 
   filename, 
-  fileTree 
+  fileTree,
+  codeTheme 
 }: { 
   filename: string | null;
   fileTree: TreeNode[];
+  codeTheme: any;
 }) {
   const [copySuccess, setCopySuccess] = useState(false);
 
@@ -367,7 +370,7 @@ function CodeViewer({
 
   if (!selectedFile || selectedFile.type === 'folder') {
     return (
-      <div className="h-full flex items-center justify-center text-gray-400">
+      <div className="h-full flex items-center justify-center text-muted-foreground">
         <div className="text-center">
           <FileCode className="size-12 mx-auto mb-4 opacity-50" />
           <p>Select a file to view its contents</p>
@@ -378,11 +381,11 @@ function CodeViewer({
 
   return (
     <div className="h-full flex flex-col">
-      <div className="h-10 border-b px-3 flex items-center justify-between text-xs text-gray-300 bg-gray-800/50 flex-shrink-0">
+      <div className="h-10 border-b border-border px-3 flex items-center justify-between text-xs text-foreground bg-muted/30 flex-shrink-0">
         <div className="flex items-center min-w-0">
           <span className="mr-2 flex-shrink-0">{getFileIcon(selectedFile.name)}</span>
           <span className="font-medium truncate">{selectedFile.name}</span>
-          <span className="ml-2 text-gray-500 flex-shrink-0">
+          <span className="ml-2 text-muted-foreground flex-shrink-0">
             ({selectedFile.language || 'text'})
           </span>
         </div>
@@ -390,13 +393,13 @@ function CodeViewer({
         <div className="flex items-center gap-1 flex-shrink-0">
           <button
             onClick={handleCopyCode}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-gray-700 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-muted transition-colors focus:outline-none focus:ring-1 focus:ring-primary"
             title="Copy code to clipboard"
           >
             {copySuccess ? (
               <>
-                <Check className="size-3 text-green-400" />
-                <span className="text-green-400 hidden sm:inline">Copied!</span>
+                <Check className="size-3 text-emerald-500" />
+                <span className="text-emerald-500 hidden sm:inline">Copied!</span>
               </>
             ) : (
               <>
@@ -408,7 +411,7 @@ function CodeViewer({
           
           <button
             onClick={handleDownload}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-gray-700 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-muted transition-colors focus:outline-none focus:ring-1 focus:ring-primary"
             title="Download file"
           >
             <Download className="size-3" />
@@ -418,7 +421,7 @@ function CodeViewer({
       </div>
 
       <div 
-        className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800" 
+        className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-background" 
         style={{ 
           minHeight: 0,
           height: 'calc(100vh - 140px)',
@@ -430,7 +433,7 @@ function CodeViewer({
       >
         <div className="min-h-full">
           <Highlight
-            theme={themes.vsDark}
+            theme={codeTheme}
             code={selectedFile.content || '// No content available'}
             language={selectedFile.language || 'text'}
           >
@@ -440,7 +443,7 @@ function CodeViewer({
                 style={{
                   ...style,
                   margin: 0,
-                  background: '#1D1D1D',
+                  background: 'transparent',
                   fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
                   fontSize: 'clamp(11px, 1.5vw, 14px)',
                 }}
@@ -449,11 +452,11 @@ function CodeViewer({
                   <div 
                     key={i} 
                     {...getLineProps({ line })}
-                    className="flex hover:bg-gray-800/30 transition-colors"
+                    className="flex hover:bg-muted/20 transition-colors"
                     style={{ minHeight: '1.25rem' }}
                   >
                     <span 
-                      className="inline-block w-10 text-right mr-3 text-gray-500 select-none flex-shrink-0 text-xs leading-5"
+                      className="inline-block w-10 text-right mr-3 text-muted-foreground/50 select-none flex-shrink-0 text-xs leading-5"
                       style={{ fontSize: 'clamp(10px, 1.2vw, 12px)' }}
                     >
                       {i + 1}
@@ -483,6 +486,7 @@ export function ProjectPageClient({
   initialMessages, 
   project 
 }: ProjectPageClientProps) {
+  const { theme, resolvedTheme } = useTheme();
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["src"]));
   const [selected, setSelected] = useState<string | null>(null);
   const [input, setInput] = useState("");
@@ -492,6 +496,9 @@ export function ProjectPageClient({
 
   // Use streaming hook for real-time updates
   const streamState = useGenerationStream(projectId);
+  
+  // Determine code theme based on current theme
+  const codeTheme = resolvedTheme === 'dark' ? themes.vsDark : themes.vsLight;
 
   const { data: messages = initialMessages, refetch } = api.messages.getMany.useQuery(
     {
@@ -737,11 +744,11 @@ export function ProjectPageClient({
       <SimpleHeader />
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        <section className="w-full sm:w-80 md:w-96 lg:w-[28rem] xl:w-[32rem] flex flex-col h-full overflow-hidden border-r border-gray-800/50 backdrop-blur-sm" 
-                 style={{ backgroundColor: '#09090B', minWidth: '320px', maxWidth: '512px', width: '400px' }}>
-          <header className="h-12 shrink-0 px-4 flex items-center gap-2 text-sm font-medium border-b border-gray-800/50">
-            <MessageSquare className="size-4 text-white flex-shrink-0" /> 
-            <span className="text-white truncate flex-1 min-w-0">{project.name}</span>
+        <section className="w-full sm:w-80 md:w-96 lg:w-[28rem] xl:w-[32rem] flex flex-col h-full overflow-hidden border-r border-border bg-card backdrop-blur-sm" 
+                 style={{ minWidth: '320px', maxWidth: '512px', width: '400px' }}>
+          <header className="h-12 shrink-0 px-4 flex items-center gap-2 text-sm font-medium border-b border-border bg-muted/30">
+            <MessageSquare className="size-4 text-foreground flex-shrink-0" /> 
+            <span className="text-foreground truncate flex-1 min-w-0">{project.name}</span>
             <div className="flex items-center gap-1 flex-shrink-0">
               {getStatusIcon(project.status)}
               <span className={`text-xs ${getStatusColor(project.status)} hidden sm:inline`}>
@@ -750,10 +757,9 @@ export function ProjectPageClient({
             </div>
           </header>
 
-          <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent" 
+          <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0 scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-card relative scroll-fade" 
                style={{ 
-                 backgroundColor: '#09090B',
-                 height: 'calc(100vh - 140px)', // Reduced from 172px to prevent header collision
+                 height: 'calc(100vh - 140px)',
                  maxHeight: 'calc(100vh - 140px)',
                  minHeight: 'calc(100vh - 140px)'
                }}>
@@ -769,59 +775,47 @@ export function ProjectPageClient({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.3, delay: index * 0.05 }}
-                    className={`text-sm flex gap-3 ${
-                      message.role === "user" ? "flex-row-reverse" : "flex-row"
-                    }`}
+                    className="text-sm"
                   >
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-lg" 
-                         style={{ backgroundColor: message.role === "user" ? '#3b82f6' : '#10b981' }}>
-                      {message.role === "user" ? (
-                        <User className="size-4 text-white" />
-                      ) : (
-                        <Bot className="size-4 text-white" />
-                      )}
-                    </div>
-                    <div
-                      className={`rounded-lg px-4 py-3 shadow-sm backdrop-blur-sm border border-gray-700/30 ${
-                        message.role === "user"
-                          ? "text-white"
-                          : "text-white"
-                      }`}
-                      style={{ 
-                        backgroundColor: message.role === "user" ? '#333333' : '#1a1a1a',
-                        width: '280px', // Fixed width for consistent sizing
-                        maxWidth: '280px',
-                        minWidth: '200px'
-                      }}
-                    >
-                      <div className="flex items-center gap-2">
-                        {isStreamingMsg && streamIcon === 'generating' && (
-                          <Loader2 className="size-3 animate-spin text-blue-400" />
-                        )}
-                        {isStreamingMsg && streamIcon === 'complete' && (
-                          <CheckCircle className="size-3 text-green-400" />
-                        )}
-                        {isStreamingMsg && streamIcon === 'processing' && (
-                          <Loader2 className="size-3 animate-spin text-yellow-400" />
-                        )}
-                        <div className="whitespace-pre-wrap break-words leading-relaxed text-sm flex-1">{message.content}</div>
-                      </div>
-                      {message.fragments && message.fragments.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-gray-600/50">
-                          <div className="text-xs text-gray-400 mb-2 font-medium">Generated Files:</div>
-                          {message.fragments.map((fragment: Fragment) => (
-                            <div key={fragment.id} className="text-xs text-blue-300 mb-1 flex items-center gap-1">
-                              <FileCode className="size-3" />
-                              <span className="truncate">{fragment.title}</span>
-                            </div>
-                          ))}
+                    {message.role === "user" ? (
+                      // User message - with card background
+                      <div className="flex justify-end mb-1">
+                        <div className="rounded-xl px-4 py-2.5 bg-primary/10 dark:bg-primary/20 border border-primary/20 dark:border-primary/30 max-w-[85%]">
+                          <div className="whitespace-pre-wrap break-words leading-relaxed text-[13px] text-foreground font-medium">
+                            {message.content}
+                          </div>
                         </div>
-                      )}
-                      <div className="text-xs text-gray-500 mt-2 flex items-center gap-1">
-                        <Clock className="size-3" />
-                        {new Date(message.created_at).toLocaleTimeString()}
                       </div>
-                    </div>
+                    ) : (
+                      // AI message - no card, just text with icons
+                      <div className="flex gap-2 items-start mb-3 pr-4">
+                        <div className="flex items-start gap-2 flex-1">
+                          {isStreamingMsg && streamIcon === 'generating' && (
+                            <Loader2 className="size-3.5 animate-spin text-primary mt-0.5 flex-shrink-0" />
+                          )}
+                          {isStreamingMsg && streamIcon === 'complete' && (
+                            <CheckCircle className="size-3.5 text-emerald-500 mt-0.5 flex-shrink-0" />
+                          )}
+                          {isStreamingMsg && streamIcon === 'processing' && (
+                            <Loader2 className="size-3.5 animate-spin text-amber-500 mt-0.5 flex-shrink-0" />
+                          )}
+                          <div className="whitespace-pre-wrap break-words leading-relaxed text-[13px] text-muted-foreground flex-1">
+                            {message.content}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {message.fragments && message.fragments.length > 0 && message.role === "user" && (
+                      <div className="mt-2 pt-2 border-t border-border/50">
+                        <div className="text-xs text-muted-foreground mb-1.5 font-medium">Generated Files:</div>
+                        {message.fragments.map((fragment: Fragment) => (
+                          <div key={fragment.id} className="text-xs text-primary mb-1 flex items-center gap-1">
+                            <FileCode className="size-3" />
+                            <span className="truncate">{fragment.title}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </motion.div>
                 );
               })}
@@ -829,9 +823,9 @@ export function ProjectPageClient({
             <div ref={messagesEndRef} />
           </div>
 
-          <div className="shrink-0 p-3 border-t border-gray-800/50 backdrop-blur-sm" style={{ backgroundColor: '#09090B', height: '80px' }}>
-            <div className="flex items-center gap-2 p-3 rounded-lg border border-gray-600/50 shadow-lg backdrop-blur-sm transition-all duration-200 hover:border-gray-500/50 focus-within:border-blue-500/50" 
-                 style={{ backgroundColor: '#333333', height: '48px', minHeight: '48px', maxHeight: '48px' }}>
+          <div className="shrink-0 p-3 border-t border-border bg-card/95 backdrop-blur-sm" style={{ height: '80px' }}>
+            <div className="flex items-center gap-2 p-3 rounded-lg border border-border bg-background shadow-lg backdrop-blur-sm transition-all duration-200 hover:border-primary/50" 
+                 style={{ height: '48px', minHeight: '48px', maxHeight: '48px' }}>
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -842,15 +836,15 @@ export function ProjectPageClient({
                   }
                 }}
                 placeholder="Continue the conversation..."
-                className="flex-1 bg-transparent text-white placeholder-gray-400 outline-none text-sm leading-relaxed"
-                style={{ height: '24px', minHeight: '24px', maxHeight: '24px' }}
+                className="flex-1 bg-transparent text-foreground placeholder-muted-foreground outline-none text-sm leading-relaxed"
+                style={{ height: '24px', minHeight: '24px', maxHeight: '24px', border: 'none', boxShadow: 'none', outline: 'none' }}
                 disabled={isLoading}
               />
               <button 
                 onClick={send} 
                 disabled={!input.trim() || isLoading}
-                className="px-3 py-2 rounded-md text-sm font-medium text-white transition-all duration-200 hover:bg-blue-600 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2 shadow-md"
-                style={{ backgroundColor: '#3b82f6', height: '32px', minHeight: '32px', maxHeight: '32px', width: '44px', minWidth: '44px' }}
+                className="px-3 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground transition-all duration-200 hover:bg-primary/90 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2 shadow-md"
+                style={{ height: '32px', minHeight: '32px', maxHeight: '32px', width: '44px', minWidth: '44px' }}
               >
                 {isLoading ? (
                   <Loader2 className="size-4 animate-spin" />
@@ -868,25 +862,25 @@ export function ProjectPageClient({
         }}>
           <button
             onClick={() => setIsMobileExplorerOpen(!isMobileExplorerOpen)}
-            className="sm:hidden absolute top-4 left-4 z-50 p-2 rounded-md bg-gray-800 text-white hover:bg-gray-700 transition-colors"
+            className="sm:hidden absolute top-4 left-4 z-50 p-2 rounded-md bg-card border border-border text-foreground hover:bg-muted transition-colors shadow-lg"
           >
             <Folder className="size-4" />
           </button>
 
-          <div className="h-full w-full rounded-lg border border-gray-700/50 bg-card shadow-xl overflow-hidden flex backdrop-blur-sm" style={{
+          <div className="h-full w-full rounded-lg border border-border bg-card shadow-xl overflow-hidden flex backdrop-blur-sm" style={{
             minWidth: '750px',
             width: '100%'
           }}>
             <aside className={`
-              w-48 lg:w-52 xl:w-56 border-r border-gray-700/50 flex-shrink-0 transition-all duration-300
+              w-48 lg:w-52 xl:w-56 border-r border-border flex-shrink-0 transition-all duration-300
               ${isMobileExplorerOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}
-              sm:relative absolute sm:z-auto z-40 h-full
-            `} style={{ backgroundColor: '#1D1D1D' }}>
-              <div className="h-10 border-b border-gray-700/50 px-3 flex items-center justify-between text-xs uppercase tracking-wide text-gray-400 font-medium backdrop-blur-sm">
+              sm:relative absolute sm:z-auto z-40 h-full bg-card
+            `}>
+              <div className="h-10 border-b border-border px-3 flex items-center justify-between text-xs uppercase tracking-wide text-muted-foreground font-medium backdrop-blur-sm">
                 <span>Explorer</span>
                 <button
                   onClick={() => setIsMobileExplorerOpen(false)}
-                  className="sm:hidden p-1 hover:bg-gray-700 rounded"
+                  className="sm:hidden p-1 hover:bg-muted rounded text-foreground"
                 >
                   ×
                 </button>
@@ -916,8 +910,7 @@ export function ProjectPageClient({
               />
             )}
 
-            <div className="flex-1 min-w-0 flex flex-col relative" style={{ 
-              backgroundColor: '#1D1D1D',
+            <div className="flex-1 min-w-0 flex flex-col relative bg-background" style={{ 
               minWidth: '600px',
               width: '100%'
             }}>
@@ -930,7 +923,7 @@ export function ProjectPageClient({
                     selectedFile={selected || undefined}
                   />
                 ) : (
-                  <CodeViewer filename={selected} fileTree={fileTree} />
+                  <CodeViewer filename={selected} fileTree={fileTree} codeTheme={codeTheme} />
                 )}
               </div>
             </div>
@@ -938,19 +931,19 @@ export function ProjectPageClient({
         </section>
 
         <section className="sm:hidden flex-1 p-2 min-h-0">
-          <div className="h-full w-full rounded-lg border border-gray-700/50 bg-card shadow-xl overflow-hidden" style={{ backgroundColor: '#1D1D1D' }}>
-            <div className="h-10 border-b border-gray-700/50 px-3 flex items-center justify-between text-xs uppercase tracking-wide text-gray-400 font-medium">
+          <div className="h-full w-full rounded-lg border border-border bg-card shadow-xl overflow-hidden">
+            <div className="h-10 border-b border-border px-3 flex items-center justify-between text-xs uppercase tracking-wide text-muted-foreground font-medium">
               <span>Code</span>
               <button
                 onClick={() => setIsMobileExplorerOpen(true)}
-                className="p-1 hover:bg-gray-700 rounded flex items-center gap-1"
+                className="p-1 hover:bg-muted rounded flex items-center gap-1 text-foreground"
               >
                 <Folder className="size-3" />
                 Files
               </button>
             </div>
             <div className="h-full overflow-hidden" style={{ height: 'calc(100% - 2.5rem)' }}>
-              <CodeViewer filename={selected} fileTree={fileTree} />
+              <CodeViewer filename={selected} fileTree={fileTree} codeTheme={codeTheme} />
             </div>
           </div>
         </section>
@@ -996,16 +989,49 @@ export function ProjectPageClient({
           transition-duration: 150ms;
         }
         
-        button:focus-visible,
-        input:focus-visible {
+        button:focus-visible {
           outline: 2px solid #3b82f6;
           outline-offset: 2px;
+        }
+        
+        input:focus,
+        input:focus-visible {
+          outline: none !important;
+          border: none !important;
+          box-shadow: none !important;
         }
         
         body {
           text-rendering: optimizeLegibility;
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
+        }
+        
+        /* Scroll fade effect for chat */
+        .scroll-fade::before {
+          content: '';
+          position: sticky;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 20px;
+          background: linear-gradient(to bottom, hsl(var(--card)) 0%, transparent 100%);
+          z-index: 10;
+          pointer-events: none;
+          display: block;
+        }
+        
+        .scroll-fade::after {
+          content: '';
+          position: sticky;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          height: 20px;
+          background: linear-gradient(to top, hsl(var(--card)) 0%, transparent 100%);
+          z-index: 10;
+          pointer-events: none;
+          display: block;
         }
       `}</style>
     </div>
