@@ -162,10 +162,11 @@ export default function HomePage() {
                   transition={{ duration: 0.5, delay: 0.8 }}
                 >
                   <Button
+                    asChild
                     size="lg"
                     className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 h-12 rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl w-full sm:w-auto"
                   >
-                    Get Started Free
+                    <Link href="/ask">Get Started Free</Link>
                   </Button>
                   <Button
                     variant="outline"

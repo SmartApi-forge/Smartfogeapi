@@ -27,7 +27,6 @@ export function DashboardHeader() {
   const router = useRouter()
   const [user, setUser] = useState({ name: 'Shashank', email: 'shashank@example.com' })
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [projectsHover, setProjectsHover] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
@@ -103,50 +102,30 @@ export function DashboardHeader() {
             </Button>
             <span className="text-white font-neue-500 text-base">Smart API Forge</span>
           </div>
-          {/* Left side - My Projects with hover effect */}
-          <div
-            className="group relative hidden md:inline-flex items-center gap-1.5 bg-transparent hover:bg-black/80 transition-colors px-2.5 py-1.5 rounded-full border-none"
-            onMouseEnter={() => setProjectsHover(true)}
-            onMouseLeave={() => setProjectsHover(false)}
-            role="button"
-            aria-haspopup="true"
-            aria-expanded={projectsHover}
+          {/* Left side - My Projects button - directly opens sidebar */}
+          <button
+            className="group relative hidden md:inline-flex items-center gap-1.5 bg-transparent hover:bg-black/80 transition-colors px-2.5 py-1.5 rounded-full border-none cursor-pointer"
+            onClick={toggleSidebar}
+            aria-label="Open projects sidebar"
           >
             <div className="relative inline-flex items-center gap-1.5">
-              {/* Flower icon (no plus) */}
+              {/* Flower icon */}
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <circle cx="12" cy="7" r="4" fill="#F8ACFF" fillOpacity="0.95"/>
                 <circle cx="12" cy="17" r="4" fill="#F8ACFF" fillOpacity="0.95"/>
                 <circle cx="7" cy="12" r="4" fill="#F8ACFF" fillOpacity="0.95"/>
                 <circle cx="17" cy="12" r="4" fill="#F8ACFF" fillOpacity="0.95"/>
               </svg>
-              {/* Text wrapper used as anchor for tooltip centering */}
-              <span className="inline-block text-white font-medium text-base text-center">
+              {/* Text */}
+              <span className="inline-block text-white font-medium text-base">
                 my projects
-                {/* Tooltip anchored to text center */}
-                <AnimatePresence>
-                  {projectsHover && (
-                    <motion.button
-                      key="projects-tooltip"
-                      initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                      transition={{ type: "spring", stiffness: 450, damping: 30, mass: 0.25 }}
-                      onClick={toggleSidebar}
-                      className="absolute top-[calc(100%+16px)] left-1/2 -translate-x-1/2 z-50 bg-black rounded-lg px-3 h-8 text-[12px] leading-none font-medium whitespace-nowrap text-white cursor-pointer select-none inline-flex items-center justify-center"
-                    >
-                      <span className="inline-block">See all projects</span>
-                      <span className="pointer-events-none absolute -top-[4px] left-1/2 -translate-x-1/2 block w-0 h-0 border-l-[4px] border-r-[4px] border-b-[4px] border-l-transparent border-r-transparent border-b-black" />
-                    </motion.button>
-                  )}
-                </AnimatePresence>
               </span>
               {/* Arrow shows only on hover */}
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="opacity-0 group-hover:opacity-100 transition-opacity">
                 <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </div>
-          </div>
+          </button>
           {/* Center Navigation (Desktop) */}
           <nav className="hidden md:flex absolute left-1/2 -translate-x-1/2 items-center gap-6">
             <Link href="/careers" className="text-white hover:text-white/80 text-base transition-colors">
