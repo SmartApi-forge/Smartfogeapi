@@ -1,4 +1,4 @@
-import { StreamEvent, StreamEventWithTimestamp } from '@/types/streaming';
+import { StreamEvent, StreamEventWithTimestamp } from '../types/streaming';
 
 type ConnectionCallback = (data: string) => void;
 

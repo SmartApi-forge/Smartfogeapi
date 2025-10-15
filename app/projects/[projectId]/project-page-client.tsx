@@ -803,7 +803,7 @@ export function ProjectPageClient({
                       {message.fragments && message.fragments.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-gray-600/50">
                           <div className="text-xs text-gray-400 mb-2 font-medium">Generated Files:</div>
-                          {message.fragments.map((fragment) => (
+                          {message.fragments.map((fragment: Fragment) => (
                             <div key={fragment.id} className="text-xs text-blue-300 mb-1 flex items-center gap-1">
                               <FileCode className="size-3" />
                               <span className="truncate">{fragment.title}</span>

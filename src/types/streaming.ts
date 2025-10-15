@@ -40,8 +40,9 @@ export type StreamEvent =
   | {
       type: 'validation:complete';
       stage: string;
-      result: boolean;
+      result?: boolean;
       message?: string;
+      summary?: string;
     }
   | {
       type: 'complete';
