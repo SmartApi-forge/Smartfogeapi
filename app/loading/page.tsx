@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LoadingAnimation } from "@/components/ui/loading-animation";
 
-export default function LoadingPage() {
+function LoadingPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const projectId = searchParams?.get("projectId");
@@ -32,4 +32,12 @@ export default function LoadingPage() {
   };
 
   return <LoadingAnimation onComplete={handleAnimationComplete} />;
+}
+
+export default function LoadingPage() {
+  return (
+    <Suspense fallback={<LoadingAnimation />}>
+      <LoadingPageContent />
+    </Suspense>
+  );
 }
