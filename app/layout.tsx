@@ -26,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${geist.variable} antialiased`}>
+    <html lang="en" className={`${geist.variable} antialiased`} suppressHydrationWarning>
       <head>
         {/* Global tRPC client for browser console testing */}
         <script src="/trpc-console-helper.js" defer></script>
@@ -36,7 +36,7 @@ export default function RootLayout({
           <AuthInitializer />
           <ThemeProvider
             attribute="class"
-            defaultTheme="system"
+            defaultTheme="light"
             enableSystem
             disableTransitionOnChange
           >
@@ -44,6 +44,7 @@ export default function RootLayout({
           </ThemeProvider>
         </TRPCReactProvider>
         <Analytics />
+        <Toaster />
       </body>
     </html>
   )

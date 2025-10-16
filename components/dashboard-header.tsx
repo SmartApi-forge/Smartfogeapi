@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { LogOut, Settings, User, Menu } from "lucide-react"
+import { LogOut, Settings, User, Menu, Plus, Search } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AnimatePresence, motion } from "framer-motion"
 import {
@@ -22,30 +22,74 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import { Input } from "@/components/ui/input"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { ProjectsSidebar } from "@/components/projects-sidebar"
+import { CustomHamburgerButton } from "@/components/custom-hamburger-button"
+import { supabase } from "@/lib/supabase"
 
-export function DashboardHeader() {
+interface DashboardHeaderProps {
+  sidebarOpen?: boolean
+  setSidebarOpen?: (open: boolean) => void
+  mobileMenuOpen?: boolean
+  setMobileMenuOpen?: (open: boolean) => void
+}
+
+export function DashboardHeader({ 
+  sidebarOpen: externalSidebarOpen, 
+  setSidebarOpen: externalSetSidebarOpen,
+  mobileMenuOpen: externalMobileMenuOpen,
+  setMobileMenuOpen: externalSetMobileMenuOpen
+}: DashboardHeaderProps = {}) {
   const router = useRouter()
-  const [user, setUser] = useState({ name: 'Shashank', email: 'shashank@example.com' })
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [internalSidebarOpen, setInternalSidebarOpen] = useState(false)
+  const [internalMobileMenuOpen, setInternalMobileMenuOpen] = useState(false)
+  const [user, setUser] = useState<any>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+
+  // Use external state if provided, otherwise use internal state
+  const sidebarOpen = externalSidebarOpen !== undefined ? externalSidebarOpen : internalSidebarOpen
+  const setSidebarOpen = externalSetSidebarOpen || setInternalSidebarOpen
+  const mobileMenuOpen = externalMobileMenuOpen !== undefined ? externalMobileMenuOpen : internalMobileMenuOpen
+  const setMobileMenuOpen = externalSetMobileMenuOpen || setInternalMobileMenuOpen
 
   useEffect(() => {
-    // Get user data from localStorage
-    const userData = localStorage.getItem("user")
-    if (userData) {
+    // Get user data from Supabase
+    const getUser = async () => {
       try {
-        const parsedUser = JSON.parse(userData)
-        setUser(parsedUser)
+        const { data: { session }, error } = await supabase.auth.getSession()
+        if (error) {
+          console.error('Error getting session:', error)
+          return
+        }
+        
+        if (session?.user) {
+          setUser({
+            name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
+            email: session.user.email || ''
+          })
+        }
       } catch (error) {
-        console.error("Error parsing user data:", error)
+        console.error('Error fetching user:', error)
       }
     }
+    
+    getUser()
   }, [])
 
-  const handleLogout = () => {
-    localStorage.removeItem("authToken")
-    localStorage.removeItem("user")
-    router.push("/")
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut()
+      localStorage.removeItem("authToken")
+      localStorage.removeItem("user")
+      router.push("/")
+    } catch (error) {
+      console.error('Error signing out:', error)
+      // Fallback to just clearing localStorage and redirecting
+      localStorage.removeItem("authToken")
+      localStorage.removeItem("user")
+      router.push("/")
+    }
   }
 
   const getUserInitials = (name: string) => {
@@ -91,41 +135,13 @@ export function DashboardHeader() {
         <div className="relative flex items-center justify-between">
           {/* Mobile: Hamburger + Brand */}
           <div className="flex items-center gap-3 md:hidden">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-white hover:bg-white/10"
-              onClick={() => setMobileMenuOpen(true)}
-              aria-label="Open menu"
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
+            <CustomHamburgerButton onClick={() => setMobileMenuOpen(true)} />
             <span className="text-white font-neue-500 text-base">Smart API Forge</span>
           </div>
-          {/* Left side - My Projects button - directly opens sidebar */}
-          <button
-            className="group relative hidden md:inline-flex items-center gap-1.5 bg-transparent hover:bg-black/80 transition-colors px-2.5 py-1.5 rounded-full border-none cursor-pointer"
-            onClick={toggleSidebar}
-            aria-label="Open projects sidebar"
-          >
-            <div className="relative inline-flex items-center gap-1.5">
-              {/* Flower icon */}
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="12" cy="7" r="4" fill="#F8ACFF" fillOpacity="0.95"/>
-                <circle cx="12" cy="17" r="4" fill="#F8ACFF" fillOpacity="0.95"/>
-                <circle cx="7" cy="12" r="4" fill="#F8ACFF" fillOpacity="0.95"/>
-                <circle cx="17" cy="12" r="4" fill="#F8ACFF" fillOpacity="0.95"/>
-              </svg>
-              {/* Text */}
-              <span className="inline-block text-white font-medium text-base">
-                my projects
-              </span>
-              {/* Arrow shows only on hover */}
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-          </button>
+          {/* Left side - Hamburger Menu button */}
+          <div className="hidden md:block">
+            <CustomHamburgerButton onClick={toggleSidebar} />
+          </div>
           {/* Center Navigation (Desktop) */}
           <nav className="hidden md:flex absolute left-1/2 -translate-x-1/2 items-center gap-6">
             <Link href="/careers" className="text-white hover:text-white/80 text-base transition-colors">
@@ -165,15 +181,15 @@ export function DashboardHeader() {
               <Button variant="ghost" className="p-0 h-auto hover:bg-white/10 rounded-full">
                 <Avatar className="w-8 h-8">
                   <AvatarFallback className="bg-blue-600 text-white text-sm">
-                    {getUserInitials(user.name)}
+                    {user ? getUserInitials(user.name) : 'U'}
                   </AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56 bg-gray-800 border-gray-700 font-neue-500" align="end">
               <div className="px-2 py-1.5">
-                <p className="text-sm font-medium text-white font-neue-500">{user.name}</p>
-                <p className="text-xs text-gray-400 font-neue-500">{user.email}</p>
+                <p className="text-sm font-medium text-white font-neue-500">{user?.name || 'User'}</p>
+                <p className="text-xs text-gray-400 font-neue-500">{user?.email || ''}</p>
               </div>
               <DropdownMenuSeparator className="bg-gray-700" />
               <DropdownMenuItem className="text-white hover:bg-gray-700 cursor-pointer font-neue-500">
@@ -199,74 +215,23 @@ export function DashboardHeader() {
     </header>
 
     {/* Projects Sidebar */}
-    <AnimatePresence>
-      {/* Desktop-only sidebar */}
-      {sidebarOpen && (
-        <>
-          {/* Click-outside overlay to close sidebar */}
-          <div
-            className="fixed inset-0 z-40 bg-transparent hidden md:block"
-            onClick={toggleSidebar}
-            aria-hidden="true"
-          />
-          {/* Sidebar */}
-          <motion.div
-            initial={{ x: -300 }}
-            animate={{ x: 0 }}
-            exit={{ x: -300 }}
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="fixed left-0 top-0 bottom-0 w-72 bg-[#1E1E1E]/95 border-r border-gray-800 z-50 overflow-y-auto hidden md:block"
-          >
-            <div className="flex items-center justify-between p-4">
-              <div className="flex items-center gap-2">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" fill="#F8ACFF" fillOpacity="0.8"/>
-                </svg>
-                <span className="text-white font-medium">my projects</span>
-              </div>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={toggleSidebar}
-                className="text-gray-400 hover:text-white hover:bg-transparent rounded-full h-8 w-8 p-0"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </Button>
-            </div>
-            
-            <div className="px-4 py-2 border-t border-gray-800/50">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="w-full justify-start gap-2 text-white hover:bg-gray-800/50 hover:text-white flex items-center py-3"
-              >
-                <span className="text-purple-400 mr-2">◆</span>
-                New project
-              </Button>
-            </div>
-            
-            <div className="px-4 py-2 mt-4">
-              <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider" style={{ fontFamily: "'__flecha_df5a44', '__flecha_Fallback_df5a44'" }}>Recents</h3>
-              <div className="mt-2 space-y-1">
-                <p className="text-gray-400 text-sm py-2">No projects found</p>
-              </div>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+    <ProjectsSidebar 
+      isOpen={sidebarOpen} 
+      onClose={() => setSidebarOpen(false)}
+      searchQuery={searchQuery}
+      setSearchQuery={setSearchQuery}
+    />
 
     {/* Mobile Menu Sheet */}
     <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-      <SheetContent side="left" className="bg-[#1E1E1E]/95 border-gray-800 p-0 w-72">
+      <SheetContent side="left" className="bg-gradient-to-b from-[#1A1D21] to-[#0F1114] border-[#2A2D31]/80 p-0 w-80">
         <SheetHeader className="sr-only">
-          <SheetTitle>Menu</SheetTitle>
-          <SheetDescription>Mobile navigation</SheetDescription>
+          <SheetTitle>Mobile Navigation</SheetTitle>
+          <SheetDescription>Mobile navigation and projects</SheetDescription>
         </SheetHeader>
         <div className="flex h-full flex-col">
-          <div className="flex items-center justify-between p-4 border-b border-gray-800">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-[#2A2D31]/60 bg-gradient-to-r from-[#1E2125] to-[#1A1D21]">
             <div className="flex items-center gap-2">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <circle cx="12" cy="7" r="4" fill="#F8ACFF" fillOpacity="0.95"/>
@@ -274,28 +239,85 @@ export function DashboardHeader() {
                 <circle cx="7" cy="12" r="4" fill="#F8ACFF" fillOpacity="0.95"/>
                 <circle cx="17" cy="12" r="4" fill="#F8ACFF" fillOpacity="0.95"/>
               </svg>
-              <span className="text-white font-neue-500">my projects</span>
+              <span className="text-gray-50 font-medium drop-shadow-sm" style={{ fontFamily: "'__flecha_df5a44', '__flecha_Fallback_df5a44'" }}>
+                My Projects
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                // Handle new project creation
+                setMobileMenuOpen(false);
+              }}
+              className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 border border-transparent hover:border-blue-400/30 transition-all duration-200"
+              aria-label="Create new project"
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              New
+            </Button>
+          </div>
+
+          {/* Search */}
+          <div className="p-4 border-b border-[#2A2D31]/60 bg-[#1A1D21]/50">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search projects..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-[#0F1114]/80 border-[#2A2D31]/60 focus:bg-[#0F1114] focus:border-blue-400/50 pl-9 text-gray-100 placeholder-gray-400 transition-all duration-200"
+                aria-label="Search projects"
+              />
             </div>
           </div>
-          <nav className="p-2">
-            <Link href="/careers" className="block px-4 py-3 text-white/90 hover:bg-gray-800/60 rounded-md">Careers</Link>
-            <Link href="/enterprise" className="block px-4 py-3 text-white/90 hover:bg-gray-800/60 rounded-md">Enterprise</Link>
-            <Link href="/pricing" className="block px-4 py-3 text-white/90 hover:bg-gray-800/60 rounded-md">Pricing</Link>
-            <Link href="/credits" className="block px-4 py-3 text-white/90 hover:bg-gray-800/60 rounded-md">Free Credits</Link>
-          </nav>
-          <div className="mt-auto p-4 border-t border-gray-800">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="w-full justify-start gap-2 text-white hover:bg-gray-800/50 hover:text-white flex items-center py-3"
-            >
-              <span className="text-purple-400 mr-2">◆</span>
-              New project
-            </Button>
-            <div className="mt-2">
-              <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider" style={{ fontFamily: "'__flecha_df5a44', '__flecha_Fallback_df5a44'" }}>Recents</h3>
-              <p className="text-gray-400 text-sm py-2">No projects found</p>
-            </div>
+
+          {/* Projects List */}
+          <div className="flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="p-2">
+                {/* Projects would be loaded here */}
+                <div className="space-y-1">
+                  <div className="px-3 py-2 text-sm text-gray-400">
+                    No projects found
+                  </div>
+                </div>
+              </div>
+            </ScrollArea>
+          </div>
+
+          {/* Navigation Links */}
+          <div className="border-t border-[#2A2D31]/60 bg-[#1A1D21]/50">
+            <nav className="p-2">
+              <Link 
+                href="/careers" 
+                className="block px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800/60 rounded-md transition-colors"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Careers
+              </Link>
+              <Link 
+                href="/enterprise" 
+                className="block px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800/60 rounded-md transition-colors"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Enterprise
+              </Link>
+              <Link 
+                href="/pricing" 
+                className="block px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800/60 rounded-md transition-colors"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Pricing
+              </Link>
+              <Link 
+                href="/credits" 
+                className="block px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800/60 rounded-md transition-colors"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Free Credits
+              </Link>
+            </nav>
           </div>
         </div>
       </SheetContent>
