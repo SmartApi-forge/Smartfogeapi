@@ -276,7 +276,7 @@ function TreeItem({
   return (
     <div>
       <div
-        className={`flex items-center gap-2 px-2 py-1 text-sm cursor-pointer hover:bg-muted/50 transition-colors rounded-md ${
+        className={`flex items-center gap-2 px-2 py-2 sm:py-1 text-sm cursor-pointer hover:bg-muted/50 transition-colors rounded-md ${
           isSelected ? 'bg-primary/10 dark:bg-[#333433] text-primary dark:text-foreground' : 'text-foreground'
         }`}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
@@ -384,7 +384,8 @@ function CodeViewer({
 
   return (
     <div className="h-full flex flex-col">
-      <div className="h-10 border-b border-border dark:border-[#333433] px-3 flex items-center justify-between text-xs text-foreground bg-muted/30 dark:bg-[#1D1D1D] flex-shrink-0">
+      {/* Code viewer header - responsive */}
+      <div className="h-12 sm:h-10 border-b border-border dark:border-[#333433] px-2 sm:px-3 flex items-center justify-between text-xs text-foreground bg-muted/30 dark:bg-[#1D1D1D] flex-shrink-0">
         <div className="flex items-center min-w-0">
           <span className="mr-2 flex-shrink-0">{getFileIcon(selectedFile.name)}</span>
           <span className="font-medium truncate">{selectedFile.name}</span>
@@ -393,20 +394,21 @@ function CodeViewer({
           </span>
         </div>
         
+        {/* Action buttons - larger touch targets on mobile */}
         <div className="flex items-center gap-1 flex-shrink-0">
           <button
             onClick={handleCopyCode}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-muted transition-colors focus:outline-none focus:ring-1 focus:ring-primary"
+            className="flex items-center gap-1 px-2 sm:px-2 py-2 sm:py-1 rounded text-xs hover:bg-muted transition-colors focus:outline-none focus:ring-1 focus:ring-primary"
             title="Copy code to clipboard"
           >
             {copySuccess ? (
               <>
-                <Check className="size-3 text-emerald-500" />
+                <Check className="size-4 sm:size-3 text-emerald-500" />
                 <span className="text-emerald-500 hidden sm:inline">Copied!</span>
               </>
             ) : (
               <>
-                <Copy className="size-3" />
+                <Copy className="size-4 sm:size-3" />
                 <span className="hidden sm:inline">Copy</span>
               </>
             )}
@@ -414,22 +416,22 @@ function CodeViewer({
           
           <button
             onClick={handleDownload}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-muted transition-colors focus:outline-none focus:ring-1 focus:ring-primary"
+            className="flex items-center gap-1 px-2 sm:px-2 py-2 sm:py-1 rounded text-xs hover:bg-muted transition-colors focus:outline-none focus:ring-1 focus:ring-primary"
             title="Download file"
           >
-            <Download className="size-3" />
+            <Download className="size-4 sm:size-3" />
             <span className="hidden sm:inline">Download</span>
           </button>
         </div>
       </div>
 
+            {/* Code display container - responsive */}
             <div 
               className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-muted/30 dark:bg-[#1D1D1D]" 
               style={{ 
                 minHeight: 0,
                 scrollBehavior: 'smooth',
-                width: '100%',
-                minWidth: '600px'
+                width: '100%'
               }}
             >
         <div>
@@ -440,13 +442,13 @@ function CodeViewer({
           >
             {({ className, style, tokens, getLineProps, getTokenProps }) => (
               <pre 
-                className={`${className} text-sm leading-5 p-3`} 
+                className={`${className} text-sm leading-5 p-2 sm:p-3`} 
                 style={{
                   ...style,
                   margin: 0,
                   background: 'transparent',
                   fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-                  fontSize: 'clamp(11px, 1.5vw, 14px)',
+                  fontSize: 'clamp(12px, 2vw, 14px)',
                 }}
               >
                 {tokens.map((line, i) => (
@@ -457,8 +459,8 @@ function CodeViewer({
                     style={{ minHeight: '1.25rem' }}
                   >
                     <span 
-                      className="inline-block w-10 text-right mr-3 text-muted-foreground/50 select-none flex-shrink-0 text-xs leading-5"
-                      style={{ fontSize: 'clamp(10px, 1.2vw, 12px)' }}
+                      className="inline-block w-8 sm:w-10 text-right mr-2 sm:mr-3 text-muted-foreground/50 select-none flex-shrink-0 text-xs leading-5"
+                      style={{ fontSize: 'clamp(11px, 1.5vw, 12px)' }}
                     >
                       {i + 1}
                     </span>
@@ -493,6 +495,7 @@ export function ProjectPageClient({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isMobileExplorerOpen, setIsMobileExplorerOpen] = useState(false);
+  const [mobileView, setMobileView] = useState<'chat' | 'code'>('chat');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -754,12 +757,44 @@ export function ProjectPageClient({
     <div className="h-screen bg-background flex flex-col overflow-hidden">
       <SimpleHeader />
 
+      {/* Mobile view toggle buttons */}
+      <div className="sm:hidden flex border-b border-border dark:border-[#333433] bg-white dark:bg-[#0E100F]">
+        <button
+          onClick={() => setMobileView('chat')}
+          className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+            mobileView === 'chat'
+              ? 'text-foreground border-b-2 border-primary bg-muted/30'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <div className="flex items-center justify-center gap-2">
+            <MessageSquare className="size-4" />
+            <span>Chat</span>
+          </div>
+        </button>
+        <button
+          onClick={() => setMobileView('code')}
+          className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+            mobileView === 'code'
+              ? 'text-foreground border-b-2 border-primary bg-muted/30'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <div className="flex items-center justify-center gap-2">
+            <FileCode className="size-4" />
+            <span>Code</span>
+          </div>
+        </button>
+      </div>
+
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        <section className="w-full sm:w-80 md:w-96 lg:w-[28rem] xl:w-[32rem] flex flex-col h-full overflow-hidden bg-white dark:bg-[#0E100F]" 
-                 style={{ minWidth: '320px', maxWidth: '512px', width: '400px' }}>
+        {/* Messages section - conditionally shown on mobile based on mobileView */}
+        <section className={`w-full sm:w-80 md:w-96 lg:w-[28rem] xl:w-[32rem] flex flex-col h-full overflow-hidden bg-white dark:bg-[#0E100F] sm:min-w-[320px] sm:max-w-[512px] ${
+          mobileView === 'chat' ? 'flex' : 'hidden sm:flex'
+        }`}>
           
           {/* Messages Area - No top header, seamless */}
-          <div className="flex-1 overflow-y-auto px-4 pt-6 pb-3 space-y-3 min-h-0 scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-white dark:bg-[#0E100F] relative scroll-fade">
+          <div className="flex-1 overflow-y-auto px-3 sm:px-4 pt-4 sm:pt-6 pb-3 space-y-3 min-h-0 scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-white dark:bg-[#0E100F] relative scroll-fade">
             <AnimatePresence>
               {allMessages.map((message, index) => {
                 const isStreamingMsg = 'isStreaming' in message && message.isStreaming;
@@ -821,7 +856,7 @@ export function ProjectPageClient({
           </div>
 
           {/* Input Box - Styled like /ask page but compact - grows upward */}
-          <div className="px-4 pb-4 bg-white dark:bg-[#0E100F] flex flex-col justify-end">
+          <div className="px-3 sm:px-4 pb-3 sm:pb-4 bg-white dark:bg-[#0E100F] flex flex-col justify-end">
             <div className="rounded-xl border border-border/50 dark:border-[#444444] bg-background/50 dark:bg-[#1F2023] p-3 shadow-lg flex flex-col">
               <textarea
                 value={input}
@@ -846,36 +881,37 @@ export function ProjectPageClient({
                 rows={1}
                 ref={textareaRef}
               />
+              {/* Input actions - responsive button sizes */}
               <div className="flex items-center justify-between pt-2.5">
                 <div className="flex items-center gap-2">
                   <button
-                    className="h-7 px-3 py-1 rounded-full text-xs text-foreground dark:text-gray-200 border border-border/50 dark:border-[#444444] bg-transparent hover:bg-muted/50 dark:hover:bg-gray-700/40 transition-colors flex items-center gap-1.5"
+                    className="h-8 sm:h-7 px-3 py-1 rounded-full text-xs text-foreground dark:text-gray-200 border border-border/50 dark:border-[#444444] bg-transparent hover:bg-muted/50 dark:hover:bg-gray-700/40 transition-colors flex items-center gap-1.5"
                   >
-                    <SlidersHorizontal className="h-3 w-3" />
-                    <span>Tools</span>
+                    <SlidersHorizontal className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
+                    <span className="hidden xs:inline">Tools</span>
                   </button>
                 </div>
                 
                 <div className="flex items-center gap-2">
                   <button
-                    className="h-8 w-8 rounded-full text-foreground dark:text-gray-300 hover:bg-muted/50 dark:hover:bg-gray-600/30 transition-colors flex items-center justify-center"
+                    className="h-9 w-9 sm:h-8 sm:w-8 rounded-full text-foreground dark:text-gray-300 hover:bg-muted/50 dark:hover:bg-gray-600/30 transition-colors flex items-center justify-center"
                     disabled={isLoading}
                   >
-                    <Paperclip className="h-4 w-4" />
+                    <Paperclip className="h-4.5 w-4.5 sm:h-4 sm:w-4" />
                   </button>
                   <button 
                     onClick={send} 
                     disabled={!input.trim() || isLoading}
-                    className={`h-8 w-8 rounded-full transition-all duration-200 flex items-center justify-center ${
+                    className={`h-9 w-9 sm:h-8 sm:w-8 rounded-full transition-all duration-200 flex items-center justify-center ${
                       input.trim() 
                         ? 'bg-white hover:bg-white/90 text-[#1F2023]' 
                         : 'bg-transparent hover:bg-gray-600/30 text-gray-400'
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     {isLoading ? (
-                      <Loader2 className="size-4 animate-spin" />
+                      <Loader2 className="size-4.5 sm:size-4 animate-spin" />
                     ) : (
-                      <ArrowUp className="size-4" />
+                      <ArrowUp className="size-4.5 sm:size-4" />
                     )}
                   </button>
                 </div>
@@ -884,10 +920,10 @@ export function ProjectPageClient({
           </div>
         </section>
 
-        <section className="hidden sm:flex flex-1 p-3 min-h-0 relative bg-white dark:bg-[#0E100F]" style={{
-          minWidth: '800px',
-          width: '100%'
-        }}>
+        {/* Code viewer section - conditionally shown on mobile based on mobileView */}
+        <section className={`flex-1 p-2 sm:p-3 min-h-0 relative bg-white dark:bg-[#0E100F] sm:min-w-0 ${
+          mobileView === 'code' ? 'flex' : 'hidden sm:flex'
+        }`}>
           <button
             onClick={() => setIsMobileExplorerOpen(!isMobileExplorerOpen)}
             className="sm:hidden absolute top-4 left-4 z-50 p-2 rounded-md bg-card border border-border text-foreground hover:bg-muted transition-colors shadow-lg"
@@ -895,29 +931,27 @@ export function ProjectPageClient({
             <Folder className="size-4" />
           </button>
 
-          <div className="h-full w-full rounded-lg border border-border bg-muted/30 dark:bg-[#1D1D1D] dark:border-[#1D1D1D] shadow-xl overflow-hidden flex backdrop-blur-sm" style={{
-            minWidth: '750px',
-            width: '100%'
-          }}>
+          <div className="h-full w-full rounded-lg border border-border bg-muted/30 dark:bg-[#1D1D1D] dark:border-[#1D1D1D] shadow-xl overflow-hidden flex backdrop-blur-sm">
+            {/* File explorer sidebar - responsive width */}
             <aside className={`
-              w-48 lg:w-52 xl:w-56 border-r border-border dark:border-[#333433] flex-shrink-0 transition-all duration-300
+              w-64 sm:w-48 lg:w-52 xl:w-56 border-r border-border dark:border-[#333433] flex-shrink-0 transition-all duration-300
               ${isMobileExplorerOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}
               sm:relative absolute sm:z-auto z-40 h-full bg-muted/30 dark:bg-[#1D1D1D]
             `}>
-              <div className="h-10 border-b border-border dark:border-[#333433] px-3 flex items-center justify-between text-xs uppercase tracking-wide text-muted-foreground font-medium backdrop-blur-sm bg-muted/30 dark:bg-[#1D1D1D]">
+              {/* Explorer header - responsive */}
+              <div className="h-12 sm:h-10 border-b border-border dark:border-[#333433] px-3 flex items-center justify-between text-xs uppercase tracking-wide text-muted-foreground font-medium backdrop-blur-sm bg-muted/30 dark:bg-[#1D1D1D]">
                 <span>Explorer</span>
                 <button
                   onClick={() => setIsMobileExplorerOpen(false)}
-                  className="sm:hidden p-1 hover:bg-muted rounded text-foreground"
+                  className="sm:hidden p-2 hover:bg-muted rounded text-foreground text-xl leading-none"
                 >
                   ×
                 </button>
               </div>
-              <div className="p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent bg-muted/30 dark:bg-[#1D1D1D]" 
-                   style={{ 
-                     height: 'calc(100% - 2.5rem)',
-                     maxHeight: 'calc(100vh - 8rem)'
-                   }}>
+              {/* File tree container - responsive height */}
+              <div 
+                className="p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent bg-muted/30 dark:bg-[#1D1D1D] h-[calc(100%-3rem)] sm:h-[calc(100%-2.5rem)] max-h-[calc(100vh-8rem)]"
+              >
                 {fileTree.map((node) => (
                   <TreeItem
                     key={node.id}
@@ -938,10 +972,8 @@ export function ProjectPageClient({
               />
             )}
 
-            <div className="flex-1 min-w-0 flex flex-col relative bg-muted/30" style={{ 
-              minWidth: '600px',
-              width: '100%'
-            }}>
+            {/* Code content area - responsive width */}
+            <div className="flex-1 min-w-0 flex flex-col relative bg-muted/30 w-full">
               <div className="h-full w-full overflow-hidden">
                 {(streamState.isStreaming || streamState.events.length > 0) && streamState.generatedFiles.length > 0 ? (
                   <StreamingCodeViewer
@@ -954,24 +986,6 @@ export function ProjectPageClient({
                   <CodeViewer filename={selected} fileTree={fileTree} codeTheme={codeTheme} />
                 )}
               </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="sm:hidden flex-1 p-2 min-h-0 bg-white dark:bg-[#0E100F]">
-          <div className="h-full w-full rounded-lg border border-border bg-muted/30 dark:bg-[#1D1D1D] dark:border-[#1D1D1D] shadow-xl overflow-hidden">
-            <div className="h-10 border-b border-border dark:border-[#333433] px-3 flex items-center justify-between text-xs uppercase tracking-wide text-muted-foreground font-medium bg-muted/30 dark:bg-[#1D1D1D]">
-              <span>Code</span>
-              <button
-                onClick={() => setIsMobileExplorerOpen(true)}
-                className="p-1 hover:bg-muted rounded flex items-center gap-1 text-foreground"
-              >
-                <Folder className="size-3" />
-                Files
-              </button>
-            </div>
-            <div className="h-full overflow-hidden" style={{ height: 'calc(100% - 2.5rem)' }}>
-              <CodeViewer filename={selected} fileTree={fileTree} codeTheme={codeTheme} />
             </div>
           </div>
         </section>
@@ -996,10 +1010,21 @@ export function ProjectPageClient({
           height: 6px;
         }
         
+        /* Mobile-specific styles */
         @media (max-width: 640px) {
           .h-screen {
             height: 100vh;
             height: 100dvh;
+          }
+          
+          /* Better scrolling on mobile */
+          * {
+            -webkit-overflow-scrolling: touch;
+          }
+          
+          /* Prevent zoom on input focus */
+          input, textarea, select {
+            font-size: 16px !important;
           }
         }
         
