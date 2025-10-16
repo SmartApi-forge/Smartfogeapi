@@ -1,4 +1,5 @@
 import { StreamEvent, StreamEventWithTimestamp } from '../types/streaming';
+import { supabaseServer } from '../../lib/supabase-server';
 
 type ConnectionCallback = (data: string) => void;
 
@@ -94,6 +95,73 @@ class StreamingService {
         console.error(`[StreamingService] Error sending to connection:`, error);
       }
     });
+
+    // Save relevant events to database for persistence
+    await this.saveEventToDatabase(projectId, eventWithTimestamp);
+  }
+
+  /**
+   * Save generation event to database for persistence across reloads
+   */
+  private async saveEventToDatabase(projectId: string, event: StreamEventWithTimestamp): Promise<void> {
+    try {
+      // Only save completed events (not the "generating..." states) for cleaner reload experience
+      const relevantEvents: Record<string, { icon: string; messageFormatter: (event: any) => string }> = {
+        'file:complete': { 
+          icon: 'complete', 
+          messageFormatter: (e) => `✓ Created ${e.filename}` 
+        },
+        'validation:complete': { 
+          icon: 'complete', 
+          messageFormatter: (e) => `✓ ${e.summary || 'Code validated successfully'}` 
+        },
+        'complete': { 
+          icon: 'complete', 
+          messageFormatter: (e) => `✓ ${e.summary}` 
+        },
+      };
+
+      const eventConfig = relevantEvents[event.type];
+      if (!eventConfig) {
+        return; // Skip events that shouldn't be persisted
+      }
+
+      const message = eventConfig.messageFormatter(event);
+      
+      // Check if this event already exists to avoid duplicates
+      const { data: existing } = await supabaseServer
+        .from('generation_events')
+        .select('id')
+        .eq('project_id', projectId)
+        .eq('event_type', event.type)
+        .eq('message', message)
+        .maybeSingle();
+
+      if (existing) {
+        console.log(`[StreamingService] Event already exists, skipping: ${event.type} for project ${projectId}`);
+        return;
+      }
+      
+      const { error } = await supabaseServer
+        .from('generation_events')
+        .insert({
+          project_id: projectId,
+          event_type: event.type,
+          filename: 'filename' in event ? event.filename : null,
+          message,
+          icon: eventConfig.icon,
+          timestamp: new Date(event.timestamp).toISOString(),
+          metadata: event,
+        });
+
+      if (error) {
+        console.error('[StreamingService] Error saving event to database:', error);
+      } else {
+        console.log(`[StreamingService] Saved ${event.type} event to database for project ${projectId}`);
+      }
+    } catch (error) {
+      console.error('[StreamingService] Error in saveEventToDatabase:', error);
+    }
   }
 
   /**

@@ -543,6 +543,18 @@ export function ProjectPageClient({
     }
   );
 
+  // Fetch persisted generation events from database
+  const { data: generationEvents = [] } = api.generationEvents.getMany.useQuery(
+    {
+      projectId,
+      limit: 100,
+    },
+    {
+      refetchOnWindowFocus: true,
+      refetchInterval: 10000,
+    }
+  );
+
   const sortedMessages = useMemo(() => {
     return [...messages].sort((a, b) => 
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
@@ -681,29 +693,63 @@ export function ProjectPageClient({
     return msgs;
   }, [streamState.events, streamState.isStreaming, streamState.status]); // Added dependencies for instant updates
 
+  // Convert persisted generation events from database into message format
+  const persistedEventMessages = useMemo(() => {
+    const eventMsgs: any[] = [];
+    
+    // Only show persisted events if NOT currently streaming
+    if (!streamState.isStreaming && streamState.events.length === 0 && generationEvents.length > 0) {
+      // Convert each generation event into a message format
+      generationEvents.forEach((event: any) => {
+        eventMsgs.push({
+          id: `persisted-event-${event.id}`,
+          content: event.message,
+          role: 'assistant' as const,
+          type: 'text' as const,
+          created_at: event.timestamp || event.created_at,
+          updated_at: event.updated_at,
+          isPersistent: true,
+          icon: event.icon,
+        });
+      });
+    }
+    
+    return eventMsgs;
+  }, [generationEvents, streamState.isStreaming, streamState.events.length]);
+
   // Merge and sort all messages, avoiding duplicates
   const allMessages = useMemo(() => {
-    // If we have streaming events, filter out database messages that might be duplicates
-    const filteredDbMessages = streamState.isStreaming || streamState.events.length > 0 
+    // If we have streaming events OR persisted events, filter out database messages
+    const hasGenerationEvents = streamState.isStreaming || streamState.events.length > 0 || persistedEventMessages.length > 0;
+    
+    const filteredDbMessages = hasGenerationEvents
       ? sortedMessages.filter((dbMsg) => {
-          // Filter out database messages that are likely duplicates of streaming events
-          // Keep user messages and error messages, but filter out AI result messages
+          // Always keep user messages and errors
           if (dbMsg.role === 'user') return true;
           if (dbMsg.type === 'error') return true;
           
-          // Filter out AI messages that look like completion summaries
-          if (dbMsg.role === 'assistant' && dbMsg.content.includes('API Generation Complete')) {
-            return false; // Skip this, we'll show the streaming completion instead
+          // Filter out assistant messages that duplicate generation events
+          if (dbMsg.role === 'assistant') {
+            // Filter out messages that look like completion summaries
+            if (dbMsg.content.includes('API Generation Complete') ||
+                dbMsg.content.includes('Generated Files:') ||
+                dbMsg.content.includes('Validation:') ||
+                dbMsg.content.toLowerCase().includes('this api allows')) {
+              return false; // Skip these, we show them via generation events
+            }
           }
           
           return true;
         })
       : sortedMessages;
 
-    return [...filteredDbMessages, ...streamingMessages].sort((a, b) => 
+    // Combine database messages, streaming messages, and persisted generation events
+    const combined = [...filteredDbMessages, ...streamingMessages, ...persistedEventMessages];
+    
+    return combined.sort((a, b) => 
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
-  }, [sortedMessages, streamingMessages, streamState.isStreaming, streamState.events.length]);
+  }, [sortedMessages, streamingMessages, persistedEventMessages, streamState.isStreaming, streamState.events.length]);
 
   // Build file tree from streaming files when active, otherwise use database messages
   const fileTree = useMemo(() => {
@@ -829,6 +875,7 @@ export function ProjectPageClient({
             <AnimatePresence>
               {allMessages.map((message, index) => {
                 const isStreamingMsg = 'isStreaming' in message && message.isStreaming;
+                const isPersistentMsg = 'isPersistent' in message && message.isPersistent;
                 const streamIcon = 'icon' in message ? message.icon : null;
                 
                 return (
@@ -853,13 +900,14 @@ export function ProjectPageClient({
                       // AI message - no card, compact spacing
                       <div className="flex gap-1.5 sm:gap-2 items-start mb-2 sm:mb-3 pr-2 sm:pr-4">
                         <div className="flex items-start gap-2 flex-1">
-                          {isStreamingMsg && streamIcon === 'generating' && (
+                          {/* Show icons for streaming and persistent messages */}
+                          {(isStreamingMsg || isPersistentMsg) && streamIcon === 'generating' && (
                             <Loader2 className="size-3.5 animate-spin text-primary mt-0.5 flex-shrink-0" />
                           )}
-                          {isStreamingMsg && streamIcon === 'complete' && (
+                          {(isStreamingMsg || isPersistentMsg) && streamIcon === 'complete' && (
                             <CheckCircle className="size-3.5 text-emerald-500 mt-0.5 flex-shrink-0" />
                           )}
-                          {isStreamingMsg && streamIcon === 'processing' && (
+                          {(isStreamingMsg || isPersistentMsg) && streamIcon === 'processing' && (
                             <Loader2 className="size-3.5 animate-spin text-amber-500 mt-0.5 flex-shrink-0" />
                           )}
                           <div className="whitespace-pre-wrap break-words leading-relaxed text-[13px] flex-1">

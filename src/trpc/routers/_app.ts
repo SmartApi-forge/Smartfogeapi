@@ -6,6 +6,7 @@ import { fragmentsRouter } from '../../modules/fragments/router';
 import { authRouter } from '../../modules/auth/router';
 import { apiGenerationRouter } from '../../modules/api-generation/router';
 import { projectsRouter } from '../../modules/projects/router';
+import { generationEventsRouter } from '../../modules/generation-events/router';
 
 export const appRouter = createTRPCRouter({
   // Modular routers - each module controls its own procedures
@@ -14,6 +15,7 @@ export const appRouter = createTRPCRouter({
   auth: authRouter,
   apiGeneration: apiGenerationRouter,
   projects: projectsRouter,
+  generationEvents: generationEventsRouter,
 });
 
 // export type definition of API
