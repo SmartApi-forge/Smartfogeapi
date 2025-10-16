@@ -30,6 +30,7 @@ import { api } from "@/lib/trpc-client";
 import { useGenerationStream } from "../../../hooks/use-generation-stream";
 import { StreamingCodeViewer } from "../../../components/streaming-code-viewer";
 import { GenerationProgressTracker } from "../../../components/generation-progress-tracker";
+import { TextShimmer } from "@/components/ui/text-shimmer";
 
 interface Message {
   id: string;
@@ -250,9 +251,9 @@ function getLanguageFromFilename(filename: string): string {
 
 function getFileIcon(name: string) {
   if (name.includes('.')) {
-    return <FileCode className="size-4 text-blue-500 dark:text-blue-400" />;
+    return <FileCode className="size-3.5 sm:size-4 text-blue-500 dark:text-blue-400" />;
   }
-  return <Folder className="size-4 text-yellow-500 dark:text-yellow-400" />;
+  return <Folder className="size-3.5 sm:size-4 text-yellow-500 dark:text-yellow-400" />;
 }
 
 function TreeItem({ 
@@ -276,10 +277,10 @@ function TreeItem({
   return (
     <div>
       <div
-        className={`flex items-center gap-2 px-2 py-2 sm:py-1 text-sm cursor-pointer hover:bg-muted/50 transition-colors rounded-md ${
+        className={`flex items-center gap-1.5 sm:gap-2 px-1.5 sm:px-2 py-2 sm:py-1 text-xs sm:text-sm cursor-pointer hover:bg-muted/50 transition-colors rounded-md ${
           isSelected ? 'bg-primary/10 dark:bg-[#333433] text-primary dark:text-foreground' : 'text-foreground'
         }`}
-        style={{ paddingLeft: `${depth * 12 + 8}px` }}
+        style={{ paddingLeft: `${depth * 8 + 6}px` }}
         onClick={() => {
           if (node.type === "folder") {
             toggle(node.id);
@@ -290,15 +291,15 @@ function TreeItem({
       >
         {node.type === "folder" && (
           <ChevronRight 
-            className={`size-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`} 
+            className={`size-3 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} 
           />
         )}
         {node.type === "folder" ? (
-          isExpanded ? <FolderOpen className="size-4 text-yellow-500 dark:text-yellow-400" /> : <Folder className="size-4 text-yellow-500 dark:text-yellow-400" />
+          isExpanded ? <FolderOpen className="size-3.5 sm:size-4 flex-shrink-0 text-yellow-500 dark:text-yellow-400" /> : <Folder className="size-3.5 sm:size-4 flex-shrink-0 text-yellow-500 dark:text-yellow-400" />
         ) : (
-          getFileIcon(node.name)
+          <span className="flex-shrink-0">{getFileIcon(node.name)}</span>
         )}
-        <span className="truncate">{node.name}</span>
+        <span className="truncate min-w-0">{node.name}</span>
       </div>
       
       {node.type === "folder" && isExpanded && node.children && (
@@ -373,65 +374,73 @@ function CodeViewer({
 
   if (!selectedFile || selectedFile.type === 'folder') {
     return (
-        <div className="h-full flex items-center justify-center text-muted-foreground bg-muted/30 dark:bg-[#1D1D1D]">
+        <div className="h-full flex items-center justify-center text-muted-foreground bg-muted/30 dark:bg-[#1D1D1D] p-4">
         <div className="text-center">
-          <FileCode className="size-12 mx-auto mb-4 opacity-50" />
-          <p>Select a file to view its contents</p>
+          <FileCode className="size-10 sm:size-12 mx-auto mb-3 sm:mb-4 opacity-50" />
+          <p className="text-sm sm:text-base">Select a file to view its contents</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Code viewer header - responsive */}
-      <div className="h-12 sm:h-10 border-b border-border dark:border-[#333433] px-2 sm:px-3 flex items-center justify-between text-xs text-foreground bg-muted/30 dark:bg-[#1D1D1D] flex-shrink-0">
-        <div className="flex items-center min-w-0">
-          <span className="mr-2 flex-shrink-0">{getFileIcon(selectedFile.name)}</span>
-          <span className="font-medium truncate">{selectedFile.name}</span>
-          <span className="ml-2 text-muted-foreground flex-shrink-0">
-            ({selectedFile.language || 'text'})
-          </span>
+    <div className="h-full flex flex-col overflow-hidden">
+      {/* Code viewer header - sticky and always visible with clear filename */}
+      <div className="sticky top-0 z-10 h-12 sm:h-10 border-b border-border dark:border-[#333433] px-2 sm:px-3 flex items-center justify-between gap-3 text-xs text-foreground bg-white/50 dark:bg-[#1D1D1D] backdrop-blur-sm flex-shrink-0 shadow-sm">
+        {/* Filename section - responsive spacing: large on mobile/tablet, compact on desktop */}
+        <div className="flex items-center gap-4 sm:gap-5 lg:gap-2.5 min-w-0 flex-1 overflow-hidden">
+          <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6">
+            {getFileIcon(selectedFile.name)}
+          </div>
+          <div className="flex items-center gap-2 min-w-0 flex-1 py-1">
+            <span className="font-semibold truncate text-[12px] sm:text-[13px] text-foreground">{selectedFile.name}</span>
+            <span className="text-muted-foreground flex-shrink-0 hidden md:inline text-[10px] sm:text-[11px] whitespace-nowrap opacity-70">
+              • {selectedFile.language || 'text'}
+            </span>
+          </div>
         </div>
         
-        {/* Action buttons - larger touch targets on mobile */}
-        <div className="flex items-center gap-1 flex-shrink-0">
+        {/* Action buttons - ALWAYS visible on ALL screen sizes */}
+        <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
           <button
             onClick={handleCopyCode}
-            className="flex items-center gap-1 px-2 sm:px-2 py-2 sm:py-1 rounded text-xs hover:bg-muted transition-colors focus:outline-none focus:ring-1 focus:ring-primary"
+            className="flex items-center justify-center gap-1 px-2 py-2 sm:py-1.5 rounded text-xs hover:bg-muted dark:hover:bg-[#262726] active:bg-muted/70 dark:active:bg-[#262726]/70 transition-colors focus:outline-none focus:ring-1 focus:ring-primary w-8 h-8 sm:w-auto sm:h-auto"
             title="Copy code to clipboard"
+            aria-label="Copy code"
           >
             {copySuccess ? (
               <>
-                <Check className="size-4 sm:size-3 text-emerald-500" />
-                <span className="text-emerald-500 hidden sm:inline">Copied!</span>
+                <Check className="size-4 sm:size-3.5 text-emerald-500 flex-shrink-0" />
+                <span className="text-emerald-500 hidden lg:inline text-[11px] whitespace-nowrap">Copied!</span>
               </>
             ) : (
               <>
-                <Copy className="size-4 sm:size-3" />
-                <span className="hidden sm:inline">Copy</span>
+                <Copy className="size-4 sm:size-3.5 flex-shrink-0" />
+                <span className="hidden lg:inline text-[11px] whitespace-nowrap">Copy</span>
               </>
             )}
           </button>
           
           <button
             onClick={handleDownload}
-            className="flex items-center gap-1 px-2 sm:px-2 py-2 sm:py-1 rounded text-xs hover:bg-muted transition-colors focus:outline-none focus:ring-1 focus:ring-primary"
+            className="flex items-center justify-center gap-1 px-2 py-2 sm:py-1.5 rounded text-xs hover:bg-muted dark:hover:bg-[#262726] active:bg-muted/70 dark:active:bg-[#262726]/70 transition-colors focus:outline-none focus:ring-1 focus:ring-primary w-8 h-8 sm:w-auto sm:h-auto"
             title="Download file"
+            aria-label="Download file"
           >
-            <Download className="size-4 sm:size-3" />
-            <span className="hidden sm:inline">Download</span>
+            <Download className="size-4 sm:size-3.5 flex-shrink-0" />
+            <span className="hidden lg:inline text-[11px] whitespace-nowrap">Download</span>
           </button>
         </div>
       </div>
 
-            {/* Code display container - responsive */}
+            {/* Code display container - proper overflow handling for mobile/tablet */}
             <div 
-              className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-muted/30 dark:bg-[#1D1D1D]" 
+              className="flex-1 overflow-y-auto overflow-x-auto md:overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-muted/30 dark:bg-[#1D1D1D] overscroll-contain" 
               style={{ 
                 minHeight: 0,
                 scrollBehavior: 'smooth',
-                width: '100%'
+                width: '100%',
+                WebkitOverflowScrolling: 'touch'
               }}
             >
         <div>
@@ -442,13 +451,15 @@ function CodeViewer({
           >
             {({ className, style, tokens, getLineProps, getTokenProps }) => (
               <pre 
-                className={`${className} text-sm leading-5 p-2 sm:p-3`} 
+                className={`${className} text-sm leading-5 p-2 sm:p-3 overflow-x-visible md:overflow-x-auto`} 
                 style={{
                   ...style,
                   margin: 0,
                   background: 'transparent',
-                  fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-                  fontSize: 'clamp(12px, 2vw, 14px)',
+                  fontFamily: 'Monaco, Menlo, "Ubuntu Mono", "Courier New", monospace',
+                  fontSize: 'clamp(11px, 2.5vw, 14px)',
+                  lineHeight: 'clamp(1.4, 1.6, 1.6)',
+                  maxWidth: '100%',
                 }}
               >
                 {tokens.map((line, i) => (
@@ -459,16 +470,20 @@ function CodeViewer({
                     style={{ minHeight: '1.25rem' }}
                   >
                     <span 
-                      className="inline-block w-8 sm:w-10 text-right mr-2 sm:mr-3 text-muted-foreground/50 select-none flex-shrink-0 text-xs leading-5"
-                      style={{ fontSize: 'clamp(11px, 1.5vw, 12px)' }}
+                      className="inline-block w-7 sm:w-10 text-right mr-1.5 sm:mr-3 text-muted-foreground/50 select-none flex-shrink-0 text-xs leading-5"
+                      style={{ fontSize: 'clamp(10px, 2vw, 12px)' }}
                     >
                       {i + 1}
                     </span>
-                    <span className="flex-1 min-w-0 whitespace-pre-wrap break-words" style={{
-                      wordBreak: 'break-word',
-                      overflowWrap: 'break-word',
-                      maxWidth: '100%'
-                    }}>
+                    <span 
+                      className="flex-1 min-w-0 md:whitespace-pre md:break-normal" 
+                      style={{
+                        wordBreak: 'break-word',
+                        overflowWrap: 'break-word',
+                        whiteSpace: 'pre-wrap',
+                        maxWidth: '100%',
+                      }}
+                    >
                       {line.map((token, key) => (
                         <span key={key} {...getTokenProps({ token })} />
                       ))}
@@ -523,8 +538,8 @@ export function ProjectPageClient({
     {
       initialData: initialMessages as any,
       refetchOnWindowFocus: true,
-      // Reduce polling frequency when streaming is active
-      refetchInterval: streamState.isStreaming ? 10000 : 5000,
+      // Reduce polling frequency when streaming is active - increase poll rate for faster updates
+      refetchInterval: streamState.isStreaming ? 15000 : 5000,
     }
   );
 
@@ -536,10 +551,26 @@ export function ProjectPageClient({
 
   // Combine streaming events with regular messages for display
   // Memoize with explicit dependencies to prevent unnecessary recalculations
+  // Optimized for instant display - no debouncing
   const streamingMessages = useMemo(() => {
     const msgs: any[] = [];
     const fileStatusMap = new Map<string, { generating: any; complete: any }>();
     let validationStatus: { start: any; complete: any } = { start: null, complete: null };
+    
+    // Show immediate feedback even with no events yet
+    if (streamState.isStreaming && streamState.events.length === 0 && streamState.status === 'generating') {
+      msgs.push({
+        id: 'stream-initializing',
+        content: 'Starting generation...',
+        role: 'assistant' as const,
+        type: 'text' as const,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        isStreaming: true,
+        icon: 'generating',
+      });
+      return msgs;
+    }
     
     // Early return if no events
     if (streamState.events.length === 0) {
@@ -648,7 +679,7 @@ export function ProjectPageClient({
     });
     
     return msgs;
-  }, [streamState.events]);
+  }, [streamState.events, streamState.isStreaming, streamState.status]); // Added dependencies for instant updates
 
   // Merge and sort all messages, avoiding duplicates
   const allMessages = useMemo(() => {
@@ -788,13 +819,13 @@ export function ProjectPageClient({
       </div>
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Messages section - conditionally shown on mobile based on mobileView */}
-        <section className={`w-full sm:w-80 md:w-96 lg:w-[28rem] xl:w-[32rem] flex flex-col h-full overflow-hidden bg-white dark:bg-[#0E100F] sm:min-w-[320px] sm:max-w-[512px] ${
+        {/* Messages section - narrower to give more space to code viewer */}
+        <section className={`w-full sm:w-64 md:w-72 lg:w-80 xl:w-96 flex flex-col h-full overflow-hidden bg-white dark:bg-[#0E100F] sm:min-w-[256px] sm:max-w-[400px] ${
           mobileView === 'chat' ? 'flex' : 'hidden sm:flex'
         }`}>
           
-          {/* Messages Area - No top header, seamless */}
-          <div className="flex-1 overflow-y-auto px-3 sm:px-4 pt-4 sm:pt-6 pb-3 space-y-3 min-h-0 scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-white dark:bg-[#0E100F] relative scroll-fade">
+          {/* Messages Area - compact for more code space */}
+          <div className="flex-1 overflow-y-auto px-2 sm:px-3 pt-3 sm:pt-4 pb-2 sm:pb-3 space-y-2 sm:space-y-3 min-h-0 scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-white dark:bg-[#0E100F] relative scroll-fade">
             <AnimatePresence>
               {allMessages.map((message, index) => {
                 const isStreamingMsg = 'isStreaming' in message && message.isStreaming;
@@ -810,17 +841,17 @@ export function ProjectPageClient({
                     className="text-sm"
                   >
                     {message.role === "user" ? (
-                      // User message - with card background
+                      // User message - compact design
                       <div className="flex justify-end mb-1">
-                        <div className="rounded-xl px-4 py-2.5 bg-muted/40 dark:bg-[#262626] border border-border/30 dark:border-[#262626] max-w-[85%]">
-                          <div className="whitespace-pre-wrap break-words leading-relaxed text-[13px] text-foreground font-medium">
+                        <div className="rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 bg-muted/40 dark:bg-[#262626] border border-border/30 dark:border-[#262626] max-w-[90%]">
+                          <div className="whitespace-pre-wrap break-words leading-relaxed text-[12px] sm:text-[13px] text-foreground font-medium">
                             {message.content}
                           </div>
                         </div>
                       </div>
                     ) : (
-                      // AI message - no card, just text with icons
-                      <div className="flex gap-2 items-start mb-3 pr-4">
+                      // AI message - no card, compact spacing
+                      <div className="flex gap-1.5 sm:gap-2 items-start mb-2 sm:mb-3 pr-2 sm:pr-4">
                         <div className="flex items-start gap-2 flex-1">
                           {isStreamingMsg && streamIcon === 'generating' && (
                             <Loader2 className="size-3.5 animate-spin text-primary mt-0.5 flex-shrink-0" />
@@ -831,8 +862,19 @@ export function ProjectPageClient({
                           {isStreamingMsg && streamIcon === 'processing' && (
                             <Loader2 className="size-3.5 animate-spin text-amber-500 mt-0.5 flex-shrink-0" />
                           )}
-                          <div className="whitespace-pre-wrap break-words leading-relaxed text-[13px] text-muted-foreground dark:text-gray-400 flex-1">
-                            {message.content}
+                          <div className="whitespace-pre-wrap break-words leading-relaxed text-[13px] flex-1">
+                            {isStreamingMsg && (streamIcon === 'generating' || streamIcon === 'processing') ? (
+                              <TextShimmer 
+                                duration={1.5} 
+                                className="text-[13px] font-normal"
+                              >
+                                {message.content}
+                              </TextShimmer>
+                            ) : (
+                              <span className="text-muted-foreground dark:text-gray-400">
+                                {message.content}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -855,9 +897,9 @@ export function ProjectPageClient({
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input Box - Styled like /ask page but compact - grows upward */}
-          <div className="px-3 sm:px-4 pb-3 sm:pb-4 bg-white dark:bg-[#0E100F] flex flex-col justify-end">
-            <div className="rounded-xl border border-border/50 dark:border-[#444444] bg-background/50 dark:bg-[#1F2023] p-3 shadow-lg flex flex-col">
+          {/* Input Box - Compact design for more code space */}
+          <div className="px-2 sm:px-3 pb-2 sm:pb-3 bg-white dark:bg-[#0E100F] flex flex-col justify-end">
+            <div className="rounded-xl border border-border/50 dark:border-[#444444] bg-background/50 dark:bg-[#1F2023] p-2 sm:p-3 shadow-lg flex flex-col">
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -924,33 +966,38 @@ export function ProjectPageClient({
         <section className={`flex-1 p-2 sm:p-3 min-h-0 relative bg-white dark:bg-[#0E100F] sm:min-w-0 ${
           mobileView === 'code' ? 'flex' : 'hidden sm:flex'
         }`}>
-          <button
-            onClick={() => setIsMobileExplorerOpen(!isMobileExplorerOpen)}
-            className="sm:hidden absolute top-4 left-4 z-50 p-2 rounded-md bg-card border border-border text-foreground hover:bg-muted transition-colors shadow-lg"
-          >
-            <Folder className="size-4" />
-          </button>
+          {/* Folder toggle button - only show when explorer is closed */}
+          {!isMobileExplorerOpen && (
+            <button
+              onClick={() => setIsMobileExplorerOpen(true)}
+              className="sm:hidden absolute top-4 left-4 z-50 p-2 rounded-md bg-card border border-border text-foreground hover:bg-muted transition-colors shadow-lg"
+              aria-label="Open file explorer"
+            >
+              <Folder className="size-4" />
+            </button>
+          )}
 
           <div className="h-full w-full rounded-lg border border-border bg-muted/30 dark:bg-[#1D1D1D] dark:border-[#1D1D1D] shadow-xl overflow-hidden flex backdrop-blur-sm">
-            {/* File explorer sidebar - responsive width */}
+            {/* File explorer sidebar - responsive width - shrinks on smaller screens */}
             <aside className={`
-              w-64 sm:w-48 lg:w-52 xl:w-56 border-r border-border dark:border-[#333433] flex-shrink-0 transition-all duration-300
+              w-56 sm:w-36 md:w-40 lg:w-44 xl:w-48 2xl:w-52 border-r border-border dark:border-[#333433] flex-shrink-0 transition-all duration-300
               ${isMobileExplorerOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}
               sm:relative absolute sm:z-auto z-40 h-full bg-muted/30 dark:bg-[#1D1D1D]
             `}>
-              {/* Explorer header - responsive */}
-              <div className="h-12 sm:h-10 border-b border-border dark:border-[#333433] px-3 flex items-center justify-between text-xs uppercase tracking-wide text-muted-foreground font-medium backdrop-blur-sm bg-muted/30 dark:bg-[#1D1D1D]">
-                <span>Explorer</span>
+              {/* Explorer header - clear and unobstructed */}
+              <div className="h-12 sm:h-10 border-b border-border dark:border-[#333433] px-3 sm:px-3 flex items-center justify-between text-[11px] sm:text-xs uppercase tracking-wider text-muted-foreground font-semibold backdrop-blur-sm bg-muted/30 dark:bg-[#1D1D1D]">
+                <span className="truncate">Explorer</span>
                 <button
                   onClick={() => setIsMobileExplorerOpen(false)}
-                  className="sm:hidden p-2 hover:bg-muted rounded text-foreground text-xl leading-none"
+                  className="sm:hidden p-1.5 hover:bg-muted rounded text-foreground text-xl leading-none flex-shrink-0"
+                  aria-label="Close file explorer"
                 >
                   ×
                 </button>
               </div>
-              {/* File tree container - responsive height */}
+              {/* File tree container - responsive height and padding */}
               <div 
-                className="p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent bg-muted/30 dark:bg-[#1D1D1D] h-[calc(100%-3rem)] sm:h-[calc(100%-2.5rem)] max-h-[calc(100vh-8rem)]"
+                className="p-1.5 sm:p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent bg-muted/30 dark:bg-[#1D1D1D] h-[calc(100%-3rem)] sm:h-[calc(100%-2.5rem)] max-h-[calc(100vh-8rem)]"
               >
                 {fileTree.map((node) => (
                   <TreeItem
@@ -1025,6 +1072,15 @@ export function ProjectPageClient({
           /* Prevent zoom on input focus */
           input, textarea, select {
             font-size: 16px !important;
+          }
+        }
+        
+        /* Tablet and mobile code viewer improvements */
+        @media (max-width: 1023px) {
+          /* Ensure code wraps on mobile/tablet for better readability */
+          pre code {
+            white-space: pre-wrap !important;
+            word-break: break-word !important;
           }
         }
         

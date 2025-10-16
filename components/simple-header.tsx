@@ -15,13 +15,13 @@ export function SimpleHeader() {
           </Link>
         </div>
 
-        {/* Right side - Action buttons - Responsive */}
+        {/* Right side - Action buttons - Responsive with subtle hover */}
         <div className="flex items-center space-x-1 sm:space-x-2">
           {/* Share button - Icon only on mobile, text on larger screens */}
           <Button 
             variant="ghost" 
             size="sm" 
-            className="text-muted-foreground hover:text-foreground h-8 sm:h-9 px-2 sm:px-3"
+            className="text-muted-foreground hover:text-foreground hover:bg-muted/50 dark:hover:bg-[#262726] transition-colors h-8 sm:h-9 px-2 sm:px-3"
           >
             <GitBranch className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">Share</span>
@@ -31,7 +31,7 @@ export function SimpleHeader() {
           <Button 
             variant="ghost" 
             size="sm" 
-            className="hidden md:inline-flex text-muted-foreground hover:text-foreground h-8 sm:h-9 px-2 sm:px-3"
+            className="hidden md:inline-flex text-muted-foreground hover:text-foreground hover:bg-muted/50 dark:hover:bg-[#262726] transition-colors h-8 sm:h-9 px-2 sm:px-3"
           >
             <Share className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">Upgrade</span>
@@ -41,7 +41,7 @@ export function SimpleHeader() {
           <Button 
             variant="ghost" 
             size="sm" 
-            className="hidden sm:inline-flex text-muted-foreground hover:text-foreground h-8 sm:h-9 px-2 sm:px-3"
+            className="hidden sm:inline-flex text-muted-foreground hover:text-foreground hover:bg-muted/50 dark:hover:bg-[#262726] transition-colors h-8 sm:h-9 px-2 sm:px-3"
           >
             Publish
           </Button>
@@ -50,7 +50,7 @@ export function SimpleHeader() {
           <Button 
             variant="ghost" 
             size="icon" 
-            className="text-muted-foreground hover:text-foreground h-8 w-8 sm:h-9 sm:w-9"
+            className="text-muted-foreground hover:text-foreground hover:bg-muted/50 dark:hover:bg-[#262726] transition-colors h-8 w-8 sm:h-9 sm:w-9"
           >
             <Settings className="h-4 w-4" />
           </Button>
