@@ -238,7 +238,9 @@ function cacheClassification(prompt: string, classification: CommandClassificati
   if (classificationCache.size >= CACHE_MAX_SIZE) {
     // Remove oldest entry
     const firstKey = classificationCache.keys().next().value;
-    classificationCache.delete(firstKey);
+    if (firstKey !== undefined) {
+      classificationCache.delete(firstKey);
+    }
   }
   
   classificationCache.set(prompt, classification);

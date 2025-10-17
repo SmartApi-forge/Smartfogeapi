@@ -26,10 +26,7 @@ export function DashboardContent() {
 
     // Invoke Inngest function with the user's input
     invokeInngest.mutate({ 
-      text: message,
-      mode: githubRepo ? 'repo' : 'direct',
-      repoUrl: githubRepo?.repo_url,
-      githubRepoId: githubRepo?.id
+      text: message
     })
     console.log('Message:', message, 'GitHub Repo:', githubRepo)
   }

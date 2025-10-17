@@ -71,6 +71,7 @@ export type StreamEvent =
       summary: string;
       totalFiles: number;
       versionId?: string;
+      previewUrl?: string; // For GitHub integration preview
     }
   | {
       type: 'error';

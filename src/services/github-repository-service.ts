@@ -329,7 +329,7 @@ export class GitHubRepositoryService {
         console.log('✅ Preview server started successfully');
         
         // Get the E2B sandbox URL (not localhost!)
-        const sandboxUrl = `https://${sandbox.getHostname(port)}`;
+        const sandboxUrl = `https://${sandbox.getHost(port)}`;
         console.log(`📡 Preview URL: ${sandboxUrl}`);
         
         return {

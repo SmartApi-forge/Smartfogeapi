@@ -9,6 +9,7 @@ import { projectsRouter } from '../../modules/projects/router';
 import { generationEventsRouter } from '../../modules/generation-events/router';
 import { versionsRouter } from '../../modules/versions/router';
 import { githubRouter } from './github';
+import { codeModificationsRouter } from './code-modifications';
 
 export const appRouter = createTRPCRouter({
   // Modular routers - each module controls its own procedures
@@ -20,6 +21,7 @@ export const appRouter = createTRPCRouter({
   generationEvents: generationEventsRouter,
   versions: versionsRouter,
   github: githubRouter,
+  codeModifications: codeModificationsRouter,
 });
 
 // export type definition of API

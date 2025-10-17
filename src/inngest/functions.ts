@@ -191,7 +191,7 @@ export const generateAPI = inngest.createFunction(
           const cloneResult = await githubRepositoryService.cloneToSandbox(
             repoUrl,
             integration.access_token,
-            sandbox.id
+            sandbox.sandboxId
           );
           
           if (!cloneResult.success) {
@@ -2086,7 +2086,7 @@ export const cloneAndPreviewRepository = inngest.createFunction(
           const cloneResult = await githubRepositoryService.cloneToSandbox(
             repoUrl,
             integration.access_token,
-            sandbox.id
+            sandbox.sandboxId
           );
           
           if (!cloneResult.success) {
@@ -2182,7 +2182,7 @@ export const cloneAndPreviewRepository = inngest.createFunction(
             packageManager: framework.packageManager,
             previewUrl: previewServer?.url,
             previewPort: previewServer?.port,
-            sandboxId: sandbox.id,
+            sandboxId: sandbox.sandboxId,
           };
         } catch (error) {
           console.error('Clone and preview error:', error);
@@ -2222,6 +2222,7 @@ export const cloneAndPreviewRepository = inngest.createFunction(
         await streamingService.emit(projectId, {
           type: 'complete',
           summary: `Repository ${repoFullName} is ready for development!`,
+          totalFiles: 0, // No files generated, just cloned
           previewUrl: previewResult.previewUrl,
         });
         
@@ -2229,7 +2230,6 @@ export const cloneAndPreviewRepository = inngest.createFunction(
       });
       
       return {
-        success: true,
         projectId,
         ...previewResult,
       };
