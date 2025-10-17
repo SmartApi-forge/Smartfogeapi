@@ -115,7 +115,6 @@ export function ModernSidebar({
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(20)
 
       if (fetchError) {
         console.error('Error fetching projects:', fetchError)
@@ -172,8 +171,11 @@ export function ModernSidebar({
   }
 
   const handleProjectClick = (project: Project) => {
-    router.push(`/projects/${project.id}`)
-    onClose()
+    // Add a small delay for the click animation to complete
+    setTimeout(() => {
+      router.push(`/projects/${project.id}`)
+      onClose()
+    }, 150)
   }
 
   const handleNavigationClick = (href: string) => {
@@ -366,23 +368,35 @@ export function ModernSidebar({
                           <motion.button
                             key={project.id}
                             onClick={() => handleProjectClick(project)}
-                            className="w-full p-3 rounded-lg bg-slate-800/30 hover:bg-slate-700/50 border border-slate-700/30 hover:border-slate-600/50 transition-all duration-200 text-left group"
-                            whileHover={{ scale: 1.01 }}
-                            whileTap={{ scale: 0.99 }}
+                            className="w-full p-3 rounded-lg bg-slate-800/30 hover:bg-slate-700/50 border border-slate-700/30 hover:border-slate-600/50 transition-all duration-200 text-left group cursor-pointer"
+                            whileHover={{ 
+                              scale: 1.02,
+                              backgroundColor: "rgba(51, 65, 85, 0.6)",
+                              borderColor: "rgba(71, 85, 105, 0.6)"
+                            }}
+                            whileTap={{ 
+                              scale: 0.98,
+                              backgroundColor: "rgba(30, 41, 59, 0.8)"
+                            }}
+                            transition={{
+                              type: "spring",
+                              stiffness: 400,
+                              damping: 25
+                            }}
                           >
                             <div className="flex items-start justify-between mb-2">
-                              <h3 className="font-medium text-slate-200 text-sm leading-relaxed group-hover:text-white transition-colors break-words">
+                              <h3 className="font-medium text-slate-200 text-sm leading-relaxed group-hover:text-white transition-colors duration-200 break-words">
                                 {getProjectTitle(project)}
                               </h3>
                             </div>
                             
                             <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2 text-xs text-slate-400">
+                              <div className="flex items-center gap-2 text-xs text-slate-400 group-hover:text-slate-300 transition-colors duration-200">
                                 <span>{formatDate(project.created_at)}</span>
                               </div>
                               <Badge 
                                 variant="secondary" 
-                                className="h-5 px-2 text-xs bg-slate-700/50 text-slate-300 border-slate-600/50"
+                                className="h-5 px-2 text-xs bg-slate-700/50 text-slate-300 border-slate-600/50 group-hover:bg-slate-600/60 group-hover:text-slate-200 transition-all duration-200"
                               >
                                 {project.framework.toUpperCase()}
                               </Badge>
