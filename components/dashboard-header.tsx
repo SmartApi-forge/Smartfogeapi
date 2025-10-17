@@ -46,6 +46,7 @@ export function DashboardHeader({
   const [internalMobileMenuOpen, setInternalMobileMenuOpen] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState("")
+  const [isHovering, setIsHovering] = useState(false)
 
   // Use external state if provided, otherwise use internal state
   const sidebarOpen = externalSidebarOpen !== undefined ? externalSidebarOpen : internalSidebarOpen
@@ -117,6 +118,16 @@ export function DashboardHeader({
     setSidebarOpen(!sidebarOpen)
   }
 
+  const handleHamburgerHover = () => {
+    setIsHovering(true)
+    setSidebarOpen(true)
+  }
+
+  const handleHamburgerLeave = () => {
+    setIsHovering(false)
+    // Don't close immediately, let the sidebar handle its own hover state
+  }
+
   // Close sidebar on Escape key
   useEffect(() => {
     if (!sidebarOpen) return
@@ -140,7 +151,12 @@ export function DashboardHeader({
           </div>
           {/* Left side - Hamburger Menu button */}
           <div className="hidden md:block">
-            <CustomHamburgerButton onClick={toggleSidebar} />
+            <div 
+              onMouseEnter={handleHamburgerHover}
+              onMouseLeave={handleHamburgerLeave}
+            >
+              <CustomHamburgerButton onClick={toggleSidebar} />
+            </div>
           </div>
           {/* Center Navigation (Desktop) */}
           <nav className="hidden md:flex absolute left-1/2 -translate-x-1/2 items-center gap-6">
@@ -261,12 +277,12 @@ export function DashboardHeader({
           {/* Search */}
           <div className="p-4 border-b border-[#2A2D31]/60 bg-[#1A1D21]/50">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Search projects..."
+                type="text"
+                placeholder="Navigate your workspace..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-[#0F1114]/80 border-[#2A2D31]/60 focus:bg-[#0F1114] focus:border-blue-400/50 pl-9 text-gray-100 placeholder-gray-400 transition-all duration-200"
+                className="w-full bg-[#2A2D31]/50 border-[#3A3D41] text-white placeholder-gray-400 focus:border-[#3A3D41] focus:ring-0 focus:outline-none focus:shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none focus-visible:border-[#3A3D41] !ring-0 !outline-none"
                 aria-label="Search projects"
               />
             </div>

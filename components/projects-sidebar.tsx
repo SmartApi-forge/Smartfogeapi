@@ -41,6 +41,7 @@ export function ProjectsSidebar({ isOpen, onClose, searchQuery: externalSearchQu
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [internalSearchQuery, setInternalSearchQuery] = useState("")
+  const [isHovering, setIsHovering] = useState(false)
   const sidebarRef = useRef<HTMLDivElement>(null)
 
   // Use external search query if provided, otherwise use internal state
@@ -88,6 +89,15 @@ export function ProjectsSidebar({ isOpen, onClose, searchQuery: externalSearchQu
       }, 100)
     }
   }, [isOpen])
+
+  // Handle keyboard navigation for search input
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Close on Escape key
+    if (e.key === 'Escape') {
+      onClose()
+      return
+    }
+  }
 
   // Handle keyboard navigation and accessibility
   useEffect(() => {
@@ -175,17 +185,22 @@ export function ProjectsSidebar({ isOpen, onClose, searchQuery: externalSearchQu
 
   // Filter projects based on search query
   const filteredProjects = projects.filter(project => {
-    const searchLower = searchQuery.toLowerCase().trim()
-    if (!searchLower) return true
-    
-    const projectTitle = getProjectTitle(project).toLowerCase()
-    const projectName = project.name?.toLowerCase() || ''
-    const projectDescription = project.description?.toLowerCase() || ''
-    
-    return projectTitle.includes(searchLower) || 
-           projectName.includes(searchLower) || 
-           projectDescription.includes(searchLower)
+    return getProjectTitle(project).toLowerCase().includes(searchQuery.toLowerCase())
   })
+
+  const handleSidebarMouseEnter = () => {
+    setIsHovering(true)
+  }
+
+  const handleSidebarMouseLeave = () => {
+    setIsHovering(false)
+    // Close sidebar after a short delay if not clicked to stay open
+    setTimeout(() => {
+      if (!isHovering) {
+        onClose()
+      }
+    }, 300)
+  }
 
   const handleProjectClick = (project: Project) => {
     // Navigate to project page
@@ -257,6 +272,8 @@ export function ProjectsSidebar({ isOpen, onClose, searchQuery: externalSearchQu
             }}
             className="fixed left-0 top-0 bottom-0 bg-gradient-to-b from-[#1A1D21] to-[#0F1114] backdrop-blur-xl border-r border-[#2A2D31]/80 z-50 flex flex-col shadow-[0_20px_50px_rgba(0,0,0,0.4)] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
+            onMouseEnter={handleSidebarMouseEnter}
+            onMouseLeave={handleSidebarMouseLeave}
             style={{
               boxShadow: '0 0 0 1px rgba(255,255,255,0.05), 0 20px 50px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)'
             }}
@@ -290,14 +307,14 @@ export function ProjectsSidebar({ isOpen, onClose, searchQuery: externalSearchQu
           {/* Search */}
           <div className="p-4 border-b border-[#2A2D31]/60 bg-[#1A1D21]/50">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
                 ref={searchInputRef}
-                placeholder="Search projects... (Press / to focus)"
+                type="text"
+                placeholder="Navigate your workspace..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-[#0F1114]/80 border-[#2A2D31]/60 focus:bg-[#0F1114] focus:border-blue-400/50 pl-9 text-gray-100 placeholder-gray-400 transition-all duration-200"
-                aria-label="Search projects"
+                className="w-full bg-[#2A2D31]/50 border-[#3A3D41] text-white placeholder-gray-400 focus:border-[#3A3D41] focus:ring-0 focus:outline-none focus:shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none focus-visible:border-[#3A3D41] !ring-0 !outline-none"
+                onKeyDown={handleInputKeyDown}
               />
             </div>
           </div>
@@ -306,12 +323,12 @@ export function ProjectsSidebar({ isOpen, onClose, searchQuery: externalSearchQu
           <ScrollArea className="flex-1 h-0">
               <div className="p-3">
                 {loading ? (
-                  // Loading skeletons
+                  // Loading skeletons - Fixed to show full skeletons
                   <div className="space-y-3">
-                    {[...Array(5)].map((_, i) => (
+                    {[...Array(8)].map((_, i) => (
                       <div key={i} className="p-3 rounded-lg">
-                        <Skeleton className="h-4 w-3/4 mb-2 bg-gray-600/40" />
-                        <Skeleton className="h-3 w-1/2 bg-gray-600/40" />
+                        <Skeleton className="h-4 w-full mb-2 bg-gray-600/40" />
+                        <Skeleton className="h-3 w-3/4 bg-gray-600/40" />
                       </div>
                     ))}
                   </div>
@@ -377,12 +394,8 @@ export function ProjectsSidebar({ isOpen, onClose, searchQuery: externalSearchQu
               </div>
             </ScrollArea>
 
-            {/* Footer */}
-            <div className="p-4 border-t border-[#444444]/50 bg-[#2A2D31]/30">
-              <p className="text-xs text-gray-400 text-center">
-                {filteredProjects.length} project{filteredProjects.length !== 1 ? 's' : ''}
-              </p>
-            </div>
+            {/* Footer - Removed project count display */}
+
           </motion.div>
         </>
       )}
