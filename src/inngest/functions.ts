@@ -184,7 +184,7 @@ export const generateAPI = inngest.createFunction(
           }
           
           // Create sandbox for repository analysis using full-stack template
-          const templateId = process.env.E2B_FULLSTACK_TEMPLATE_ID || 'smart-forge-fullstack';
+          const templateId = process.env.E2B_FULLSTACK_TEMPLATE_ID || 'ckskh5feot2y94v5z07d';
           sandbox = await Sandbox.create(templateId);
           
           // Clone repository using service with authentication
@@ -2072,7 +2072,7 @@ export const cloneAndPreviewRepository = inngest.createFunction(
           const { githubRepositoryService } = await import('../services/github-repository-service');
           
           // Create sandbox using full-stack template
-          const templateId = process.env.E2B_FULLSTACK_TEMPLATE_ID || 'smart-forge-fullstack';
+          const templateId = process.env.E2B_FULLSTACK_TEMPLATE_ID || 'ckskh5feot2y94v5z07d';
           sandbox = await Sandbox.create(templateId);
           
           // Emit starting event
