@@ -109,7 +109,7 @@ export const generateAPI = inngest.createFunction(
   { id: "generate-api" },
   { event: "api/generate" },
   async ({ event, step }) => {
-    const { prompt, mode, repoUrl, userId, projectId } = event.data;
+    const { prompt, mode, repoUrl, userId, projectId, githubRepoId } = event.data;
     
     let jobId: string | undefined;
     
@@ -151,11 +151,27 @@ export const generateAPI = inngest.createFunction(
 
     // Step 2: Handle repository if GitHub mode
     let repoAnalysis = null;
+    let sandboxUrl: string | undefined;
     if (mode === "github" && repoUrl) {
       repoAnalysis = await step.run("analyze-repository", async () => {
         let sandbox: Sandbox | null = null;
         
         try {
+          const { githubRepositoryService } = await import('../services/github-repository-service');
+          
+          // Get GitHub integration for access token
+          const { data: integration } = await supabase
+            .from('user_integrations')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('provider', 'github')
+            .eq('is_active', true)
+            .single();
+          
+          if (!integration) {
+            throw new Error('GitHub integration not found');
+          }
+          
           // Enhanced validation and sanitization of repository URL
           const urlPattern = /^https:\/\/(github\.com|gitlab\.com|bitbucket\.org)\/[\w\-\.]+\/[\w\-\.]+(\.git)?$/;
           if (!urlPattern.test(repoUrl)) {
@@ -167,21 +183,62 @@ export const generateAPI = inngest.createFunction(
             throw new Error(`Repository URL contains potentially dangerous characters: ${repoUrl}`);
           }
           
-          // Create sandbox for repository analysis - assign immediately
-          sandbox = await Sandbox.create('smart-forge-api-sandbox');
+          // Create sandbox for repository analysis using full-stack template
+          const templateId = process.env.E2B_FULLSTACK_TEMPLATE_ID || 'smart-forge-fullstack';
+          sandbox = await Sandbox.create(templateId);
           
-          // Enhanced URL escaping to prevent command injection
-          // Handle single quotes, double quotes, backticks, and other shell metacharacters
-          const escapedUrl = repoUrl
-            .replace(/'/g, "'\\''")           // Handle single quotes
-            .replace(/"/g, '\\"')             // Handle double quotes  
-            .replace(/`/g, '\\`')             // Handle backticks
-            .replace(/\$/g, '\\$')            // Handle dollar signs
-            .replace(/\\/g, '\\\\');          // Handle backslashes
+          // Clone repository using service with authentication
+          const cloneResult = await githubRepositoryService.cloneToSandbox(
+            repoUrl,
+            integration.access_token,
+            sandbox.id
+          );
           
-          const cloneResult = await sandbox.commands.run(`git clone '${escapedUrl}' /home/user/repo`);
-          if (cloneResult.exitCode !== 0) {
-            throw new Error(`Failed to clone repository (exit code: ${cloneResult.exitCode}): ${cloneResult.stderr || cloneResult.stdout}`);
+          if (!cloneResult.success) {
+            throw new Error(`Failed to clone repository: ${cloneResult.error}`);
+          }
+          
+          const repoPath = cloneResult.path;
+          
+          // Detect framework
+          const framework = await githubRepositoryService.detectFramework(sandbox, repoPath);
+          
+          // Install dependencies
+          const installResult = await githubRepositoryService.installDependencies(
+            sandbox,
+            repoPath,
+            framework.packageManager
+          );
+          
+          if (!installResult.success) {
+            console.warn('Dependency installation failed:', installResult.error);
+          }
+          
+          // Start preview server
+          let previewServer = null;
+          if (framework.framework !== 'unknown' && framework.startCommand) {
+            previewServer = await githubRepositoryService.startPreviewServer(
+              sandbox,
+              framework,
+              repoPath
+            );
+            
+            if (previewServer.success) {
+              console.log('Preview server started:', previewServer.url);
+              sandboxUrl = previewServer.url;
+              
+              // Update project with sandbox URL
+              if (projectId) {
+                await supabase
+                  .from('projects')
+                  .update({ 
+                    sandbox_url: previewServer.url,
+                    github_mode: true,
+                    github_repo_id: githubRepoId
+                  })
+                  .eq('id', projectId);
+              }
+            }
           }
           
           // Analyze package.json if it exists
@@ -225,10 +282,16 @@ export const generateAPI = inngest.createFunction(
           
           return {
             repoUrl,
+            framework: framework.framework,
+            packageManager: framework.packageManager,
+            previewServer: previewServer?.success ? {
+              url: previewServer.url,
+              port: previewServer.port
+            } : null,
             packageInfo,
-            directoryStructure: dirStructure.stdout,
+            directoryStructure: dirStructure?.stdout || '',
             mainFiles,
-            readme: readme ? readme.substring(0, 2000) : null, // First 2000 chars
+            readme: readme ? readme.substring(0, 2000) : null,
             analysisTimestamp: new Date().toISOString()
           };
         } catch (error) {
@@ -1288,11 +1351,80 @@ EXAMPLE STRUCTURE:
     
     // Step 5: Handle GitHub PR creation if in GitHub mode
     let prUrl = null;
-    if (mode === "github" && repoUrl) {
+    if (mode === "github" && repoUrl && githubRepoId) {
       prUrl = await step.run("create-pull-request", async () => {
-        // TODO: Implement GitHub PR creation
-        // For now, return a placeholder URL
-        return `https://github.com/${repoUrl.split('/').slice(-2).join('/').replace('.git', '')}/pull/new`;
+        try {
+          const { githubSyncService } = await import('../services/github-sync-service');
+          
+          // Get GitHub integration
+          const { data: integration } = await supabase
+            .from('user_integrations')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('provider', 'github')
+            .eq('is_active', true)
+            .single();
+          
+          if (!integration) {
+            console.error('No GitHub integration found');
+            return null;
+          }
+          
+          // Get repository details
+          const { data: repo } = await supabase
+            .from('github_repositories')
+            .select('*')
+            .eq('id', githubRepoId)
+            .single();
+          
+          if (!repo) {
+            console.error('Repository not found');
+            return null;
+          }
+          
+          // Generate branch name
+          const branchName = `smartforge/api-generation-${Date.now()}`;
+          
+          // Push changes to GitHub
+          const files = apiResult.state.data.files || {};
+          const result = await githubSyncService.pushChangesToGithub(
+            integration.access_token,
+            {
+              repoFullName: repo.repo_full_name,
+              branchName,
+              files,
+              commitMessage: `feat: Add API generation from SmartForge\n\n${apiResult.state.data.summary}`,
+              createPR: true,
+              prTitle: `API Generation: ${apiResult.state.data.summary.substring(0, 50)}`,
+              prBody: `## Generated API\n\n${apiResult.state.data.summary}\n\n### Files Changed\n${Object.keys(files).map(f => `- ${f}`).join('\n')}\n\n---\n*Generated by SmartForge*`,
+            }
+          );
+          
+          if (result.success) {
+            // Record sync history
+            await githubSyncService.recordSyncHistory(
+              githubRepoId,
+              projectId,
+              userId,
+              'create_pr',
+              {
+                branchName,
+                commitSha: result.commitSha,
+                commitMessage: 'API generation from SmartForge',
+                prUrl: result.prUrl,
+                filesChanged: Object.keys(files).length,
+                status: 'completed',
+              }
+            );
+            
+            return result.prUrl;
+          }
+          
+          return null;
+        } catch (error) {
+          console.error('Failed to create GitHub PR:', error);
+          return null;
+        }
       });
     }
 
@@ -1897,6 +2029,226 @@ You MUST respond with valid JSON in this exact structure:
       });
       
       // Close streaming connection
+      streamingService.closeProject(projectId);
+      
+      throw error;
+    }
+  }
+);
+
+/**
+ * Clone and Preview Repository - No code generation
+ * Just clones repo, installs deps, starts preview
+ */
+export const cloneAndPreviewRepository = inngest.createFunction(
+  { id: "clone-and-preview-repository" },
+  { event: "github/clone-and-preview" },
+  async ({ event, step }) => {
+    const { projectId, repoUrl, repoFullName, githubRepoId, userId } = event.data;
+    
+    try {
+      // Step 1: Get GitHub integration
+      const integration = await step.run("get-github-integration", async () => {
+        const { data, error } = await supabase
+          .from('user_integrations')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('provider', 'github')
+          .eq('is_active', true)
+          .single();
+        
+        if (error || !data) {
+          throw new Error('GitHub integration not found');
+        }
+        
+        return data;
+      });
+      
+      // Step 2: Clone repository and start preview
+      const previewResult = await step.run("clone-and-setup-preview", async () => {
+        let sandbox: Sandbox | null = null;
+        
+        try {
+          const { githubRepositoryService } = await import('../services/github-repository-service');
+          
+          // Create sandbox using full-stack template
+          const templateId = process.env.E2B_FULLSTACK_TEMPLATE_ID || 'smart-forge-fullstack';
+          sandbox = await Sandbox.create(templateId);
+          
+          // Emit starting event
+          await streamingService.emit(projectId, {
+            type: 'step:start',
+            step: 'Cloning Repository',
+            message: `Cloning ${repoFullName}...`,
+          });
+          
+          // Clone repository
+          const cloneResult = await githubRepositoryService.cloneToSandbox(
+            repoUrl,
+            integration.access_token,
+            sandbox.id
+          );
+          
+          if (!cloneResult.success) {
+            throw new Error(`Failed to clone repository: ${cloneResult.error}`);
+          }
+          
+          const repoPath = cloneResult.path;
+          
+          await streamingService.emit(projectId, {
+            type: 'step:complete',
+            step: 'Cloning Repository',
+            message: 'Repository cloned successfully!',
+          });
+          
+          // Detect framework
+          await streamingService.emit(projectId, {
+            type: 'step:start',
+            step: 'Detecting Framework',
+            message: 'Analyzing project structure...',
+          });
+          
+          const framework = await githubRepositoryService.detectFramework(sandbox, repoPath);
+          
+          await streamingService.emit(projectId, {
+            type: 'step:complete',
+            step: 'Detecting Framework',
+            message: `Detected: ${framework.framework}`,
+          });
+          
+          // Install dependencies
+          await streamingService.emit(projectId, {
+            type: 'step:start',
+            step: 'Installing Dependencies',
+            message: `Installing with ${framework.packageManager}...`,
+          });
+          
+          const installResult = await githubRepositoryService.installDependencies(
+            sandbox,
+            repoPath,
+            framework.packageManager
+          );
+          
+          if (!installResult.success) {
+            console.warn('Dependency installation failed:', installResult.error);
+            await streamingService.emit(projectId, {
+              type: 'step:complete',
+              step: 'Installing Dependencies',
+              message: 'Installation completed with warnings',
+            });
+          } else {
+            await streamingService.emit(projectId, {
+              type: 'step:complete',
+              step: 'Installing Dependencies',
+              message: 'Dependencies installed successfully!',
+            });
+          }
+          
+          // Start preview server
+          let previewServer = null;
+          if (framework.framework !== 'unknown' && framework.startCommand) {
+            await streamingService.emit(projectId, {
+              type: 'step:start',
+              step: 'Starting Preview',
+              message: 'Starting development server...',
+            });
+            
+            previewServer = await githubRepositoryService.startPreviewServer(
+              sandbox,
+              framework,
+              repoPath
+            );
+            
+            if (previewServer.success) {
+              console.log('Preview server started:', previewServer.url);
+              
+              await streamingService.emit(projectId, {
+                type: 'step:complete',
+                step: 'Starting Preview',
+                message: `Preview ready on port ${previewServer.port}!`,
+              });
+            } else {
+              await streamingService.emit(projectId, {
+                type: 'step:complete',
+                step: 'Starting Preview',
+                message: 'Preview server could not be started',
+              });
+            }
+          }
+          
+          return {
+            success: true,
+            framework: framework.framework,
+            packageManager: framework.packageManager,
+            previewUrl: previewServer?.url,
+            previewPort: previewServer?.port,
+            sandboxId: sandbox.id,
+          };
+        } catch (error) {
+          console.error('Clone and preview error:', error);
+          
+          // Clean up sandbox on error
+          if (sandbox && typeof sandbox.kill === 'function') {
+            try {
+              await sandbox.kill();
+            } catch (cleanupError) {
+              console.error('Sandbox cleanup error:', cleanupError);
+            }
+          }
+          
+          throw error;
+        }
+      });
+      
+      // Step 3: Update project with preview URL and status
+      await step.run("update-project", async () => {
+        const { error } = await supabase
+          .from('projects')
+          .update({
+            sandbox_url: previewResult.previewUrl,
+            status: 'completed',
+            framework: previewResult.framework,
+            github_repo_id: githubRepoId,
+          })
+          .eq('id', projectId);
+        
+        if (error) {
+          console.error('Failed to update project:', error);
+        }
+      });
+      
+      // Step 4: Emit completion
+      await step.run("emit-complete", async () => {
+        await streamingService.emit(projectId, {
+          type: 'complete',
+          summary: `Repository ${repoFullName} is ready for development!`,
+          previewUrl: previewResult.previewUrl,
+        });
+        
+        streamingService.closeProject(projectId);
+      });
+      
+      return {
+        success: true,
+        projectId,
+        ...previewResult,
+      };
+    } catch (error: any) {
+      console.error('Clone and preview workflow error:', error);
+      
+      // Update project status to failed
+      await supabase
+        .from('projects')
+        .update({ status: 'failed' })
+        .eq('id', projectId);
+      
+      // Emit error
+      await streamingService.emit(projectId, {
+        type: 'error',
+        message: error.message || 'Failed to clone and preview repository',
+        stage: 'Clone & Preview',
+      });
+      
       streamingService.closeProject(projectId);
       
       throw error;

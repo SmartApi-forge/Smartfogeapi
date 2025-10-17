@@ -21,16 +21,17 @@ export function DashboardContent() {
     }
   })
 
-  const handleSendMessage = (message: string) => {
+  const handleSendMessage = (message: string, githubRepo?: any) => {
     if (!message.trim()) return
 
     // Invoke Inngest function with the user's input
     invokeInngest.mutate({ 
       text: message,
-      mode: 'direct',
-      repoUrl: undefined
+      mode: githubRepo ? 'repo' : 'direct',
+      repoUrl: githubRepo?.repo_url,
+      githubRepoId: githubRepo?.id
     })
-    console.log('Message:', message)
+    console.log('Message:', message, 'GitHub Repo:', githubRepo)
   }
 
   return (
