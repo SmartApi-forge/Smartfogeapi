@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/sheet"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { ProjectsSidebar } from "@/components/projects-sidebar"
+import { ModernSidebar } from "@/components/modern-sidebar"
 import { CustomHamburgerButton } from "@/components/custom-hamburger-button"
 import { supabase } from "@/lib/supabase"
 
@@ -230,8 +230,8 @@ export function DashboardHeader({
       </div>
     </header>
 
-    {/* Projects Sidebar */}
-    <ProjectsSidebar 
+    {/* Modern Sidebar */}
+    <ModernSidebar 
       isOpen={sidebarOpen} 
       onClose={() => setSidebarOpen(false)}
       searchQuery={searchQuery}
