@@ -326,8 +326,8 @@ export function ModernSidebar({
                 </motion.button>
               </div>
 
-              <ScrollArea className="flex-1 px-4" style={{ height: 'calc(100vh - 200px)' }}>
-                <div className="space-y-3 pb-8" style={{ minHeight: '400px' }}>
+              <ScrollArea className="flex-1 px-4" style={{ height: 'calc(100vh - 240px)' }}>
+                <div className="space-y-3 pb-16" style={{ minHeight: '400px' }}>
                   {loading ? (
                     <div className="space-y-3">
                       {[...Array(6)].map((_, i) => (
@@ -394,12 +394,6 @@ export function ModernSidebar({
                               <div className="flex items-center gap-2 text-xs text-slate-400 group-hover:text-slate-300 transition-colors duration-200">
                                 <span>{formatDate(project.created_at)}</span>
                               </div>
-                              <Badge 
-                                variant="secondary" 
-                                className="h-5 px-2 text-xs bg-slate-700/50 text-slate-300 border-slate-600/50 group-hover:bg-slate-600/60 group-hover:text-slate-200 transition-all duration-200"
-                              >
-                                {project.framework.toUpperCase()}
-                              </Badge>
                             </div>
                           </motion.button>
                         )
