@@ -31,6 +31,7 @@ import { useGenerationStream } from "../../../hooks/use-generation-stream";
 import { StreamingCodeViewer } from "../../../components/streaming-code-viewer";
 import { GenerationProgressTracker } from "../../../components/generation-progress-tracker";
 import { TextShimmer } from "@/components/ui/text-shimmer";
+import { VersionCard } from "@/components/version-card";
 
 interface Message {
   id: string;
@@ -324,13 +325,21 @@ function TreeItem({
 function CodeViewer({ 
   filename, 
   fileTree,
-  codeTheme 
+  codeTheme,
+  versions = [],
+  selectedVersionId,
+  onVersionChange,
 }: { 
   filename: string | null;
   fileTree: TreeNode[];
   codeTheme: any;
+  versions?: any[];
+  selectedVersionId?: string | null;
+  onVersionChange?: (versionId: string) => void;
 }) {
   const [copySuccess, setCopySuccess] = useState(false);
+  const [isVersionDropdownOpen, setIsVersionDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const selectedFile = useMemo(() => {
     const findFile = (nodes: TreeNode[], id: string): TreeNode | null => {
@@ -372,6 +381,20 @@ function CodeViewer({
     URL.revokeObjectURL(url);
   };
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsVersionDropdownOpen(false);
+      }
+    };
+
+    if (isVersionDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isVersionDropdownOpen]);
+
   if (!selectedFile || selectedFile.type === 'folder') {
     return (
         <div className="h-full flex items-center justify-center text-muted-foreground bg-muted/30 dark:bg-[#1D1D1D] p-4">
@@ -399,6 +422,54 @@ function CodeViewer({
             </span>
           </div>
         </div>
+        
+        {/* Version Dropdown */}
+        {versions.length > 0 && (
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setIsVersionDropdownOpen(!isVersionDropdownOpen)}
+              className="flex items-center gap-1.5 px-2 py-1.5 sm:py-1 rounded text-xs hover:bg-muted dark:hover:bg-[#262726] transition-colors border border-border dark:border-gray-600"
+              title="Switch version"
+            >
+              <span className="font-medium text-[11px]">
+                v{versions.find((v: any) => v.id === selectedVersionId)?.version_number || versions[versions.length - 1]?.version_number || 1}
+              </span>
+              <ChevronRight className={`size-3 transition-transform ${isVersionDropdownOpen ? 'rotate-90' : ''}`} />
+            </button>
+            
+            {isVersionDropdownOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="absolute right-0 mt-1 w-48 bg-background dark:bg-[#1D1D1D] border border-border dark:border-gray-600 rounded-md shadow-lg z-50 max-h-64 overflow-y-auto"
+              >
+                {versions
+                  .sort((a: any, b: any) => b.version_number - a.version_number)
+                  .map((version: any) => (
+                    <button
+                      key={version.id}
+                      onClick={() => {
+                        onVersionChange?.(version.id);
+                        setIsVersionDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-xs hover:bg-muted dark:hover:bg-gray-700 transition-colors flex items-center justify-between ${
+                        selectedVersionId === version.id ? 'bg-primary/10 text-primary' : ''
+                      }`}
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-medium">v{version.version_number}</span>
+                        <span className="text-muted-foreground truncate">{version.name}</span>
+                      </div>
+                      {selectedVersionId === version.id && (
+                        <Check className="size-3 text-primary" />
+                      )}
+                    </button>
+                  ))}
+              </motion.div>
+            )}
+          </div>
+        )}
         
         {/* Action buttons - ALWAYS visible on ALL screen sizes */}
         <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
@@ -554,6 +625,74 @@ export function ProjectPageClient({
       refetchInterval: 10000,
     }
   );
+
+  // Mutations
+  const createMessage = api.messages.create.useMutation();
+  const classifyCommand = api.apiGeneration.classify.useMutation();
+  const triggerIteration = api.apiGeneration.triggerIteration.useMutation();
+
+  // Fetch versions
+  const { data: versions = [], refetch: refetchVersions } = api.versions.getMany.useQuery(
+    { projectId, limit: 50 },
+    { 
+      refetchInterval: streamState.isStreaming ? false : 2000, // Poll every 2s when not streaming
+      refetchOnWindowFocus: true,
+    }
+  );
+
+  // Refetch versions when streaming completes to get the newly created version
+  const wasStreaming = useRef(false);
+  useEffect(() => {
+    if (wasStreaming.current && !streamState.isStreaming && streamState.status === 'complete') {
+      console.log('Streaming completed, refetching versions...');
+      // Refetch immediately, then again after 500ms and 1500ms to catch delayed DB writes
+      refetchVersions();
+      setTimeout(() => refetchVersions(), 500);
+      setTimeout(() => refetchVersions(), 1500);
+    }
+    wasStreaming.current = streamState.isStreaming;
+  }, [streamState.isStreaming, streamState.status, refetchVersions]);
+
+  // State for selected version - MUST be declared before useMemos that use it
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+
+  // Auto-select latest version or streaming version
+  const previousVersionsLength = useRef(0);
+  
+  useEffect(() => {
+    // Priority 1: If actively streaming a version, always switch to it
+    if (streamState.currentVersionId && streamState.isStreaming) {
+      setSelectedVersionId(streamState.currentVersionId);
+      return;
+    }
+    
+    // Priority 2: Auto-switch to latest when versions list changes (new version created)
+    if (versions.length > 0) {
+      // Only consider completed versions for auto-selection
+      const completedVersions = versions.filter(v => v.status === 'complete');
+      
+      if (completedVersions.length > 0) {
+        const latest = completedVersions.reduce((max, v) => 
+          v.version_number > max.version_number ? v : max
+        );
+        
+        // Auto-switch to latest version if:
+        // 1. No version selected yet, OR
+        // 2. A new version was just created (length increased), OR  
+        // 3. Current selection doesn't exist anymore
+        const newVersionCreated = completedVersions.length > previousVersionsLength.current;
+        const currentSelectionInvalid = selectedVersionId && !completedVersions.find(v => v.id === selectedVersionId);
+        
+        if (!selectedVersionId || newVersionCreated || currentSelectionInvalid) {
+          console.log('Auto-switching to latest completed version:', latest.version_number);
+          setSelectedVersionId(latest.id);
+        }
+        
+        // Update ref for next comparison
+        previousVersionsLength.current = completedVersions.length;
+      }
+    }
+  }, [versions, versions.length, streamState.currentVersionId, streamState.isStreaming, selectedVersionId]);
 
   const sortedMessages = useMemo(() => {
     return [...messages].sort((a, b) => 
@@ -717,7 +856,7 @@ export function ProjectPageClient({
     return eventMsgs;
   }, [generationEvents, streamState.isStreaming, streamState.events.length]);
 
-  // Merge and sort all messages, avoiding duplicates
+  // Merge and sort all messages, avoiding duplicates, and inject version cards
   const allMessages = useMemo(() => {
     // If we have streaming events OR persisted events, filter out database messages
     const hasGenerationEvents = streamState.isStreaming || streamState.events.length > 0 || persistedEventMessages.length > 0;
@@ -744,19 +883,97 @@ export function ProjectPageClient({
       : sortedMessages;
 
     // Combine database messages, streaming messages, and persisted generation events
-    const combined = [...filteredDbMessages, ...streamingMessages, ...persistedEventMessages];
+    let combined = [...filteredDbMessages, ...streamingMessages, ...persistedEventMessages];
     
-    return combined.sort((a, b) => 
+    // Sort by timestamp
+    combined.sort((a, b) => 
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
-  }, [sortedMessages, streamingMessages, persistedEventMessages, streamState.isStreaming, streamState.events.length]);
 
-  // Build file tree from streaming files when active, otherwise use database messages
+    // Inject version cards after the messages that created them
+    // Only show COMPLETED versions (not generating ones) to avoid premature display
+    const completedVersions = versions.filter(v => v.status === 'complete');
+    
+    if (completedVersions.length > 0) {
+      const messagesWithVersions: any[] = [];
+      const addedVersionIds = new Set<string>();
+      
+      combined.forEach((msg, index) => {
+        messagesWithVersions.push(msg);
+        
+        // After each message, check if there's a version that should appear
+        // Either linked by version_id or created around the same time
+        if ('id' in msg) {
+          // Method 1: Direct link via version_id (most reliable)
+          const directLinkedVersion = completedVersions.find(v => 
+            'version_id' in msg && msg.version_id === v.id
+          );
+          
+          if (directLinkedVersion && !addedVersionIds.has(directLinkedVersion.id)) {
+            messagesWithVersions.push({
+              id: `version-card-${directLinkedVersion.id}`,
+              role: 'version' as const,
+              type: 'version-card' as const,
+              created_at: directLinkedVersion.created_at,
+              updated_at: directLinkedVersion.updated_at,
+              versionData: directLinkedVersion,
+            });
+            addedVersionIds.add(directLinkedVersion.id);
+          } else if (msg.role === 'user') {
+            // Method 2: Time-based matching for versions without direct links
+            const timeBasedVersions = completedVersions.filter(v => {
+              if (addedVersionIds.has(v.id)) return false;
+              const msgTime = new Date(msg.created_at).getTime();
+              const versionTime = new Date(v.created_at).getTime();
+              // Version should be created within 10 seconds after the message
+              return versionTime >= msgTime && versionTime - msgTime < 10000;
+            });
+            
+            // Add time-based matched versions
+            timeBasedVersions.forEach(version => {
+              messagesWithVersions.push({
+                id: `version-card-${version.id}`,
+                role: 'version' as const,
+                type: 'version-card' as const,
+                created_at: version.created_at,
+                updated_at: version.updated_at,
+                versionData: version,
+              });
+              addedVersionIds.add(version.id);
+            });
+          }
+        }
+      });
+      
+      // Add any versions that haven't been added yet (orphaned versions)
+      completedVersions.forEach(version => {
+        if (!addedVersionIds.has(version.id)) {
+          messagesWithVersions.push({
+            id: `version-card-${version.id}`,
+            role: 'version' as const,
+            type: 'version-card' as const,
+            created_at: version.created_at,
+            updated_at: version.updated_at,
+            versionData: version,
+          });
+        }
+      });
+      
+      // Re-sort to ensure proper chronological order
+      messagesWithVersions.sort((a, b) => 
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      
+      return messagesWithVersions;
+    }
+    
+    return combined;
+  }, [sortedMessages, streamingMessages, persistedEventMessages, versions, streamState.isStreaming, streamState.events.length]);
+
+  // Build file tree from selected version or streaming files
   const fileTree = useMemo(() => {
-    // If we have generated files from streaming (even if streaming has ended), use them
-    // This prevents showing placeholder files while waiting for database update
-    if (streamState.generatedFiles.length > 0) {
-      // Convert streaming files directly to tree nodes without placeholders
+    // Priority 1: Use streaming files only while currently generating
+    if (streamState.isStreaming && streamState.generatedFiles.length > 0) {
       const streamingNodes: TreeNode[] = streamState.generatedFiles.map(file => ({
         id: file.filename,
         name: file.filename,
@@ -767,13 +984,44 @@ export function ProjectPageClient({
       return streamingNodes;
     }
     
-    // If streaming is active but no files yet, show empty tree (no placeholders)
+    // Priority 2: Load from selected version if available
+    if (selectedVersionId && versions.length > 0) {
+      const selectedVersion = versions.find(v => v.id === selectedVersionId);
+      if (selectedVersion?.files) {
+        const versionNodes: TreeNode[] = Object.entries(selectedVersion.files).map(([filename, content]) => ({
+          id: filename,
+          name: filename,
+          type: 'file' as const,
+          content: typeof content === 'string' ? content : JSON.stringify(content, null, 2),
+          language: getLanguageFromFilename(filename),
+        }));
+        return versionNodes;
+      }
+    }
+    
+    // Priority 3: If streaming is active but no files yet, show empty tree
     if (streamState.isStreaming) {
       return [];
     }
     
+    // Priority 4: Fallback to project-based tree generation from messages
     return generateFileTreeFromProject(project, sortedMessages, streamState.generatedFiles);
-  }, [project, sortedMessages, streamState.generatedFiles, streamState.isStreaming]);
+  }, [selectedVersionId, versions, streamState.generatedFiles, streamState.isStreaming, project, sortedMessages]);
+
+  // When switching versions, ensure the selected file exists in that version.
+  // If not, select the first file of the chosen version.
+  useEffect(() => {
+    if (streamState.isStreaming) return; // don't override while streaming
+    if (!selectedVersionId) return;
+    const version = versions.find(v => v.id === selectedVersionId);
+    const versionFiles = version?.files ? Object.keys(version.files) : [];
+    if (versionFiles.length === 0) return;
+
+    // If current selection is not in this version, pick the first file
+    if (!selected || !versionFiles.includes(selected)) {
+      setSelected(versionFiles[0]);
+    }
+  }, [selectedVersionId, versions, streamState.isStreaming]);
 
   // Auto-select currently generating file during streaming
   useEffect(() => {
@@ -801,32 +1049,59 @@ export function ProjectPageClient({
 
   const select = (id: string) => setSelected(id);
 
-  const createMessage = api.messages.create.useMutation({
-    onSuccess: () => {
-      setInput("");
-      setIsLoading(false);
-      refetch();
-    },
-    onError: (error) => {
-      console.error("Failed to send message:", error);
-      setIsLoading(false);
-    },
-  });
-
   const send = async () => {
     if (!input.trim() || isLoading) return;
     
     setIsLoading(true);
+    const messageContent = input.trim();
+    setInput(""); // Clear input immediately for better UX
+    
     try {
-      await createMessage.mutateAsync({
-        content: input.trim(),
+      // 1. Save user message
+      const message = await createMessage.mutateAsync({
+        content: messageContent,
         role: 'user',
         type: 'text',
         project_id: projectId,
       });
-    } catch (error) {
-      console.error("Error sending message:", error);
+      
+      // Refetch messages to show user's message
+      refetch();
+      
+      // 2. Classify command (with current file list for context)
+      const currentFiles = selectedVersionId 
+        ? Object.keys(versions.find(v => v.id === selectedVersionId)?.files || {})
+        : [];
+      
+      const classification = await classifyCommand.mutateAsync({
+        prompt: messageContent,
+        projectId,
+        currentFiles,
+      });
+      
+      console.log('Command classified:', classification);
+      
+      // 3. Trigger iteration workflow
+      await triggerIteration.mutateAsync({
+        projectId,
+        messageId: message.id,
+        prompt: messageContent,
+        commandType: classification.type,
+        shouldCreateNewVersion: classification.shouldCreateNewVersion,
+        parentVersionId: selectedVersionId || undefined,
+      });
+      
+      // Refetch versions to get the new one
+      setTimeout(() => {
+        refetchVersions();
+      }, 1000);
+      
       setIsLoading(false);
+    } catch (error) {
+      console.error("Error processing message:", error);
+      setIsLoading(false);
+      // Re-add the message to input on error
+      setInput(messageContent);
     }
   };
 
@@ -887,7 +1162,19 @@ export function ProjectPageClient({
                     transition={{ duration: 0.3, delay: index * 0.05 }}
                     className="text-sm"
                   >
-                    {message.role === "user" ? (
+                    {message.type === "version-card" && 'versionData' in message ? (
+                      // Version card - seamlessly integrated
+                      <div className="my-2">
+                        <VersionCard
+                          version={message.versionData}
+                          isActive={selectedVersionId === message.versionData.id}
+                          onClick={() => setSelectedVersionId(message.versionData.id)}
+                          previousVersion={
+                            versions.find(v => v.id === message.versionData.parent_version_id)
+                          }
+                        />
+                      </div>
+                    ) : message.role === "user" ? (
                       // User message - compact design
                       <div className="flex justify-end mb-1">
                         <div className="rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 bg-muted/40 dark:bg-[#262626] border border-border/30 dark:border-[#262626] max-w-[90%]">
@@ -1070,15 +1357,25 @@ export function ProjectPageClient({
             {/* Code content area - responsive width */}
             <div className="flex-1 min-w-0 flex flex-col relative bg-muted/30 w-full">
               <div className="h-full w-full overflow-hidden">
-                {(streamState.isStreaming || streamState.events.length > 0) && streamState.generatedFiles.length > 0 ? (
+                {streamState.isStreaming && streamState.generatedFiles.length > 0 ? (
                   <StreamingCodeViewer
                     files={streamState.generatedFiles}
                     currentFile={streamState.currentFile}
                     isStreaming={streamState.isStreaming}
                     selectedFile={selected || undefined}
+                    versions={versions}
+                    selectedVersionId={selectedVersionId}
+                    onVersionChange={setSelectedVersionId}
                   />
                 ) : (
-                  <CodeViewer filename={selected} fileTree={fileTree} codeTheme={codeTheme} />
+                  <CodeViewer 
+                    filename={selected} 
+                    fileTree={fileTree} 
+                    codeTheme={codeTheme}
+                    versions={versions}
+                    selectedVersionId={selectedVersionId}
+                    onVersionChange={setSelectedVersionId}
+                  />
                 )}
               </div>
             </div>

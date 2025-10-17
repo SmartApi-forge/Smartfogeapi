@@ -7,6 +7,8 @@ export interface UseGenerationStreamResult extends GenerationState {
   isStreaming: boolean;
   isConnected: boolean;
   reconnect: () => void;
+  currentVersionId?: string;
+  currentVersionNumber?: number;
 }
 
 /**
@@ -21,6 +23,8 @@ export function useGenerationStream(projectId: string | undefined): UseGeneratio
   });
 
   const [isConnected, setIsConnected] = useState(false);
+  const [currentVersionId, setCurrentVersionId] = useState<string | undefined>(undefined);
+  const [currentVersionNumber, setCurrentVersionNumber] = useState<number | undefined>(undefined);
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
@@ -62,6 +66,11 @@ export function useGenerationStream(projectId: string | undefined): UseGeneratio
 
           // Add event to history
           newState.events = [...prevState.events, streamEvent];
+
+          // Track version ID from any event that includes it
+          if ('versionId' in streamEvent && streamEvent.versionId) {
+            setCurrentVersionId(streamEvent.versionId);
+          }
 
           // Update state based on event type
           switch (streamEvent.type) {
@@ -244,6 +253,8 @@ export function useGenerationStream(projectId: string | undefined): UseGeneratio
     isStreaming: state.status !== 'idle' && state.status !== 'complete' && state.status !== 'error',
     isConnected,
     reconnect: connect,
+    currentVersionId,
+    currentVersionNumber,
   };
 }
 

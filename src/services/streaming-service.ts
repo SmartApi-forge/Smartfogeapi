@@ -106,11 +106,11 @@ class StreamingService {
   private async saveEventToDatabase(projectId: string, event: StreamEventWithTimestamp): Promise<void> {
     try {
       // Only save completed events (not the "generating..." states) for cleaner reload experience
-      const relevantEvents: Record<string, { icon: string; messageFormatter: (event: any) => string }> = {
-        'file:complete': { 
-          icon: 'complete', 
-          messageFormatter: (e) => `✓ Created ${e.filename}` 
-        },
+    const relevantEvents: Record<string, { icon: string; messageFormatter: (event: any) => string }> = {
+      'file:complete': {
+        icon: 'complete',
+        messageFormatter: (e) => `✓ Created ${e.filename}`
+      },
         'validation:complete': { 
           icon: 'complete', 
           messageFormatter: (e) => `✓ ${e.summary || 'Code validated successfully'}` 
@@ -152,6 +152,7 @@ class StreamingService {
           icon: eventConfig.icon,
           timestamp: new Date(event.timestamp).toISOString(),
           metadata: event,
+          version_id: 'versionId' in event ? event.versionId : null,
         });
 
       if (error) {

@@ -3,15 +3,25 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Highlight, themes } from 'prism-react-renderer';
 import { motion } from 'framer-motion';
-import { Loader2, Copy, Check, Download } from 'lucide-react';
+import { Loader2, Copy, Check, Download, ChevronDown } from 'lucide-react';
 import { GeneratedFile } from '../src/types/streaming';
 import { useTheme } from 'next-themes';
+
+interface Version {
+  id: string;
+  version_number: number;
+  name: string;
+  status: string;
+}
 
 interface StreamingCodeViewerProps {
   files: GeneratedFile[];
   currentFile?: string;
   isStreaming: boolean;
   selectedFile?: string;
+  versions?: Version[];
+  selectedVersionId?: string | null;
+  onVersionChange?: (versionId: string) => void;
 }
 
 /**
@@ -23,12 +33,17 @@ export function StreamingCodeViewer({
   currentFile,
   isStreaming,
   selectedFile,
+  versions = [],
+  selectedVersionId,
+  onVersionChange,
 }: StreamingCodeViewerProps) {
   const { resolvedTheme } = useTheme();
   const [displayedContent, setDisplayedContent] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [isVersionDropdownOpen, setIsVersionDropdownOpen] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Determine which file to display
   const fileToDisplay = files.find(
@@ -109,6 +124,20 @@ export function StreamingCodeViewer({
     }
   }, [displayedContent, isTyping]);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsVersionDropdownOpen(false);
+      }
+    };
+
+    if (isVersionDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isVersionDropdownOpen]);
+
   if (files.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
@@ -155,6 +184,55 @@ export function StreamingCodeViewer({
           <span className="text-xs text-muted-foreground">
             {displayedContent.split('\n').length} lines
           </span>
+          
+          {/* Version Dropdown */}
+          {versions.length > 0 && (
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setIsVersionDropdownOpen(!isVersionDropdownOpen)}
+                className="flex items-center gap-1.5 px-2 py-1 rounded text-xs hover:bg-muted dark:hover:bg-gray-700 transition-colors border border-border dark:border-gray-600"
+                title="Switch version"
+              >
+                <span className="font-medium">
+                  v{versions.find(v => v.id === selectedVersionId)?.version_number || versions[versions.length - 1]?.version_number || 1}
+                </span>
+                <ChevronDown className={`h-3 w-3 transition-transform ${isVersionDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {isVersionDropdownOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="absolute right-0 mt-1 w-48 bg-background dark:bg-[#1D1D1D] border border-border dark:border-gray-600 rounded-md shadow-lg z-50 max-h-64 overflow-y-auto"
+                >
+                  {versions
+                    .sort((a, b) => b.version_number - a.version_number)
+                    .map((version) => (
+                      <button
+                        key={version.id}
+                        onClick={() => {
+                          onVersionChange?.(version.id);
+                          setIsVersionDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-xs hover:bg-muted dark:hover:bg-gray-700 transition-colors flex items-center justify-between ${
+                          selectedVersionId === version.id ? 'bg-primary/10 text-primary' : ''
+                        }`}
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-medium">v{version.version_number}</span>
+                          <span className="text-muted-foreground truncate">{version.name}</span>
+                        </div>
+                        {selectedVersionId === version.id && (
+                          <Check className="h-3 w-3 text-primary" />
+                        )}
+                      </button>
+                    ))}
+                </motion.div>
+              )}
+            </div>
+          )}
+          
           <div className="flex items-center gap-1">
             <button
               onClick={handleCopyCode}

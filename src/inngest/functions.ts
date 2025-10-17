@@ -5,6 +5,8 @@ import { Octokit } from '@octokit/rest';
 import { createClient } from '@supabase/supabase-js';
 import { AgentState, AIResult } from './types';
 import { streamingService } from '../services/streaming-service';
+import { VersionManager } from '../services/version-manager';
+import { ContextBuilder } from '../services/context-builder';
 
 // Initialize OpenAI client with API key from environment
 const openaiClient = new OpenAI({
@@ -94,6 +96,12 @@ export const messageCreated = inngest.createFunction(
       console.log(`Message ${messageId} for project ${project_id || 'unknown'} processed successfully`);
       return { success: true, messageId, project_id };
     });
+
+    // NOTE: Removed automatic iteration trigger to prevent duplicates
+    // Iteration is now ONLY triggered by the frontend:
+    // - /ask page: triggers api/generate directly
+    // - /projects page: triggers api/iterate via send() function
+    // This prevents race conditions and duplicate workflow executions
   }
 );
 
@@ -1383,7 +1391,7 @@ EXAMPLE STRUCTURE:
     });
 
     // Step 7: Save successful result to messages and fragments tables
-    await step.run("save-result-to-messages", async () => {
+    const savedResult = await step.run("save-result-to-messages", async () => {
       try {
         const { MessageService } = await import('../modules/messages/service');
         
@@ -1394,7 +1402,8 @@ EXAMPLE STRUCTURE:
         
         const resultContent = `API Generation Complete!\n\n${summary}\n\nGenerated Files:\n${filesList.map(file => `- ${file}`).join('\n')}\n\nValidation: ${validationResult.overallValid ? 'Passed' : 'Failed'}`;
         
-        // Save the AI response as a message with fragment
+        // Get the version ID that will be created in the next step (we'll update the message after)
+        // For now, save without version_id and update it later
         const result = await MessageService.saveResult({
           content: resultContent,
           role: 'assistant',
@@ -1421,8 +1430,84 @@ EXAMPLE STRUCTURE:
       } catch (error) {
         console.error('Error saving result to messages/fragments:', error);
         // Don't throw error here - API generation succeeded, this is just for UI display
+        return null;
       }
     });
+
+    // Step 7.5: Create Version 1 for initial generation
+    const versionResult = await step.run("create-initial-version", async () => {
+      try {
+        const { VersionManager } = await import('../services/version-manager');
+        
+        const files = apiResult.state.data.files || {};
+        const summary = apiResult.state.data.summary || 'Generated API successfully';
+        
+        // Generate version name from prompt (first 2-3 words)
+        const words = prompt.trim().split(/\s+/).slice(0, 3);
+        const versionName = words.map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        
+        // Create Version 1
+        const version = await VersionManager.createVersion({
+          project_id: projectId,
+          version_number: 1,
+          name: versionName,
+          description: `Initial generation: ${summary}`,
+          files: files,
+          command_type: 'GENERATE_API',
+          prompt: prompt,
+          parent_version_id: undefined, // First version has no parent
+          status: 'complete',
+          metadata: {
+            validation_results: validationResult,
+            pr_url: prUrl,
+            api_fragment_id: savedApi.id,
+            requirements: apiResult.state.data.requirements || [],
+          },
+        });
+        
+        console.log('Created initial version:', version.id, 'v' + version.version_number);
+        return { versionId: version.id, versionNumber: version.version_number };
+      } catch (error) {
+        console.error('Error creating initial version:', error);
+        // Don't fail the entire generation if version creation fails
+        return { versionId: null, versionNumber: null };
+      }
+    });
+
+    const versionId = versionResult?.versionId;
+
+    // Step 7.7: Link message and fragments to version (in background)
+    if (versionId && savedResult) {
+      await step.run("link-to-version", async () => {
+        try {
+          const resultMessageId = savedResult?.message?.id;
+          
+          // Update all user messages for this project with the version_id
+          await supabase
+            .from('messages')
+            .update({ version_id: versionId })
+            .eq('project_id', projectId)
+            .eq('role', 'user');
+          
+          // Update assistant message/fragment too if we have the ID
+          if (resultMessageId) {
+            await supabase
+              .from('messages')
+              .update({ version_id: versionId })
+              .eq('id', resultMessageId);
+            
+            await supabase
+              .from('fragments')
+              .update({ version_id: versionId })
+              .eq('message_id', resultMessageId);
+          }
+          
+          console.log('Linked messages and fragments to version:', versionId);
+        } catch (error) {
+          console.error('Error linking to version:', error);
+        }
+      });
+    }
 
     // Step 8: Update job status to completed (if job tracking is available)
     await step.run("update-job-completed", async () => {
@@ -1457,26 +1542,35 @@ EXAMPLE STRUCTURE:
       }
     });
     
-      // Emit completion event
-      if (projectId) {
-        const filesList = Object.keys(apiResult.state.data.files || {});
-        await streamingService.emit(projectId, {
-          type: 'complete',
-          summary: apiResult.state.data.summary || 'API generated successfully!',
-          totalFiles: filesList.length,
-        });
-        
-        // Close streaming connection
-        streamingService.closeProject(projectId);
-      }
+    // Step 8.5: Emit completion event AFTER all file generation and validation
+    // This ensures users see detailed progress before the version card appears
+    await step.run("emit-complete", async () => {
+      const filesList = Object.keys(apiResult.state.data.files || {});
+      
+      await streamingService.emit(projectId, {
+        type: 'complete',
+        summary: apiResult.state.data.summary || 'API generated successfully!',
+        totalFiles: filesList.length,
+        versionId: versionId || undefined,
+      });
+      
+      console.log('Emitted completion event with versionId:', versionId);
+    });
     
-      return {
-        success: true,
-        jobId,
-        apiFragmentId: savedApi.id,
-        validation: validationResult,
-        prUrl
-      };
+    // Step 9: Close streaming connection
+    await step.run("close-stream", async () => {
+      streamingService.closeProject(projectId);
+      console.log('Closed streaming connection for project:', projectId);
+    });
+    
+    return {
+      success: true,
+      jobId,
+      apiFragmentId: savedApi.id,
+      validation: validationResult,
+      prUrl,
+      versionId,
+    };
     } catch (error) {
       console.error('Error in generateAPI function:', error);
       
@@ -1507,6 +1601,303 @@ EXAMPLE STRUCTURE:
           console.error('Failed to update job status to failed:', updateError);
         }
       }
+      
+      throw error;
+    }
+  }
+);
+
+/**
+ * Iterate API - Version-aware generation workflow
+ * Similar to generateAPI but builds on previous versions
+ */
+export const iterateAPI = inngest.createFunction(
+  { id: "iterate-api" },
+  { event: "api/iterate" },
+  async ({ event, step }) => {
+    const { projectId, messageId, prompt, commandType, shouldCreateNewVersion, parentVersionId, conversationHistory } = event.data;
+    
+    let versionId: string | undefined;
+    
+    try {
+      // Step 1: Create version record
+      versionId = await step.run("create-version", async () => {
+        // Get parent version
+        const parentVersion = parentVersionId 
+          ? await VersionManager.getVersion(parentVersionId)
+          : await VersionManager.getLatestVersion(projectId);
+        
+        // Get next version number
+        const versionNumber = await VersionManager.getNextVersionNumber(projectId);
+        
+        // Generate version name from prompt (first 2-3 words)
+        const words = prompt.trim().split(/\s+/).slice(0, 3);
+        const versionName = words.map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        
+        // Create version
+        const version = await VersionManager.createVersion({
+          project_id: projectId,
+          version_number: versionNumber,
+          name: versionName,
+          description: `Generated from: ${prompt}`,
+          files: {}, // Will be populated during generation
+          command_type: commandType,
+          prompt,
+          parent_version_id: parentVersion?.id,
+          status: 'generating',
+          metadata: {},
+        });
+        
+        return version.id;
+      });
+      
+      // Step 2: Build context from parent version + conversation
+      const context = await step.run("build-context", async () => {
+        return await ContextBuilder.buildContext(projectId, 20);
+      });
+      
+      // Step 3: Generate code with context
+      const apiResult = await step.run("generate-api-code", async () => {
+        // Emit step start event
+        await streamingService.emit(projectId, {
+          type: 'step:start',
+          step: 'Planning',
+          message: 'Planning changes...',
+          versionId,
+        });
+        
+        // Build enhanced prompt with context
+        const enhancedPrompt = ContextBuilder.formatForPrompt(context, prompt);
+        
+        const completion = await openaiClient.chat.completions.create({
+          model: "gpt-4o",
+          stream: true,
+          messages: [
+            {
+              role: "system",
+              content: `You are an expert code iteration assistant. You help users modify and improve existing codebases.
+
+IMPORTANT INSTRUCTIONS:
+1. You are working on an EXISTING codebase. The user wants to ${commandType === 'CREATE_FILE' ? 'add new features' : commandType === 'MODIFY_FILE' ? 'modify existing files' : commandType === 'DELETE_FILE' ? 'remove features' : commandType === 'REFACTOR_CODE' ? 'refactor code' : 'enhance the API'}.
+2. PRESERVE ALL EXISTING FILES that are not being modified.
+3. Only output the files that are NEW or MODIFIED.
+4. Maintain the same coding style and patterns from the existing code.
+5. Ensure backward compatibility unless explicitly asked to break it.
+
+Current codebase context:
+${context.summary}
+
+You MUST respond with valid JSON in this exact structure:
+{
+  "openApiSpec": { /* OpenAPI 3.0 spec */ },
+  "implementationCode": {
+    "filename.ext": "file content..."
+  },
+  "requirements": ["List of changes made"],
+  "description": "Brief summary of changes"
+}`,
+            },
+            { role: "user", content: enhancedPrompt }
+          ],
+          response_format: { type: "json_object" },
+        });
+
+        // Emit generation start event
+        await streamingService.emit(projectId, {
+          type: 'step:complete',
+          step: 'Planning',
+          message: 'Plan complete. Generating code...',
+          versionId,
+        });
+        
+        await streamingService.emit(projectId, {
+          type: 'step:start',
+          step: 'Generating',
+          message: 'Generating files...',
+          versionId,
+        });
+
+        // Collect streaming response from OpenAI
+        let rawOutput = '';
+        let chunkCount = 0;
+        
+        for await (const chunk of completion) {
+          const content = chunk.choices[0]?.delta?.content || '';
+          if (content) {
+            rawOutput += content;
+            chunkCount++;
+            
+            // Emit progress updates periodically
+            if (chunkCount % 10 === 0) {
+              const progress = Math.min(95, Math.round((rawOutput.length / 3000) * 100));
+              await streamingService.emit(projectId, {
+                type: 'code:chunk',
+                filename: 'Generating...',
+                chunk: '',
+                progress,
+                versionId,
+              });
+            }
+          }
+        }
+        
+        console.log("Raw OpenAI output:", rawOutput.substring(0, 500));
+        
+        try {
+          // Handle potential markdown-wrapped JSON
+          let jsonStr = rawOutput || '';
+          const markdownMatch = rawOutput?.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+          if (markdownMatch) {
+            jsonStr = markdownMatch[1];
+          }
+          
+          const parsed = JSON.parse(jsonStr);
+          
+          // Merge with parent version files
+          const parentFiles = context.previousFiles || {};
+          const newFiles = parsed.implementationCode || {};
+          
+          // Add OpenAPI spec to files if it exists
+          if (parsed.openApiSpec) {
+            newFiles['openapi.json'] = JSON.stringify(parsed.openApiSpec, null, 2);
+          }
+          
+          // Combine parent files with new/modified files
+          const combinedFiles = { ...parentFiles, ...newFiles };
+          
+          // Stream individual files to frontend
+          if (Object.keys(newFiles).length > 0) {
+            for (const [filename, content] of Object.entries(newFiles)) {
+              // Emit file generating event
+              await streamingService.emit(projectId, {
+                type: 'file:generating',
+                filename,
+                path: filename,
+                versionId,
+              });
+              
+              await new Promise(resolve => setTimeout(resolve, 100));
+              
+              // Stream code in chunks
+              const fileContent = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+              const chunkSize = 50;
+              for (let i = 0; i < fileContent.length; i += chunkSize) {
+                const chunk = fileContent.slice(i, i + chunkSize);
+                const progress = Math.round(((i + chunkSize) / fileContent.length) * 100);
+                
+                await streamingService.emit(projectId, {
+                  type: 'code:chunk',
+                  filename,
+                  chunk,
+                  progress: Math.min(progress, 100),
+                  versionId,
+                });
+                
+                await new Promise(resolve => setTimeout(resolve, 30));
+              }
+              
+              // Emit file complete event
+              await streamingService.emit(projectId, {
+                type: 'file:complete',
+                filename,
+                content: fileContent,
+                path: filename,
+                versionId,
+              });
+              
+              await new Promise(resolve => setTimeout(resolve, 300));
+            }
+          }
+          
+          const requirements = Array.isArray(parsed.requirements) ? parsed.requirements : [];
+          
+          const result: AIResult = {
+            state: {
+              data: {
+                summary: parsed.description || "",
+                files: combinedFiles,
+                requirements: requirements
+              } as AgentState
+            }
+          };
+          
+          return result;
+        } catch (error) {
+          console.error("Failed to parse generated API code:", error);
+          throw error;
+        }
+      });
+      
+      // Step 4: Update version with generated files
+      await step.run("update-version", async () => {
+        if (!('state' in apiResult) || !apiResult.state?.data) {
+          throw new Error('Invalid API result structure');
+        }
+        
+        await VersionManager.updateVersion(versionId!, {
+          files: apiResult.state.data.files,
+          status: 'complete',
+          metadata: {
+            requirements: apiResult.state.data.requirements,
+            summary: apiResult.state.data.summary,
+          },
+        });
+      });
+      
+      // Step 5: Update message with version_id
+      await step.run("link-message-to-version", async () => {
+        await supabase
+          .from('messages')
+          .update({ version_id: versionId })
+          .eq('id', messageId);
+      });
+      
+      // Step 6: Emit completion event
+      await step.run("emit-complete", async () => {
+        if (!('state' in apiResult) || !apiResult.state?.data) {
+          throw new Error('Invalid API result structure');
+        }
+        
+        const filesList = Object.keys(apiResult.state.data.files || {});
+        
+        await streamingService.emit(projectId, {
+          type: 'complete',
+          summary: apiResult.state.data.summary || 'Changes applied successfully!',
+          totalFiles: filesList.length,
+          versionId,
+        });
+        
+        // Close streaming connection
+        streamingService.closeProject(projectId);
+      });
+      
+      return {
+        success: true,
+        versionId,
+        projectId,
+      };
+    } catch (error) {
+      console.error('Error in iterateAPI function:', error);
+      
+      // Mark version as failed
+      if (versionId) {
+        try {
+          await VersionManager.updateVersion(versionId, { status: 'failed' });
+        } catch (updateError) {
+          console.error('Failed to mark version as failed:', updateError);
+        }
+      }
+      
+      // Emit error event
+      await streamingService.emit(projectId, {
+        type: 'error',
+        message: (error as Error).message || 'An error occurred during iteration',
+        stage: 'Iteration',
+        versionId,
+      });
+      
+      // Close streaming connection
+      streamingService.closeProject(projectId);
       
       throw error;
     }
