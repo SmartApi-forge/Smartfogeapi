@@ -1,6 +1,6 @@
 import { serve } from "inngest/next";
 import { inngest } from "@/src/inngest/client";
-import { generateAPI, deployAPI, messageCreated, iterateAPI } from "@/src/inngest/functions";
+import { generateAPI, deployAPI, messageCreated, iterateAPI, cloneAndPreviewRepository } from "@/src/inngest/functions";
 
 // Create an API that serves the SmartAPIForge functions
 export const { GET, POST, PUT } = serve({
@@ -10,5 +10,6 @@ export const { GET, POST, PUT } = serve({
     generateAPI,
     deployAPI,
     iterateAPI, // Added for v0-style iteration workflow
+    cloneAndPreviewRepository, // GitHub clone and preview workflow
   ],
 });
