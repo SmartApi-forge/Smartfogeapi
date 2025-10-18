@@ -2042,7 +2042,10 @@ You MUST respond with valid JSON in this exact structure:
  * Just clones repo, installs deps, starts preview
  */
 export const cloneAndPreviewRepository = inngest.createFunction(
-  { id: "clone-and-preview-repository" },
+  { 
+    id: "clone-and-preview-repository",
+    retries: 2, // Retry up to 2 times
+  },
   { event: "github/clone-and-preview" },
   async ({ event, step }) => {
     const { projectId, repoUrl, repoFullName, githubRepoId, userId } = event.data;
@@ -2066,7 +2069,19 @@ export const cloneAndPreviewRepository = inngest.createFunction(
       });
       
       // Step 2: Clone repository and start preview
-      const previewResult = await step.run("clone-and-setup-preview", async () => {
+      // Note: This step can take 10-15 minutes for Next.js 15 + Tailwind v4 projects (first build)
+      // The timeout is controlled by E2B sandbox command timeout (10 mins) and Vercel function timeout
+      const previewResult: {
+        success: boolean;
+        framework: string;
+        packageManager: string;
+        sandboxUrl?: string;
+        previewPort?: number;
+        previewError?: string;
+        installOutput?: string;
+        sandboxId?: string;
+        repoFiles?: Record<string, string>;
+      } = await step.run("clone-and-setup-preview", async () => {
         let sandbox: Sandbox | null = null;
         
         try {

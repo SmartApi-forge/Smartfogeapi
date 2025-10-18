@@ -313,7 +313,7 @@ export class GitHubRepositoryService {
 
       console.log(`📦 Running: ${installCommand}`);
       const result = await sandbox.commands.run(`cd ${repoPath} && ${installCommand}`, {
-        timeoutMs: 300000, // 5 minutes timeout
+        timeoutMs: 600000, // 10 minutes timeout (Next.js 15 can take long)
       });
 
       // If successful, return immediately
@@ -334,7 +334,7 @@ export class GitHubRepositoryService {
         console.log(`🔄 Retrying with fallback: ${fallbackCommand}`);
         
         const fallbackResult = await sandbox.commands.run(`cd ${repoPath} && ${fallbackCommand}`, {
-          timeoutMs: 300000, // 5 minutes timeout
+          timeoutMs: 600000, // 10 minutes timeout
         });
 
         if (fallbackResult.exitCode === 0) {
@@ -407,11 +407,12 @@ export class GitHubRepositoryService {
       }
 
       // Step 2: Start the dev server in background (longer timeout for first build)
-      // Note: Next.js 15 + Tailwind v4 can take 5-10 minutes for first build
+      // Note: Next.js 15 + Tailwind v4 can take 10-15 minutes for first build
+      // The compile script itself waits 10 minutes (600s), so we give 20 mins total
       const startCommand = `source /usr/local/bin/compile_fullstack.sh && start_server_background "${repoPath}" ${port} /tmp/server.log`;
       
       const result = await sandbox.commands.run(startCommand, {
-        timeoutMs: 600000, // 10 minutes timeout for first Next.js build + server startup
+        timeoutMs: 1200000, // 20 minutes timeout for Next.js 15 first build + server startup
       });
 
       // Check if start was successful
