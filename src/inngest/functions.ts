@@ -2044,11 +2044,17 @@ You MUST respond with valid JSON in this exact structure:
 export const cloneAndPreviewRepository = inngest.createFunction(
   { 
     id: "clone-and-preview-repository",
-    retries: 2, // Retry up to 2 times
+    retries: 1, // Retry only once to avoid excessive retries
+    concurrency: {
+      limit: 5, // Limit concurrent executions
+    },
   },
   { event: "github/clone-and-preview" },
   async ({ event, step }) => {
     const { projectId, repoUrl, repoFullName, githubRepoId, userId } = event.data;
+    
+    // Store sandbox ID across steps
+    let sandboxId: string | null = null;
     
     try {
       // Step 1: Get GitHub integration
@@ -2068,20 +2074,8 @@ export const cloneAndPreviewRepository = inngest.createFunction(
         return data;
       });
       
-      // Step 2: Clone repository and start preview
-      // Note: This step can take 10-15 minutes for Next.js 15 + Tailwind v4 projects (first build)
-      // The timeout is controlled by E2B sandbox command timeout (10 mins) and Vercel function timeout
-      const previewResult: {
-        success: boolean;
-        framework: string;
-        packageManager: string;
-        sandboxUrl?: string;
-        previewPort?: number;
-        previewError?: string;
-        installOutput?: string;
-        sandboxId?: string;
-        repoFiles?: Record<string, string>;
-      } = await step.run("clone-and-setup-preview", async () => {
+      // Step 2: Create sandbox and clone repository
+      const cloneResult = await step.run("clone-repository", async () => {
         let sandbox: Sandbox | null = null;
         
         try {
@@ -2090,6 +2084,9 @@ export const cloneAndPreviewRepository = inngest.createFunction(
           // Create sandbox using full-stack template
           const templateId = process.env.E2B_FULLSTACK_TEMPLATE_ID || 'ckskh5feot2y94v5z07d';
           sandbox = await Sandbox.create(templateId);
+          
+          // Store sandbox ID for later cleanup if needed
+          sandboxId = sandbox.sandboxId;
           
           // Emit starting event
           await streamingService.emit(projectId, {
@@ -2117,32 +2114,61 @@ export const cloneAndPreviewRepository = inngest.createFunction(
             message: 'Repository cloned successfully!',
           });
           
-          // Detect framework
-          await streamingService.emit(projectId, {
-            type: 'step:start',
-            step: 'Detecting Framework',
-            message: 'Analyzing project structure...',
-          });
+          return {
+            sandboxId: sandbox.sandboxId,
+            repoPath,
+          };
+        } catch (error) {
+          console.error('Clone repository error:', error);
+          throw error;
+        }
+      });
+      
+      // Step 3: Detect framework (separate step for clarity)
+      const frameworkInfo = await step.run("detect-framework", async () => {
+        const { githubRepositoryService } = await import('../services/github-repository-service');
+        
+        // Recreate sandbox connection
+        const sandbox = await Sandbox.connect(cloneResult.sandboxId);
+        
+        await streamingService.emit(projectId, {
+          type: 'step:start',
+          step: 'Detecting Framework',
+          message: 'Analyzing project structure...',
+        });
+        
+        const framework = await githubRepositoryService.detectFramework(sandbox, cloneResult.repoPath);
+        
+        await streamingService.emit(projectId, {
+          type: 'step:complete',
+          step: 'Detecting Framework',
+          message: `Detected: ${framework.framework}`,
+        });
+        
+        return {
+          framework: framework.framework,
+          packageManager: framework.packageManager,
+          port: framework.port || 3000,
+          frameworkDetails: framework,
+        };
+      });
+      
+      // Step 4: Read repository files (separate step)
+      const repoFiles = await step.run("read-repository-files", async () => {
+        const sandbox = await Sandbox.connect(cloneResult.sandboxId);
+        const repoPath = cloneResult.repoPath;
           
-          const framework = await githubRepositoryService.detectFramework(sandbox, repoPath);
-          
-          await streamingService.emit(projectId, {
-            type: 'step:complete',
-            step: 'Detecting Framework',
-            message: `Detected: ${framework.framework}`,
-          });
-          
-          // Read repository files
-          await streamingService.emit(projectId, {
-            type: 'step:start',
-            step: 'Reading Files',
-            message: 'Reading repository files...',
-          });
-          
-          const repoFiles: Record<string, string> = {};
-          
-          // Get list of source files - EXCLUDE build/generated folders
-          const findFilesCommand = `find ${repoPath} -type f \\( -name '*.py' -o -name '*.js' -o -name '*.ts' -o -name '*.tsx' -o -name '*.jsx' -o -name '*.json' -o -name '*.md' -o -name '*.txt' -o -name '*.yml' -o -name '*.yaml' -o -name '*.css' -o -name '*.scss' \\) ! -path '*/node_modules/*' ! -path '*/.git/*' ! -path '*/dist/*' ! -path '*/build/*' ! -path '*/.next/*' ! -path '*/__pycache__/*' ! -path '*/coverage/*' ! -path '*/.cache/*' ! -path '*/out/*' ! -path '*/.turbo/*' | head -200`;
+        // Read repository files
+        await streamingService.emit(projectId, {
+          type: 'step:start',
+          step: 'Reading Files',
+          message: 'Reading repository files...',
+        });
+        
+        const filesMap: Record<string, string> = {};
+        
+        // Get list of source files - EXCLUDE build/generated folders
+        const findFilesCommand = `find ${repoPath} -type f \\( -name '*.py' -o -name '*.js' -o -name '*.ts' -o -name '*.tsx' -o -name '*.jsx' -o -name '*.json' -o -name '*.md' -o -name '*.txt' -o -name '*.yml' -o -name '*.yaml' -o -name '*.css' -o -name '*.scss' \\) ! -path '*/node_modules/*' ! -path '*/.git/*' ! -path '*/dist/*' ! -path '*/build/*' ! -path '*/.next/*' ! -path '*/__pycache__/*' ! -path '*/coverage/*' ! -path '*/.cache/*' ! -path '*/out/*' ! -path '*/.turbo/*' | head -200`;
           
           const filesListResult = await sandbox.commands.run(findFilesCommand);
           
@@ -2211,7 +2237,7 @@ export const cloneAndPreviewRepository = inngest.createFunction(
                   continue;
                 }
                 
-                repoFiles[relativePath] = fileContent;
+                filesMap[relativePath] = fileContent;
                 filesRead++;
                 
                 // Only emit config files to stream to avoid overwhelming
@@ -2232,126 +2258,180 @@ export const cloneAndPreviewRepository = inngest.createFunction(
             console.log(`Successfully read ${filesRead} files, skipped ${filesSkipped} files`);
           }
           
-          console.log(`Successfully read ${Object.keys(repoFiles).length} source files`);
+          console.log(`Successfully read ${Object.keys(filesMap).length} source files`);
           
           await streamingService.emit(projectId, {
             type: 'step:complete',
             step: 'Reading Files',
-            message: `Read ${Object.keys(repoFiles).length} source files`,
+            message: `Read ${Object.keys(filesMap).length} source files`,
           });
           
-          // Start preview server (this will install dependencies and start the server)
-          let previewServer = null;
-          
-          // Try to start preview even if framework is unknown
-          if (framework.startCommand || framework.framework !== 'unknown') {
-            // Emit installing step
-            await streamingService.emit(projectId, {
-              type: 'step:start',
-              step: 'Installing Dependencies',
-              message: `Installing with ${framework.packageManager}...`,
-            });
-            
-            // Then emit starting preview step
-            await streamingService.emit(projectId, {
-              type: 'step:start',
-              step: 'Starting Preview',
-              message: 'Starting development server...',
-            });
-            
-            previewServer = await githubRepositoryService.startPreviewServer(
-              sandbox,
-              framework,
-              repoPath
-            );
-            
-            if (previewServer.success) {
-              console.log('✅ Preview server started:', previewServer.url);
-              
-              await streamingService.emit(projectId, {
-                type: 'step:complete',
-                step: 'Installing Dependencies',
-                message: 'Dependencies installed successfully!',
-              });
-              
-              await streamingService.emit(projectId, {
-                type: 'step:complete',
-                step: 'Starting Preview',
-                message: `Preview ready on port ${previewServer.port}!`,
-              });
-            } else {
-              console.error('❌ Preview server failed to start:', previewServer.error);
-              console.error('📋 Install output:', previewServer.installOutput);
-              
-              await streamingService.emit(projectId, {
-                type: 'step:complete',
-                step: 'Installing Dependencies',
-                message: 'Installation completed',
-              });
-              
-              await streamingService.emit(projectId, {
-                type: 'step:complete',
-                step: 'Starting Preview',
-                message: `Preview server could not be started: ${previewServer.error || 'Unknown error'}`,
-              });
-            }
-          } else {
-            console.warn('⚠️ Skipping preview server - no start command for framework:', framework.framework);
-            
-            // Framework unknown and no start command - skip server start
-            await streamingService.emit(projectId, {
-              type: 'step:complete',
-              step: 'Starting Preview',
-              message: 'Unable to auto-start server - framework not detected',
-            });
-          }
-          
-          // Generate the sandbox URL based on framework port
-          const defaultPort = framework.port || 3000;
-          const sandboxUrl = previewServer?.url || `https://${sandbox.sandboxId}-${defaultPort}.e2b.dev`;
-          
-          console.log('📡 Sandbox URL:', sandboxUrl);
-          console.log('   - Framework:', framework.framework);
-          console.log('   - Port:', defaultPort);
-          console.log('   - Sandbox ID:', sandbox.sandboxId);
-          
-          return {
-            success: true,
-            sandboxId: sandbox.sandboxId,
-            sandboxUrl, // Single URL for easy access
-            framework: framework.framework,
-            packageManager: framework.packageManager,
-            previewPort: defaultPort,
-            previewError: previewServer?.success === false ? previewServer.error : undefined,
-            installOutput: previewServer?.success === false ? previewServer.installOutput : undefined, // Include npm logs for debugging
-            repoFiles,
-          };
-        } catch (error) {
-          console.error('Clone and preview error:', error);
-          
-          // Clean up sandbox on error
-          if (sandbox && typeof sandbox.kill === 'function') {
-            try {
-              await sandbox.kill();
-            } catch (cleanupError) {
-              console.error('Sandbox cleanup error:', cleanupError);
-            }
-          }
-          
-          throw error;
-        }
+          return filesMap;
       });
       
-      // Step 3: Save repository files to database
+      // Step 5: Install dependencies (separate step with proper timeout)
+      const installResult = await step.run("install-dependencies", async () => {
+        const { githubRepositoryService } = await import('../services/github-repository-service');
+        const sandbox = await Sandbox.connect(cloneResult.sandboxId);
+        const repoPath = cloneResult.repoPath;
+        
+        // Only install if we have a known package manager
+        if (!frameworkInfo.packageManager || frameworkInfo.packageManager === 'unknown') {
+          console.warn('⚠️ Skipping dependency installation - package manager not detected');
+          return { 
+            success: false, 
+            skipped: true,
+            output: '',
+            error: 'Package manager not detected',
+          };
+        }
+        
+        // Emit installing step
+        await streamingService.emit(projectId, {
+          type: 'step:start',
+          step: 'Installing Dependencies',
+          message: `Installing with ${frameworkInfo.packageManager}...`,
+        });
+        
+        const result = await githubRepositoryService.installDependencies(
+          sandbox,
+          frameworkInfo.packageManager,
+          repoPath
+        );
+        
+        if (result.success) {
+          await streamingService.emit(projectId, {
+            type: 'step:complete',
+            step: 'Installing Dependencies',
+            message: result.fallbackUsed ? 'Dependencies installed with --legacy-peer-deps' : 'Dependencies installed successfully!',
+          });
+        } else {
+          await streamingService.emit(projectId, {
+            type: 'step:complete',
+            step: 'Installing Dependencies',
+            message: `Installation failed: ${result.error?.substring(0, 100) || 'Unknown error'}`,
+          });
+        }
+        
+        return {
+          ...result,
+          skipped: false,
+        };
+      });
+      
+      // Step 6: Start preview server (separate step with proper timeout)
+      const previewResult = await step.run("start-preview-server", async () => {
+        const { githubRepositoryService } = await import('../services/github-repository-service');
+        const sandbox = await Sandbox.connect(cloneResult.sandboxId);
+        const repoPath = cloneResult.repoPath;
+        
+        // Try to start preview if we have a framework and dependencies were installed
+        if (!frameworkInfo.frameworkDetails.startCommand && frameworkInfo.framework === 'unknown') {
+          console.warn('⚠️ Skipping preview server - no start command for framework:', frameworkInfo.framework);
+          
+          await streamingService.emit(projectId, {
+            type: 'step:complete',
+            step: 'Starting Preview',
+            message: 'Unable to auto-start server - framework not detected',
+          });
+          
+          // Generate sandbox URL anyway
+          const defaultPort = frameworkInfo.port || 3000;
+          const sandboxUrl = `https://${cloneResult.sandboxId}-${defaultPort}.e2b.dev`;
+          
+          return {
+            success: false,
+            skipped: true,
+            sandboxUrl,
+            port: defaultPort,
+            error: 'Framework not detected',
+            installOutput: undefined,
+          };
+        }
+        
+        // Skip if dependencies installation failed
+        if (!installResult.success && !installResult.skipped) {
+          await streamingService.emit(projectId, {
+            type: 'step:complete',
+            step: 'Starting Preview',
+            message: 'Skipped - dependencies installation failed',
+          });
+          
+          const defaultPort = frameworkInfo.port || 3000;
+          const sandboxUrl = `https://${cloneResult.sandboxId}-${defaultPort}.e2b.dev`;
+          
+          return {
+            success: false,
+            skipped: true,
+            sandboxUrl,
+            port: defaultPort,
+            error: 'Dependencies installation failed',
+            installOutput: installResult.output,
+          };
+        }
+        
+        // Emit starting preview step
+        await streamingService.emit(projectId, {
+          type: 'step:start',
+          step: 'Starting Preview',
+          message: 'Starting development server...',
+        });
+        
+        // Start preview server (skip install since we already did it in previous step)
+        const previewServer = await githubRepositoryService.startPreviewServer(
+          sandbox,
+          frameworkInfo.frameworkDetails,
+          repoPath,
+          true // skipInstall = true, we already installed dependencies
+        );
+        
+        if (previewServer.success) {
+          console.log('✅ Preview server started:', previewServer.url);
+          
+          await streamingService.emit(projectId, {
+            type: 'step:complete',
+            step: 'Starting Preview',
+            message: `Preview ready on port ${previewServer.port}!`,
+          });
+        } else {
+          console.error('❌ Preview server failed to start:', previewServer.error);
+          
+          await streamingService.emit(projectId, {
+            type: 'step:complete',
+            step: 'Starting Preview',
+            message: `Preview server could not be started: ${previewServer.error?.substring(0, 100) || 'Unknown error'}`,
+          });
+        }
+        
+        // Generate the sandbox URL based on framework port
+        const defaultPort = frameworkInfo.port || 3000;
+        const sandboxUrl = previewServer?.url || `https://${cloneResult.sandboxId}-${defaultPort}.e2b.dev`;
+        
+        console.log('📡 Sandbox URL:', sandboxUrl);
+        console.log('   - Framework:', frameworkInfo.framework);
+        console.log('   - Port:', defaultPort);
+        console.log('   - Sandbox ID:', cloneResult.sandboxId);
+        
+        return {
+          success: previewServer.success,
+          skipped: false,
+          sandboxUrl,
+          port: previewServer.port || defaultPort,
+          error: previewServer.error,
+          installOutput: previewServer.installOutput,
+        };
+      });
+      
+      // Step 7: Save repository files to database
       await step.run("save-repository-files", async () => {
         try {
           const { MessageService } = await import('../modules/messages/service');
           
           // Create a message with the repository files
-          const filesCount = Object.keys(previewResult.repoFiles || {}).length;
+          const filesCount = Object.keys(repoFiles || {}).length;
           const previewStatus = previewResult.sandboxUrl 
-            ? `Sandbox URL: ${previewResult.sandboxUrl}` 
-            : `Sandbox created (${previewResult.framework || 'framework detection failed'})`;
+            ? `Preview: ${previewResult.sandboxUrl}` 
+            : `Sandbox created (${frameworkInfo.framework || 'framework detection failed'})`;
           const messageContent = `Repository cloned successfully! ${previewStatus}`;
           
           await MessageService.saveResult({
@@ -2362,18 +2442,19 @@ export const cloneAndPreviewRepository = inngest.createFunction(
             fragment: {
               title: `${repoFullName} - Cloned Repository`,
               sandbox_url: previewResult.sandboxUrl || `https://github.com/${repoFullName}`,
-              files: previewResult.repoFiles || {},
+              files: repoFiles || {},
               fragment_type: 'repo_clone',
               order_index: 0,
               metadata: {
                 repoUrl,
                 repoFullName,
-                framework: previewResult.framework || 'unknown',
-                packageManager: previewResult.packageManager || 'unknown',
+                framework: frameworkInfo.framework || 'unknown',
+                packageManager: frameworkInfo.packageManager || 'unknown',
                 filesCount,
-                sandboxId: previewResult.sandboxId || 'N/A',
+                sandboxId: cloneResult.sandboxId || 'N/A',
                 sandboxUrl: previewResult.sandboxUrl,
-                previewError: previewResult.previewError,
+                previewError: previewResult.error,
+                installError: installResult.success ? undefined : installResult.error,
               }
             }
           });
@@ -2385,11 +2466,11 @@ export const cloneAndPreviewRepository = inngest.createFunction(
         }
       });
       
-      // Step 4: Update project with sandbox URL and status
+      // Step 8: Update project with sandbox URL and status
       await step.run("update-project", async () => {
         const updateData: any = {
           status: 'completed', // Always mark as completed if files were cloned
-          framework: previewResult.framework || 'unknown',
+          framework: frameworkInfo.framework || 'unknown',
           github_repo_id: githubRepoId,
         };
         
@@ -2406,13 +2487,13 @@ export const cloneAndPreviewRepository = inngest.createFunction(
         if (error) {
           console.error('Failed to update project:', error);
         } else {
-          console.log(`Project updated - status: completed, framework: ${previewResult.framework}, sandbox URL: ${previewResult.sandboxUrl}`);
+          console.log(`Project updated - status: completed, framework: ${frameworkInfo.framework}, sandbox URL: ${previewResult.sandboxUrl}`);
         }
       });
       
-      // Step 5: Emit completion
+      // Step 9: Emit completion
       await step.run("emit-complete", async () => {
-        const filesCount = Object.keys(previewResult.repoFiles || {}).length;
+        const filesCount = Object.keys(repoFiles || {}).length;
         
         await streamingService.emit(projectId, {
           type: 'complete',
@@ -2426,7 +2507,14 @@ export const cloneAndPreviewRepository = inngest.createFunction(
       
       return {
         projectId,
-        ...previewResult,
+        sandboxId: cloneResult.sandboxId,
+        sandboxUrl: previewResult.sandboxUrl,
+        framework: frameworkInfo.framework,
+        packageManager: frameworkInfo.packageManager,
+        previewPort: previewResult.port,
+        previewError: previewResult.error,
+        installOutput: previewResult.installOutput,
+        filesCount: Object.keys(repoFiles || {}).length,
       };
     } catch (error: any) {
       console.error('Clone and preview workflow error:', error);

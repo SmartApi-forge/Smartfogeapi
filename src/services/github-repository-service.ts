@@ -379,31 +379,36 @@ export class GitHubRepositoryService {
   async startPreviewServer(
     sandbox: Sandbox,
     framework: FrameworkDetection,
-    repoPath: string = '/home/user/repo'
+    repoPath: string = '/home/user/repo',
+    skipInstall: boolean = false
   ): Promise<{ success: boolean; url?: string; port?: number; error?: string; installOutput?: string }> {
     try {
       const port = framework.port || 3000;
 
       console.log(`🚀 Starting preview server for ${framework.framework} on port ${port}...`);
 
-      // Step 1: Install dependencies first (with generous timeout)
-      console.log('📦 Installing dependencies...');
-      const installResult = await this.installDependencies(sandbox, framework.packageManager, repoPath);
-      
-      if (!installResult.success) {
-        console.error('❌ Dependency installation failed:', installResult.error);
-        // Return detailed error for debugging
-        return {
-          success: false,
-          error: installResult.error || 'Unknown installation error',
-          installOutput: installResult.output, // Include npm output for debugging
-        };
-      }
-      
-      if (installResult.fallbackUsed) {
-        console.log('⚠️ Dependencies installed using --legacy-peer-deps fallback');
+      // Step 1: Install dependencies first (with generous timeout) - unless skipInstall is true
+      if (!skipInstall) {
+        console.log('📦 Installing dependencies...');
+        const installResult = await this.installDependencies(sandbox, framework.packageManager, repoPath);
+        
+        if (!installResult.success) {
+          console.error('❌ Dependency installation failed:', installResult.error);
+          // Return detailed error for debugging
+          return {
+            success: false,
+            error: installResult.error || 'Unknown installation error',
+            installOutput: installResult.output, // Include npm output for debugging
+          };
+        }
+        
+        if (installResult.fallbackUsed) {
+          console.log('⚠️ Dependencies installed using --legacy-peer-deps fallback');
+        } else {
+          console.log('✅ Dependencies installed successfully');
+        }
       } else {
-        console.log('✅ Dependencies installed successfully');
+        console.log('⏭️  Skipping dependency installation (already done)');
       }
 
       // Step 2: Start the dev server in background (longer timeout for first build)
@@ -457,7 +462,6 @@ export class GitHubRepositoryService {
         return {
           success: false,
           error: errorMessage,
-          installOutput: installResult.output, // Include install output for context
         };
       }
     } catch (error: any) {
