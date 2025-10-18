@@ -228,6 +228,50 @@ python-multipart==0.0.6
   return baseStructure;
 }
 
+/**
+ * Calculate indentation level for a line of code
+ */
+function getIndentationLevel(line: string, tabSize: number = 2): number {
+  let spaces = 0;
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === ' ') {
+      spaces++;
+    } else if (line[i] === '\t') {
+      spaces += tabSize;
+    } else {
+      break;
+    }
+  }
+  return Math.floor(spaces / tabSize);
+}
+
+/**
+ * Generate indentation guides for a line
+ */
+function renderIndentationGuides(indentLevel: number, lineNumber: number): React.ReactElement[] {
+  const guides = [];
+  const lineNumberWidth = 52; // Width of line number column in pixels (responsive, increased for better alignment)
+  const charWidth = 8.4; // Approximate character width in pixels for monospace font
+  const tabSize = 2; // Tab size for indentation
+  
+  for (let i = 0; i < indentLevel; i++) {
+    const leftPosition = lineNumberWidth + (i * tabSize * charWidth); // Precise positioning
+    guides.push(
+      <div
+        key={`guide-${lineNumber}-${i}`}
+        className="absolute border-l-[1px] border-gray-400/50 dark:border-gray-500/60 pointer-events-none"
+        style={{
+          left: `${leftPosition}px`,
+          top: 0,
+          bottom: 0,
+          zIndex: 1,
+        }}
+      />
+    );
+  }
+  return guides;
+}
+
 function getLanguageFromFilename(filename: string): string {
   const ext = filename.split('.').pop()?.toLowerCase();
   const languageMap: Record<string, string> = {
@@ -533,34 +577,42 @@ function CodeViewer({
                   maxWidth: '100%',
                 }}
               >
-                {tokens.map((line, i) => (
-                  <div 
-                    key={i} 
-                    {...getLineProps({ line })}
-                    className="flex hover:bg-muted/20 transition-colors"
-                    style={{ minHeight: '1.25rem' }}
-                  >
-                    <span 
-                      className="inline-block w-7 sm:w-10 text-right mr-1.5 sm:mr-3 text-muted-foreground/50 select-none flex-shrink-0 text-xs leading-5"
-                      style={{ fontSize: 'clamp(10px, 2vw, 12px)' }}
+                {tokens.map((line, i) => {
+                  const lineText = line.map(token => token.content).join('');
+                  const indentLevel = getIndentationLevel(lineText);
+                  
+                  return (
+                    <div 
+                      key={i} 
+                      {...getLineProps({ line })}
+                      className="flex hover:bg-muted/20 transition-colors relative"
+                      style={{ minHeight: '1.25rem' }}
                     >
-                      {i + 1}
-                    </span>
-                    <span 
-                      className="flex-1 min-w-0 md:whitespace-pre md:break-normal" 
-                      style={{
-                        wordBreak: 'break-word',
-                        overflowWrap: 'break-word',
-                        whiteSpace: 'pre-wrap',
-                        maxWidth: '100%',
-                      }}
-                    >
-                      {line.map((token, key) => (
-                        <span key={key} {...getTokenProps({ token })} />
-                      ))}
-                    </span>
-                  </div>
-                ))}
+                      {/* Indentation guides */}
+                      {renderIndentationGuides(indentLevel, i)}
+                      
+                      <span 
+                        className="inline-block w-7 sm:w-10 text-right mr-1.5 sm:mr-3 text-muted-foreground/50 select-none flex-shrink-0 text-xs leading-5 relative z-10"
+                        style={{ fontSize: 'clamp(10px, 2vw, 12px)' }}
+                      >
+                        {i + 1}
+                      </span>
+                      <span 
+                        className="flex-1 min-w-0 md:whitespace-pre md:break-normal relative z-10" 
+                        style={{
+                          wordBreak: 'break-word',
+                          overflowWrap: 'break-word',
+                          whiteSpace: 'pre-wrap',
+                          maxWidth: '100%',
+                        }}
+                      >
+                        {line.map((token, key) => (
+                          <span key={key} {...getTokenProps({ token })} />
+                        ))}
+                      </span>
+                    </div>
+                  );
+                })}
               </pre>
             )}
           </Highlight>

@@ -282,22 +282,31 @@ export function StreamingCodeViewer({
                 fontSize: '14px',
               }}
             >
-              {tokens.map((line, i) => (
-                <div
-                  key={i}
-                  {...getLineProps({ line })}
-                  className="flex hover:bg-muted/20 dark:hover:bg-gray-800/30 transition-colors"
-                >
-                  <span className="inline-block w-10 text-right mr-3 text-gray-500 select-none flex-shrink-0 text-xs leading-5">
-                    {i + 1}
-                  </span>
-                  <span className="flex-1 min-w-0">
-                    {line.map((token, key) => (
-                      <span key={key} {...getTokenProps({ token })} />
-                    ))}
-                  </span>
-                </div>
-              ))}
+              {tokens.map((line, i) => {
+                const lineText = line.map(token => token.content).join('');
+                const indentLevel = getIndentationLevel(lineText);
+                
+                return (
+                  <div
+                    key={i}
+                    {...getLineProps({ line })}
+                    className="flex hover:bg-muted/20 dark:hover:bg-gray-800/30 transition-colors relative"
+                    style={{ minHeight: '20px' }}
+                  >
+                    {/* Indentation guides */}
+                    {renderIndentationGuides(indentLevel, i)}
+                    
+                    <span className="inline-block w-10 text-right mr-3 text-gray-500 select-none flex-shrink-0 text-xs leading-5 relative z-10">
+                      {i + 1}
+                    </span>
+                    <span className="flex-1 min-w-0 relative z-10">
+                      {line.map((token, key) => (
+                        <span key={key} {...getTokenProps({ token })} />
+                      ))}
+                    </span>
+                  </div>
+                );
+              })}
             </pre>
           )}
         </Highlight>
@@ -323,6 +332,50 @@ export function StreamingCodeViewer({
       </div>
     </div>
   );
+}
+
+/**
+ * Calculate indentation level for a line of code
+ */
+function getIndentationLevel(line: string, tabSize: number = 2): number {
+  let spaces = 0;
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === ' ') {
+      spaces++;
+    } else if (line[i] === '\t') {
+      spaces += tabSize;
+    } else {
+      break;
+    }
+  }
+  return Math.floor(spaces / tabSize);
+}
+
+/**
+ * Generate indentation guides for a line
+ */
+function renderIndentationGuides(indentLevel: number, lineNumber: number): React.ReactElement[] {
+  const guides = [];
+  const lineNumberWidth = 52; // Width of line number column in pixels (increased for better alignment)
+  const charWidth = 8.4; // Approximate character width in pixels for monospace font
+  const tabSize = 2; // Tab size for indentation
+  
+  for (let i = 0; i < indentLevel; i++) {
+    const leftPosition = lineNumberWidth + (i * tabSize * charWidth); // Precise positioning
+    guides.push(
+      <div
+        key={`guide-${lineNumber}-${i}`}
+        className="absolute border-l-[1px] border-gray-400/50 dark:border-gray-500/60 pointer-events-none"
+        style={{
+          left: `${leftPosition}px`,
+          top: 0,
+          bottom: 0,
+          zIndex: 1,
+        }}
+      />
+    );
+  }
+  return guides;
 }
 
 /**
