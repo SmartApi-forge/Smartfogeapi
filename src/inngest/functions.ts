@@ -2315,6 +2315,7 @@ export const cloneAndPreviewRepository = inngest.createFunction(
             packageManager: framework.packageManager,
             previewPort: defaultPort,
             previewError: previewServer?.success === false ? previewServer.error : undefined,
+            installOutput: previewServer?.success === false ? previewServer.installOutput : undefined, // Include npm logs for debugging
             repoFiles,
           };
         } catch (error) {

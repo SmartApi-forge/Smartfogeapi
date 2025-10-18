@@ -282,15 +282,16 @@ export class GitHubRepositoryService {
   }
 
   /**
-   * Install dependencies in sandbox
+   * Install dependencies in sandbox with automatic fallback to --legacy-peer-deps
    */
   async installDependencies(
     sandbox: Sandbox,
-    repoPath: string = '/home/user/repo',
-    packageManager: string = 'npm'
-  ): Promise<{ success: boolean; output: string; error?: string }> {
+    packageManager: string = 'npm',
+    repoPath: string = '/home/user/repo'
+  ): Promise<{ success: boolean; output: string; error?: string; fallbackUsed?: boolean }> {
     try {
       let installCommand: string;
+      let fallbackCommand: string | null = null;
       
       switch (packageManager) {
         case 'pnpm':
@@ -307,23 +308,60 @@ export class GitHubRepositoryService {
           break;
         default:
           installCommand = 'npm install';
+          fallbackCommand = 'npm install --legacy-peer-deps'; // Fallback for npm
       }
 
+      console.log(`📦 Running: ${installCommand}`);
       const result = await sandbox.commands.run(`cd ${repoPath} && ${installCommand}`, {
         timeoutMs: 300000, // 5 minutes timeout
       });
 
-      if (result.exitCode !== 0) {
+      // If successful, return immediately
+      if (result.exitCode === 0) {
+        console.log('✅ Dependencies installed successfully');
         return {
-          success: false,
+          success: true,
           output: result.stdout,
-          error: result.stderr,
         };
       }
 
+      // If failed, log the error details
+      const errorDetails = result.stderr || result.stdout || 'Unknown error';
+      console.error('❌ Installation failed with error:', errorDetails);
+
+      // Try fallback for npm if available
+      if (fallbackCommand && packageManager === 'npm') {
+        console.log(`🔄 Retrying with fallback: ${fallbackCommand}`);
+        
+        const fallbackResult = await sandbox.commands.run(`cd ${repoPath} && ${fallbackCommand}`, {
+          timeoutMs: 300000, // 5 minutes timeout
+        });
+
+        if (fallbackResult.exitCode === 0) {
+          console.log('✅ Dependencies installed successfully with --legacy-peer-deps');
+          return {
+            success: true,
+            output: fallbackResult.stdout,
+            fallbackUsed: true,
+          };
+        }
+
+        // Both attempts failed
+        const fallbackError = fallbackResult.stderr || fallbackResult.stdout || 'Unknown error';
+        console.error('❌ Fallback also failed:', fallbackError);
+        
+        return {
+          success: false,
+          output: result.stdout + '\n\n--- Fallback attempt ---\n' + fallbackResult.stdout,
+          error: `Primary: ${errorDetails}\n\nFallback (--legacy-peer-deps): ${fallbackError}`,
+        };
+      }
+
+      // No fallback available or not npm
       return {
-        success: true,
+        success: false,
         output: result.stdout,
+        error: errorDetails,
       };
     } catch (error: any) {
       console.error('Dependency installation error:', error);
@@ -342,7 +380,7 @@ export class GitHubRepositoryService {
     sandbox: Sandbox,
     framework: FrameworkDetection,
     repoPath: string = '/home/user/repo'
-  ): Promise<{ success: boolean; url?: string; port?: number; error?: string }> {
+  ): Promise<{ success: boolean; url?: string; port?: number; error?: string; installOutput?: string }> {
     try {
       const port = framework.port || 3000;
 
@@ -354,13 +392,19 @@ export class GitHubRepositoryService {
       
       if (!installResult.success) {
         console.error('❌ Dependency installation failed:', installResult.error);
+        // Return detailed error for debugging
         return {
           success: false,
-          error: `Failed to install dependencies: ${installResult.error}`,
+          error: installResult.error || 'Unknown installation error',
+          installOutput: installResult.output, // Include npm output for debugging
         };
       }
       
-      console.log('✅ Dependencies installed successfully');
+      if (installResult.fallbackUsed) {
+        console.log('⚠️ Dependencies installed using --legacy-peer-deps fallback');
+      } else {
+        console.log('✅ Dependencies installed successfully');
+      }
 
       // Step 2: Start the dev server in background (shorter timeout since deps already installed)
       const startCommand = `source /usr/local/bin/compile_fullstack.sh && start_server_background "${repoPath}" ${port} /tmp/server.log`;
