@@ -709,7 +709,8 @@ EXAMPLE STRUCTURE:
       try {
         // Create sandbox with our custom template and timeout configuration
         console.log('🏗️ Creating E2B sandbox with timeout configuration...');
-        sandbox = await Sandbox.create('smart-forge-api-sandbox', {
+        const templateId = process.env.E2B_FULLSTACK_TEMPLATE_ID || 'ckskh5feot2y94v5z07d';
+        sandbox = await Sandbox.create(templateId, {
           timeoutMs: 300000, // 5 minutes timeout
         });
         
