@@ -406,11 +406,12 @@ export class GitHubRepositoryService {
         console.log('✅ Dependencies installed successfully');
       }
 
-      // Step 2: Start the dev server in background (shorter timeout since deps already installed)
+      // Step 2: Start the dev server in background (longer timeout for first build)
+      // Note: Next.js 15 + Tailwind v4 can take 5-10 minutes for first build
       const startCommand = `source /usr/local/bin/compile_fullstack.sh && start_server_background "${repoPath}" ${port} /tmp/server.log`;
       
       const result = await sandbox.commands.run(startCommand, {
-        timeoutMs: 120000, // 2 minutes timeout for server startup only
+        timeoutMs: 600000, // 10 minutes timeout for first Next.js build + server startup
       });
 
       // Check if start was successful
