@@ -1,42 +1,55 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { useMemo, useEffect, useState } from "react"
-import { cn } from "@/lib/utils"
-import { motion } from "@/components/motion-wrapper"
-import { IconCode, IconRocket, IconFileText, IconShield, IconCircleCheck } from "@tabler/icons-react"
-import { CodeTypingAnimation } from "@/components/ui/code-typing-animation"
+import type React from "react";
+import { useMemo, useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
+import { motion } from "@/components/motion-wrapper";
+import {
+  IconCode,
+  IconRocket,
+  IconFileText,
+  IconShield,
+  IconCircleCheck,
+} from "@tabler/icons-react";
+import { CodeTypingAnimation } from "@/components/ui/code-typing-animation";
 
 export default function FeaturesSection() {
   // Memoize to keep element identity stable and avoid remounts of skeletons
-  const features = useMemo(() => [
-    {
-      title: "Natural Language to API",
-      description:
-        "Transform your ideas into production-ready APIs using simple English descriptions. No coding required.",
-      skeleton: <SkeletonOne />,
-      className: "col-span-1 lg:col-span-4 border-b lg:border-r dark:border-neutral-800",
-    },
-    {
-      title: "Auto-Generated Documentation",
-      description:
-        "Get comprehensive OpenAPI documentation and interactive Swagger UI automatically generated for every API.",
-      skeleton: <SkeletonTwo />,
-      className: "border-b col-span-1 lg:col-span-2 dark:border-neutral-800",
-    },
-    {
-      title: "One-Click Deployment",
-      description: "Deploy your APIs instantly to production with automated CI/CD pipelines and cloud hosting.",
-      skeleton: <SkeletonThree />,
-      className: "col-span-1 lg:col-span-3 lg:border-r dark:border-neutral-800",
-    },
-    {
-      title: "AI-Powered Testing",
-      description: "Comprehensive test suites generated automatically with intelligent validation and error detection.",
-      skeleton: <SkeletonFour />,
-      className: "col-span-1 lg:col-span-3 border-b lg:border-none",
-    },
-  ], [])
+  const features = useMemo(
+    () => [
+      {
+        title: "Natural Language to API",
+        description:
+          "Transform your ideas into production-ready APIs using simple English descriptions. No coding required.",
+        skeleton: <SkeletonOne />,
+        className:
+          "col-span-1 lg:col-span-4 border-b lg:border-r dark:border-neutral-800",
+      },
+      {
+        title: "Auto-Generated Documentation",
+        description:
+          "Get comprehensive OpenAPI documentation and interactive Swagger UI automatically generated for every API.",
+        skeleton: <SkeletonTwo />,
+        className: "border-b col-span-1 lg:col-span-2 dark:border-neutral-800",
+      },
+      {
+        title: "One-Click Deployment",
+        description:
+          "Deploy your APIs instantly to production with automated CI/CD pipelines and cloud hosting.",
+        skeleton: <SkeletonThree />,
+        className:
+          "col-span-1 lg:col-span-3 lg:border-r dark:border-neutral-800",
+      },
+      {
+        title: "AI-Powered Testing",
+        description:
+          "Comprehensive test suites generated automatically with intelligent validation and error detection.",
+        skeleton: <SkeletonFour />,
+        className: "col-span-1 lg:col-span-3 border-b lg:border-none",
+      },
+    ],
+    [],
+  );
 
   return (
     <div className="relative z-20 py-10 lg:py-20 max-w-7xl mx-auto">
@@ -46,8 +59,9 @@ export default function FeaturesSection() {
         </h4>
 
         <p className="text-base sm:text-lg max-w-2xl my-3 sm:my-4 mx-auto text-muted-foreground text-center font-normal leading-relaxed">
-          From natural language processing to automated deployment, SmartAPIForge provides all the tools you need to
-          create production-ready APIs in seconds.
+          From natural language processing to automated deployment,
+          SmartAPIForge provides all the tools you need to create
+          production-ready APIs in seconds.
         </p>
       </div>
 
@@ -63,26 +77,30 @@ export default function FeaturesSection() {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 const FeatureCard = ({
   children,
   className,
 }: {
-  children?: React.ReactNode
-  className?: string
+  children?: React.ReactNode;
+  className?: string;
 }) => {
-  return <div className={cn(`p-4 sm:p-8 relative overflow-hidden`, className)}>{children}</div>
-}
+  return (
+    <div className={cn(`p-4 sm:p-8 relative overflow-hidden`, className)}>
+      {children}
+    </div>
+  );
+};
 
 const FeatureTitle = ({ children }: { children?: React.ReactNode }) => {
   return (
     <p className="max-w-5xl mx-auto text-left tracking-tight text-foreground text-lg sm:text-xl md:text-2xl leading-tight sm:leading-snug">
       {children}
     </p>
-  )
-}
+  );
+};
 
 const FeatureDescription = ({ children }: { children?: React.ReactNode }) => {
   return (
@@ -95,30 +113,60 @@ const FeatureDescription = ({ children }: { children?: React.ReactNode }) => {
     >
       {children}
     </p>
-  )
-}
+  );
+};
 
 export const SkeletonOne = () => {
   const codeLines = useMemo(
     () => [
       // More comprehensive API example
-      { text: 'from fastapi import FastAPI', className: 'text-muted-foreground' },
-      { text: 'from pydantic import BaseModel', className: 'text-muted-foreground' },
-      { text: 'app = FastAPI()', className: 'text-muted-foreground' },
-      { text: 'class UserModel(BaseModel):', className: 'text-blue-600 dark:text-blue-400' },
-      { text: '    id: int', className: 'ml-4 text-muted-foreground' },
-      { text: '    name: str', className: 'ml-4 text-muted-foreground' },
-      { text: '    email: str', className: 'ml-4 text-muted-foreground' },
-      { text: '@app.post("/users")', className: 'text-purple-600 dark:text-purple-400' },
-      { text: 'def create_user(user: UserModel):', className: 'text-blue-600 dark:text-blue-400' },
-      { text: '    # Auto-generated validation', className: 'ml-4 text-green-600 dark:text-green-400' },
-      { text: '    return {"id": user.id}', className: 'ml-4 text-muted-foreground' },
-      { text: '@app.get("/users/{id}")', className: 'text-purple-600 dark:text-purple-400' },
-      { text: 'def get_user(id: int):', className: 'text-blue-600 dark:text-blue-400' },
-      { text: '    return {"id": id, "name": "Alice"}', className: 'ml-4 text-muted-foreground' },
+      {
+        text: "from fastapi import FastAPI",
+        className: "text-muted-foreground",
+      },
+      {
+        text: "from pydantic import BaseModel",
+        className: "text-muted-foreground",
+      },
+      { text: "app = FastAPI()", className: "text-muted-foreground" },
+      {
+        text: "class UserModel(BaseModel):",
+        className: "text-blue-600 dark:text-blue-400",
+      },
+      { text: "    id: int", className: "ml-4 text-muted-foreground" },
+      { text: "    name: str", className: "ml-4 text-muted-foreground" },
+      { text: "    email: str", className: "ml-4 text-muted-foreground" },
+      {
+        text: '@app.post("/users")',
+        className: "text-purple-600 dark:text-purple-400",
+      },
+      {
+        text: "def create_user(user: UserModel):",
+        className: "text-blue-600 dark:text-blue-400",
+      },
+      {
+        text: "    # Auto-generated validation",
+        className: "ml-4 text-green-600 dark:text-green-400",
+      },
+      {
+        text: '    return {"id": user.id}',
+        className: "ml-4 text-muted-foreground",
+      },
+      {
+        text: '@app.get("/users/{id}")',
+        className: "text-purple-600 dark:text-purple-400",
+      },
+      {
+        text: "def get_user(id: int):",
+        className: "text-blue-600 dark:text-blue-400",
+      },
+      {
+        text: '    return {"id": id, "name": "Alice"}',
+        className: "ml-4 text-muted-foreground",
+      },
     ],
-    []
-  )
+    [],
+  );
 
   return (
     <div className="relative flex py-8 px-2 gap-10 h-full">
@@ -143,8 +191,8 @@ export const SkeletonOne = () => {
       <div className="absolute bottom-0 z-40 inset-x-0 h-60 bg-gradient-to-t from-background via-background to-transparent w-full pointer-events-none" />
       <div className="absolute top-0 z-40 inset-x-0 h-60 bg-gradient-to-b from-background via-transparent to-transparent w-full pointer-events-none" />
     </div>
-  )
-}
+  );
+};
 
 export const SkeletonTwo = () => {
   const docs = [
@@ -153,7 +201,7 @@ export const SkeletonTwo = () => {
     { title: "Data Models", color: "bg-purple-500" },
     { title: "API Reference", color: "bg-orange-500" },
     { title: "Examples", color: "bg-pink-500" },
-  ]
+  ];
 
   const docVariants = {
     whileHover: {
@@ -166,7 +214,7 @@ export const SkeletonTwo = () => {
       rotate: 0,
       zIndex: 100,
     },
-  }
+  };
 
   return (
     <div className="relative flex flex-col items-start p-8 gap-10 h-full overflow-hidden">
@@ -219,8 +267,8 @@ export const SkeletonTwo = () => {
       <div className="absolute left-0 z-[100] inset-y-0 w-20 bg-gradient-to-r from-background to-transparent h-full pointer-events-none" />
       <div className="absolute right-0 z-[100] inset-y-0 w-20 bg-gradient-to-l from-background to-transparent h-full pointer-events-none" />
     </div>
-  )
-}
+  );
+};
 
 export const SkeletonThree = () => {
   // Ordered flow per spec
@@ -230,17 +278,17 @@ export const SkeletonThree = () => {
     { key: "static", label: "Build Static Pages", percent: 75, dur: 1600 },
     { key: "generate", label: "Generating Output", percent: 95, dur: 1600 },
     { key: "success", label: "Live", percent: 100, dur: 2200 },
-  ] as const
-  const [stageIdx, setStageIdx] = useState(0)
-  const stage = stages[stageIdx]
+  ] as const;
+  const [stageIdx, setStageIdx] = useState(0);
+  const stage = stages[stageIdx];
 
   // Auto advance through the pipeline and loop
   useEffect(() => {
     const t = setTimeout(() => {
-      setStageIdx((i) => (i + 1) % stages.length)
-    }, stage.dur)
-    return () => clearTimeout(t)
-  }, [stageIdx])
+      setStageIdx((i) => (i + 1) % stages.length);
+    }, stage.dur);
+    return () => clearTimeout(t);
+  }, [stageIdx]);
 
   return (
     <div className="relative flex gap-10 h-full group/deploy">
@@ -267,7 +315,11 @@ export const SkeletonThree = () => {
               initial={false}
               animate={
                 stage.key === "success"
-                  ? { opacity: 0, filter: "blur(2px)", transitionEnd: { visibility: "hidden" } }
+                  ? {
+                      opacity: 0,
+                      filter: "blur(2px)",
+                      transitionEnd: { visibility: "hidden" },
+                    }
                   : { opacity: 1, filter: "none", visibility: "visible" }
               }
               transition={{ duration: 0.25 }}
@@ -283,7 +335,11 @@ export const SkeletonThree = () => {
                     rotate: stage.key === "success" ? 0 : [0, 2, 0],
                     opacity: stage.key === "success" ? 0.25 : 1,
                   }}
-                  transition={{ duration: stage.key === "success" ? 1.1 : 2.2, repeat: stage.key === "success" ? 0 : Infinity, ease: "easeInOut" }}
+                  transition={{
+                    duration: stage.key === "success" ? 1.1 : 2.2,
+                    repeat: stage.key === "success" ? 0 : Infinity,
+                    ease: "easeInOut",
+                  }}
                   whileHover={{ scale: 1.06 }}
                 >
                   <IconRocket className="h-16 w-16 text-blue-500 drop-shadow-[0_6px_16px_rgba(59,130,246,0.45)]" />
@@ -291,8 +347,15 @@ export const SkeletonThree = () => {
                   {/* Exhaust flame during pre-success stages */}
                   <motion.div
                     className="absolute left-1/2 -bottom-3 -translate-x-1/2 h-3 w-3 rounded-full bg-orange-400/80 blur-[2px] -z-10"
-                    animate={{ opacity: stage.key === "success" ? 0 : 1, scale: [0.7, 1.05, 0.7] }}
-                    transition={{ duration: 0.8, repeat: Infinity, repeatType: "mirror" }}
+                    animate={{
+                      opacity: stage.key === "success" ? 0 : 1,
+                      scale: [0.7, 1.05, 0.7],
+                    }}
+                    transition={{
+                      duration: 0.8,
+                      repeat: Infinity,
+                      repeatType: "mirror",
+                    }}
                   />
 
                   {/* Exhaust particles looping */}
@@ -306,7 +369,12 @@ export const SkeletonThree = () => {
                         y: stage.key === "success" ? 10 : [0, 26],
                         x: stage.key === "success" ? 0 : [0, (i - 2.5) * 6],
                       }}
-                      transition={{ duration: 1.4 + i * 0.12, repeat: Infinity, delay: i * 0.1, ease: "easeOut" }}
+                      transition={{
+                        duration: 1.4 + i * 0.12,
+                        repeat: Infinity,
+                        delay: i * 0.1,
+                        ease: "easeOut",
+                      }}
                     />
                   ))}
                 </motion.div>
@@ -315,7 +383,9 @@ export const SkeletonThree = () => {
               {/* Labels + progress just below center */}
               <div className="absolute left-1/2 top-[52%] -translate-x-1/2 translate-y-0 w-full max-w-xs text-center">
                 <div className="space-y-1">
-                  <div className="text-sm font-medium text-foreground">Deploy to Production</div>
+                  <div className="text-sm font-medium text-foreground">
+                    Deploy to Production
+                  </div>
                   <div className="text-xs text-muted-foreground flex items-center justify-center gap-2">
                     <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                     <span>Ready to deploy</span>
@@ -326,12 +396,15 @@ export const SkeletonThree = () => {
                     <motion.div
                       key={stageIdx}
                       className="absolute left-0 top-0 h-full rounded-full"
-                      initial={{ width: `${stages[Math.max(0, stageIdx - 1)]?.percent ?? 0}%` }}
+                      initial={{
+                        width: `${stages[Math.max(0, stageIdx - 1)]?.percent ?? 0}%`,
+                      }}
                       animate={{
                         width: `${stage.percent}%`,
-                        background: stage.key === "success"
-                          ? "linear-gradient(to right, #22c55e, #86efac)"
-                          : "linear-gradient(to right, #3b82f6, #22d3ee)",
+                        background:
+                          stage.key === "success"
+                            ? "linear-gradient(to right, #22c55e, #86efac)"
+                            : "linear-gradient(to right, #3b82f6, #22d3ee)",
                       }}
                       transition={{ duration: 0.6, ease: "easeOut" }}
                     />
@@ -360,8 +433,15 @@ export const SkeletonThree = () => {
               {/* Sweep background */}
               <motion.div
                 className="absolute inset-0 z-[5]"
-                initial={{ scale: 0.2, borderRadius: 24, backgroundColor: "rgba(16,185,129,0.12)" }}
-                animate={{ scale: stage.key === "success" ? 1.4 : 0.2, backgroundColor: "rgba(16,185,129,0.14)" }}
+                initial={{
+                  scale: 0.2,
+                  borderRadius: 24,
+                  backgroundColor: "rgba(16,185,129,0.12)",
+                }}
+                animate={{
+                  scale: stage.key === "success" ? 1.4 : 0.2,
+                  backgroundColor: "rgba(16,185,129,0.14)",
+                }}
                 transition={{ duration: 0.9, ease: "easeOut" }}
               />
               {/* Pulsing ring + check */}
@@ -385,63 +465,63 @@ export const SkeletonThree = () => {
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
 export const SkeletonFour = () => {
-  const [started, setStarted] = useState(false)
-  const [counts, setCounts] = useState({ e: 0, v: 0, s: 0, p: 0 })
-  const [finished, setFinished] = useState(false)
-  const [cycle, setCycle] = useState(0)
+  const [started, setStarted] = useState(false);
+  const [counts, setCounts] = useState({ e: 0, v: 0, s: 0, p: 0 });
+  const [finished, setFinished] = useState(false);
+  const [cycle, setCycle] = useState(0);
 
   // Simple RAF-based count up with easing and stagger, loops by scheduling next cycle
   useEffect(() => {
-    if (!started) return
+    if (!started) return;
 
-    const targets = { e: 12, v: 8, s: 5, p: 95 }
-    const duration = 1200 // ms per counter
-    const stagger = 180 // ms
+    const targets = { e: 12, v: 8, s: 5, p: 95 };
+    const duration = 1200; // ms per counter
+    const stagger = 180; // ms
 
-    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 
-    const animKeys: (keyof typeof targets)[] = ["e", "v", "s", "p"]
-    const rafIds: number[] = []
+    const animKeys: (keyof typeof targets)[] = ["e", "v", "s", "p"];
+    const rafIds: number[] = [];
 
-    setFinished(false)
-    setCounts({ e: 0, v: 0, s: 0, p: 0 })
+    setFinished(false);
+    setCounts({ e: 0, v: 0, s: 0, p: 0 });
 
     animKeys.forEach((key, idx) => {
-      const startTime = performance.now() + idx * stagger
+      const startTime = performance.now() + idx * stagger;
       const loop = (now: number) => {
-        const t = Math.min(1, Math.max(0, (now - startTime) / duration))
-        const eased = easeOutCubic(t)
-        const val = Math.round(targets[key] * eased)
-        setCounts((c) => ({ ...c, [key]: val }))
-        if (t < 1) rafIds[idx] = requestAnimationFrame(loop)
-      }
-      rafIds[idx] = requestAnimationFrame(loop)
-    })
+        const t = Math.min(1, Math.max(0, (now - startTime) / duration));
+        const eased = easeOutCubic(t);
+        const val = Math.round(targets[key] * eased);
+        setCounts((c) => ({ ...c, [key]: val }));
+        if (t < 1) rafIds[idx] = requestAnimationFrame(loop);
+      };
+      rafIds[idx] = requestAnimationFrame(loop);
+    });
 
     // Show success check near completion, then schedule next cycle
-    const totalMs = duration + stagger * (animKeys.length - 1)
-    const doneTimer = setTimeout(() => setFinished(true), totalMs)
-    const cycleTimer = setTimeout(() => setCycle((c) => c + 1), totalMs + 2000)
+    const totalMs = duration + stagger * (animKeys.length - 1);
+    const doneTimer = setTimeout(() => setFinished(true), totalMs);
+    const cycleTimer = setTimeout(() => setCycle((c) => c + 1), totalMs + 2000);
 
     return () => {
-      rafIds.forEach((id) => cancelAnimationFrame(id))
-      clearTimeout(doneTimer)
-      clearTimeout(cycleTimer)
-    }
-  }, [started, cycle])
+      rafIds.forEach((id) => cancelAnimationFrame(id));
+      clearTimeout(doneTimer);
+      clearTimeout(cycleTimer);
+    };
+  }, [started, cycle]);
 
   const container = {
     hidden: { opacity: 0, y: 8 },
     show: { opacity: 1, y: 0, transition: { staggerChildren: 0.12 } },
-  }
+  };
   const item = {
     hidden: { opacity: 0, y: 8 },
     show: { opacity: 1, y: 0 },
-  }
+  };
 
   return (
     <div className="h-60 md:h-60 flex flex-col items-center relative bg-transparent dark:bg-transparent mt-10">
@@ -459,7 +539,11 @@ export const SkeletonFour = () => {
           initial={false}
           animate={
             finished
-              ? { opacity: 0, filter: "blur(2px)", transitionEnd: { visibility: "hidden" } }
+              ? {
+                  opacity: 0,
+                  filter: "blur(2px)",
+                  transitionEnd: { visibility: "hidden" },
+                }
               : { opacity: 1, filter: "none", visibility: "visible" }
           }
           transition={{ duration: 0.25 }}
@@ -476,7 +560,9 @@ export const SkeletonFour = () => {
                 animate={{ scale: [1, 1.25, 1] }}
                 transition={{ repeat: Infinity, duration: 1.6 }}
               />
-              <span className="text-xs">API Endpoints: {counts.e}/12 passed</span>
+              <span className="text-xs">
+                API Endpoints: {counts.e}/12 passed
+              </span>
             </motion.div>
             <motion.div className="flex items-center gap-3" variants={item}>
               <motion.div
@@ -484,7 +570,9 @@ export const SkeletonFour = () => {
                 animate={{ scale: [1, 1.25, 1] }}
                 transition={{ repeat: Infinity, duration: 1.6, delay: 0.1 }}
               />
-              <span className="text-xs">Validation Tests: {counts.v}/8 passed</span>
+              <span className="text-xs">
+                Validation Tests: {counts.v}/8 passed
+              </span>
             </motion.div>
             <motion.div className="flex items-center gap-3" variants={item}>
               <motion.div
@@ -492,12 +580,21 @@ export const SkeletonFour = () => {
                 animate={{ scale: [1, 1.25, 1] }}
                 transition={{ repeat: Infinity, duration: 1.6, delay: 0.2 }}
               />
-              <span className="text-xs">Security Checks: {counts.s}/5 passed</span>
+              <span className="text-xs">
+                Security Checks: {counts.s}/5 passed
+              </span>
             </motion.div>
             <motion.div className="flex items-center gap-3" variants={item}>
               <motion.div
                 className="w-2 h-2 rounded-full bg-yellow-500"
-                animate={{ scale: [1, 1.2, 1], boxShadow: ["0 0 0 0 rgba(250,204,21,0.0)", "0 0 0 6px rgba(250,204,21,0.15)", "0 0 0 0 rgba(250,204,21,0.0)"] }}
+                animate={{
+                  scale: [1, 1.2, 1],
+                  boxShadow: [
+                    "0 0 0 0 rgba(250,204,21,0.0)",
+                    "0 0 0 6px rgba(250,204,21,0.15)",
+                    "0 0 0 0 rgba(250,204,21,0.0)",
+                  ],
+                }}
                 transition={{ repeat: Infinity, duration: 2.0 }}
               />
               <span className="text-xs">Performance: {counts.p}% score</span>
@@ -521,7 +618,15 @@ export const SkeletonFour = () => {
             <motion.div
               className="absolute -inset-6 rounded-full"
               style={{ boxShadow: "0 0 0 0 rgba(16,185,129,0.0)" }}
-              animate={{ boxShadow: finished ? ["0 0 0 0 rgba(16,185,129,0.0)", "0 0 0 16px rgba(16,185,129,0.15)", "0 0 0 0 rgba(16,185,129,0.0)"] : "0 0 0 0 rgba(16,185,129,0.0)" }}
+              animate={{
+                boxShadow: finished
+                  ? [
+                      "0 0 0 0 rgba(16,185,129,0.0)",
+                      "0 0 0 16px rgba(16,185,129,0.15)",
+                      "0 0 0 0 rgba(16,185,129,0.0)",
+                    ]
+                  : "0 0 0 0 rgba(16,185,129,0.0)",
+              }}
               transition={{ duration: 1.6 }}
             />
             <IconCircleCheck className="h-10 w-10 text-emerald-500" />
@@ -529,5 +634,5 @@ export const SkeletonFour = () => {
         </motion.div>
       </motion.div>
     </div>
-  )
-}
+  );
+};

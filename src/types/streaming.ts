@@ -2,19 +2,19 @@
 
 export type StreamEvent =
   | {
-      type: 'project:created';
+      type: "project:created";
       projectId: string;
       prompt: string;
     }
   | {
-      type: 'version:start';
+      type: "version:start";
       versionId: string;
       versionNumber: number;
       versionName: string;
       projectId: string;
     }
   | {
-      type: 'version:complete';
+      type: "version:complete";
       versionId: string;
       versionNumber: number;
       versionName: string;
@@ -22,44 +22,44 @@ export type StreamEvent =
       projectId: string;
     }
   | {
-      type: 'step:start';
+      type: "step:start";
       step: string;
       message: string;
       versionId?: string;
     }
   | {
-      type: 'step:complete';
+      type: "step:complete";
       step: string;
       message: string;
       versionId?: string;
     }
   | {
-      type: 'file:generating';
+      type: "file:generating";
       filename: string;
       path: string;
       versionId?: string;
     }
   | {
-      type: 'code:chunk';
+      type: "code:chunk";
       filename: string;
       chunk: string;
       progress: number; // 0-100
       versionId?: string;
     }
   | {
-      type: 'file:complete';
+      type: "file:complete";
       filename: string;
       content: string;
       path: string;
       versionId?: string;
     }
   | {
-      type: 'validation:start';
+      type: "validation:start";
       stage: string;
       versionId?: string;
     }
   | {
-      type: 'validation:complete';
+      type: "validation:complete";
       stage: string;
       result?: boolean;
       message?: string;
@@ -67,13 +67,13 @@ export type StreamEvent =
       versionId?: string;
     }
   | {
-      type: 'complete';
+      type: "complete";
       summary: string;
       totalFiles: number;
       versionId?: string;
     }
   | {
-      type: 'error';
+      type: "error";
       message: string;
       stage?: string;
       versionId?: string;
@@ -84,7 +84,13 @@ export type StreamEventWithTimestamp = StreamEvent & {
 };
 
 export interface GenerationState {
-  status: 'idle' | 'initializing' | 'generating' | 'validating' | 'complete' | 'error';
+  status:
+    | "idle"
+    | "initializing"
+    | "generating"
+    | "validating"
+    | "complete"
+    | "error";
   currentStep?: string;
   currentFile?: string;
   generatedFiles: GeneratedFile[];
@@ -98,4 +104,3 @@ export interface GeneratedFile {
   content: string;
   isComplete: boolean;
 }
-

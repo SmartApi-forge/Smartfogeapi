@@ -1,8 +1,15 @@
-"use client"
-import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Check } from 'lucide-react'
+"use client";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Check } from "lucide-react";
 
 const plans = [
   {
@@ -16,8 +23,8 @@ const plans = [
       "REST API endpoints only",
       "Community Discord support",
       "Basic API documentation",
-      "Rate limiting: 100 requests/day"
-    ]
+      "Rate limiting: 100 requests/day",
+    ],
   },
   {
     title: "Developer",
@@ -33,8 +40,8 @@ const plans = [
       "Swagger/OpenAPI docs auto-generated",
       "One-click deployment to Vercel",
       "Email & chat support",
-      "Rate limiting: 10K requests/day"
-    ]
+      "Rate limiting: 10K requests/day",
+    ],
   },
   {
     title: "Pro",
@@ -52,10 +59,10 @@ const plans = [
       "Custom domain deployment",
       "Priority support & SLA",
       "Rate limiting: 100K requests/day",
-      "Team collaboration (up to 5 members)"
-    ]
-  }
-]
+      "Team collaboration (up to 5 members)",
+    ],
+  },
+];
 
 export default function PricingSection() {
   return (
@@ -66,7 +73,8 @@ export default function PricingSection() {
             Pricing that Scales with You
           </h1>
           <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
-            Choose the perfect plan for your API development needs. From individual developers to enterprise teams.
+            Choose the perfect plan for your API development needs. From
+            individual developers to enterprise teams.
           </p>
           <div>
             <Button asChild variant="link" className="px-0">
@@ -77,12 +85,10 @@ export default function PricingSection() {
 
         <div className="mt-8 grid gap-6 md:mt-20 md:grid-cols-3">
           {plans.map((plan) => (
-            <Card 
-              key={plan.title} 
+            <Card
+              key={plan.title}
               className={`bg-muted flex flex-col border-none shadow-none ${
-                plan.isMostPopular 
-                  ? 'relative border-2 border-primary' 
-                  : ''
+                plan.isMostPopular ? "relative border-2 border-primary" : ""
               }`}
             >
               {plan.isMostPopular && (
@@ -92,8 +98,12 @@ export default function PricingSection() {
               )}
 
               <CardHeader>
-                <CardTitle className="font-semibold text-lg sm:text-xl text-foreground">{plan.title}</CardTitle>
-                <span className="my-3 block text-2xl sm:text-3xl font-semibold text-foreground">{plan.price}</span>
+                <CardTitle className="font-semibold text-lg sm:text-xl text-foreground">
+                  {plan.title}
+                </CardTitle>
+                <span className="my-3 block text-2xl sm:text-3xl font-semibold text-foreground">
+                  {plan.price}
+                </span>
                 <CardDescription className="text-sm sm:text-base text-muted-foreground">
                   {plan.billed}
                 </CardDescription>
@@ -101,12 +111,14 @@ export default function PricingSection() {
 
               <CardContent className="space-y-4 flex-1">
                 <hr className="border-dashed border-border" />
-                
+
                 <ul className="list-outside space-y-3 text-sm sm:text-base">
                   {plan.features.map((feature, index) => (
                     <li key={index} className="flex items-start gap-2">
                       <Check className="size-4 text-primary flex-shrink-0 mt-0.5" />
-                      <span className="text-muted-foreground leading-relaxed">{feature}</span>
+                      <span className="text-muted-foreground leading-relaxed">
+                        {feature}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -126,5 +138,5 @@ export default function PricingSection() {
         </div>
       </div>
     </section>
-  )
+  );
 }

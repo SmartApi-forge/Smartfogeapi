@@ -1,8 +1,14 @@
-import type React from "react"
-import { OpenAI, Anthropic, Mistral, HuggingFace, Cohere } from "@/components/logos"
-import { Button } from "@/components/ui/button"
-import Link from "next/link"
-import { Plus } from "lucide-react"
+import type React from "react";
+import {
+  OpenAI,
+  Anthropic,
+  Mistral,
+  HuggingFace,
+  Cohere,
+} from "@/components/logos";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { Plus } from "lucide-react";
 
 export default function IntegrationsSection() {
   return (
@@ -43,7 +49,8 @@ export default function IntegrationsSection() {
               Integrate with your favorite LLMs
             </h2>
             <p className="text-muted-foreground">
-              Connect seamlessly with leading AI models to power your API generation workflow.
+              Connect seamlessly with leading AI models to power your API
+              generation workflow.
             </p>
 
             <Button variant="outline" size="sm" asChild>
@@ -53,10 +60,18 @@ export default function IntegrationsSection() {
         </div>
       </div>
     </section>
-  )
+  );
 }
 
-const Integration = ({ icon, name, description }: { icon: React.ReactNode; name: string; description: string }) => {
+const Integration = ({
+  icon,
+  name,
+  description,
+}: {
+  icon: React.ReactNode;
+  name: string;
+  description: string;
+}) => {
   return (
     <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-dashed py-3 last:border-b-0">
       <div className="bg-muted border-foreground/5 flex size-12 items-center justify-center rounded-lg border">
@@ -64,13 +79,20 @@ const Integration = ({ icon, name, description }: { icon: React.ReactNode; name:
       </div>
       <div className="space-y-0.5 min-w-0">
         <h3 className="text-sm font-medium">{name}</h3>
-        <p className="text-muted-foreground line-clamp-1 text-sm">{description}</p>
+        <p className="text-muted-foreground line-clamp-1 text-sm">
+          {description}
+        </p>
       </div>
       <div className="flex-shrink-0">
-        <Button variant="ghost" size="sm" className="h-8 w-8 rounded-full hover:bg-muted/50 transition-colors" aria-label="Add integration">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 rounded-full hover:bg-muted/50 transition-colors"
+          aria-label="Add integration"
+        >
           <Plus className="size-4 text-muted-foreground" />
         </Button>
       </div>
     </div>
-  )
-}
+  );
+};

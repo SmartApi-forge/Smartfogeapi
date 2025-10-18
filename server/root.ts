@@ -1,6 +1,6 @@
-import { createTRPCRouter } from '../lib/trpc';
-import { apiRouter } from './routers/api';
-import { authRouter } from './routers/auth';
+import { createTRPCRouter } from "../lib/trpc";
+import { apiRouter } from "./routers/api";
+import { authRouter } from "./routers/auth";
 
 /**
  * This is the primary router for your server.

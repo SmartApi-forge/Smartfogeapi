@@ -1,14 +1,14 @@
-"use client"
+"use client";
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react";
 
 interface TypingAnimationProps {
-  prompts: string[]
-  className?: string
-  typingSpeed?: number
-  deletingSpeed?: number
-  pauseAfterType?: number
-  pauseAfterDelete?: number
+  prompts: string[];
+  className?: string;
+  typingSpeed?: number;
+  deletingSpeed?: number;
+  pauseAfterType?: number;
+  pauseAfterDelete?: number;
 }
 
 export const TypingAnimation: React.FC<TypingAnimationProps> = ({
@@ -19,56 +19,62 @@ export const TypingAnimation: React.FC<TypingAnimationProps> = ({
   pauseAfterType = 2000,
   pauseAfterDelete = 500,
 }) => {
-  const [currentPromptIndex, setCurrentPromptIndex] = useState(0)
-  const [currentText, setCurrentText] = useState("")
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [isPaused, setIsPaused] = useState(false)
+  const [currentPromptIndex, setCurrentPromptIndex] = useState(0);
+  const [currentText, setCurrentText] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
 
   useEffect(() => {
     // Early guard to prevent runtime errors
     if (!prompts || prompts.length === 0) {
-      return
+      return;
     }
-    
+
     // Ensure currentPromptIndex is within valid range
     if (currentPromptIndex >= prompts.length) {
-      setCurrentPromptIndex(0)
-      return
+      setCurrentPromptIndex(0);
+      return;
     }
-    
-    const currentPrompt = prompts[currentPromptIndex]
-    
+
+    const currentPrompt = prompts[currentPromptIndex];
+
     if (isPaused) {
-      const pauseTimeout = setTimeout(() => {
-        setIsPaused(false)
-        if (isDeleting) {
-          setIsDeleting(false)
-          setCurrentPromptIndex((prev) => (prev + 1) % prompts.length)
-        } else {
-          setIsDeleting(true)
-        }
-      }, isDeleting ? pauseAfterDelete : pauseAfterType)
-      
-      return () => clearTimeout(pauseTimeout)
+      const pauseTimeout = setTimeout(
+        () => {
+          setIsPaused(false);
+          if (isDeleting) {
+            setIsDeleting(false);
+            setCurrentPromptIndex((prev) => (prev + 1) % prompts.length);
+          } else {
+            setIsDeleting(true);
+          }
+        },
+        isDeleting ? pauseAfterDelete : pauseAfterType,
+      );
+
+      return () => clearTimeout(pauseTimeout);
     }
 
-    const timeout = setTimeout(() => {
-      if (isDeleting) {
-        if (currentText.length > 0) {
-          setCurrentText(currentPrompt.substring(0, currentText.length - 1))
+    const timeout = setTimeout(
+      () => {
+        if (isDeleting) {
+          if (currentText.length > 0) {
+            setCurrentText(currentPrompt.substring(0, currentText.length - 1));
+          } else {
+            setIsPaused(true);
+          }
         } else {
-          setIsPaused(true)
+          if (currentText.length < currentPrompt.length) {
+            setCurrentText(currentPrompt.substring(0, currentText.length + 1));
+          } else {
+            setIsPaused(true);
+          }
         }
-      } else {
-        if (currentText.length < currentPrompt.length) {
-          setCurrentText(currentPrompt.substring(0, currentText.length + 1))
-        } else {
-          setIsPaused(true)
-        }
-      }
-    }, isDeleting ? deletingSpeed : typingSpeed)
+      },
+      isDeleting ? deletingSpeed : typingSpeed,
+    );
 
-    return () => clearTimeout(timeout)
+    return () => clearTimeout(timeout);
   }, [
     currentText,
     currentPromptIndex,
@@ -79,12 +85,12 @@ export const TypingAnimation: React.FC<TypingAnimationProps> = ({
     deletingSpeed,
     pauseAfterType,
     pauseAfterDelete,
-  ])
+  ]);
 
   return (
     <span className={className}>
       {currentText}
       <span className="animate-pulse">|</span>
     </span>
-  )
-}
+  );
+};

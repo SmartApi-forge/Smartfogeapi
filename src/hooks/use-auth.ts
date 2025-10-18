@@ -1,36 +1,39 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import type { User } from '@supabase/supabase-js'
-import { authService } from '../services/auth'
+import { useState, useEffect } from "react";
+import type { User } from "@supabase/supabase-js";
+import { authService } from "../services/auth";
 
 // React hook for client-side auth state management
 export const useAuthState = () => {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // Get initial session
-    authService.getCurrentUser()
+    authService
+      .getCurrentUser()
       .then(({ user }) => {
-        setUser(user)
+        setUser(user);
       })
       .catch((error) => {
-        console.error('Failed to get current user:', error)
-        setUser(null)
+        console.error("Failed to get current user:", error);
+        setUser(null);
       })
       .finally(() => {
-        setLoading(false)
-      })
+        setLoading(false);
+      });
 
     // Listen for auth changes
-    const { data: { subscription } } = authService.onAuthStateChange((event, session) => {
-      setUser(session?.user || null)
-      setLoading(false)
-    })
+    const {
+      data: { subscription },
+    } = authService.onAuthStateChange((event, session) => {
+      setUser(session?.user || null);
+      setLoading(false);
+    });
 
-    return () => subscription.unsubscribe()
-  }, [])
+    return () => subscription.unsubscribe();
+  }, []);
 
-  return { user, loading }
-}
+  return { user, loading };
+};

@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, FileCode, Edit, Sparkles, Trash2 } from 'lucide-react';
-import type { Version } from '../src/modules/versions/types';
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ChevronRight, FileCode, Edit, Sparkles, Trash2 } from "lucide-react";
+import type { Version } from "../src/modules/versions/types";
 
 interface VersionCardProps {
   version: Version;
@@ -17,37 +17,44 @@ interface VersionCardProps {
  * Displays a single version with collapsible file list
  * Shows version number, name, and file changes
  */
-export function VersionCard({ version, isActive, onClick, previousVersion }: VersionCardProps) {
+export function VersionCard({
+  version,
+  isActive,
+  onClick,
+  previousVersion,
+}: VersionCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const files = Object.keys(version.files || {});
   const fileCount = files.length;
 
   // Calculate file changes compared to previous version
-  const getFileStatus = (filename: string): 'new' | 'modified' | 'unchanged' => {
-    if (!previousVersion) return 'new';
-    
+  const getFileStatus = (
+    filename: string,
+  ): "new" | "modified" | "unchanged" => {
+    if (!previousVersion) return "new";
+
     const previousFiles = previousVersion.files || {};
-    if (!previousFiles[filename]) return 'new';
-    if (previousFiles[filename] !== version.files[filename]) return 'modified';
-    return 'unchanged';
+    if (!previousFiles[filename]) return "new";
+    if (previousFiles[filename] !== version.files[filename]) return "modified";
+    return "unchanged";
   };
 
   const filesGrouped = {
-    new: files.filter(f => getFileStatus(f) === 'new'),
-    modified: files.filter(f => getFileStatus(f) === 'modified'),
-    unchanged: files.filter(f => getFileStatus(f) === 'unchanged'),
+    new: files.filter((f) => getFileStatus(f) === "new"),
+    modified: files.filter((f) => getFileStatus(f) === "modified"),
+    unchanged: files.filter((f) => getFileStatus(f) === "unchanged"),
   };
 
   const getVersionIcon = () => {
     switch (version.command_type) {
-      case 'CREATE_FILE':
+      case "CREATE_FILE":
         return <Sparkles className="size-4 text-blue-500" />;
-      case 'MODIFY_FILE':
+      case "MODIFY_FILE":
         return <Edit className="size-4 text-amber-500" />;
-      case 'DELETE_FILE':
+      case "DELETE_FILE":
         return <Trash2 className="size-4 text-red-500" />;
-      case 'REFACTOR_CODE':
+      case "REFACTOR_CODE":
         return <FileCode className="size-4 text-purple-500" />;
       default:
         return <FileCode className="size-4 text-green-500" />;
@@ -61,19 +68,14 @@ export function VersionCard({ version, isActive, onClick, previousVersion }: Ver
       exit={{ opacity: 0, y: -20 }}
       className={`rounded-lg border transition-all duration-200 ${
         isActive
-          ? 'border-primary bg-primary/5 shadow-md'
-          : 'border-border bg-card hover:border-primary/50 hover:shadow-sm'
+          ? "border-primary bg-primary/5 shadow-md"
+          : "border-border bg-card hover:border-primary/50 hover:shadow-sm"
       }`}
     >
       {/* Card Header */}
-      <div
-        className="px-3 py-2.5 cursor-pointer"
-        onClick={onClick}
-      >
+      <div className="px-3 py-2.5 cursor-pointer" onClick={onClick}>
         <div className="flex items-start gap-2">
-          <div className="flex-shrink-0 mt-0.5">
-            {getVersionIcon()}
-          </div>
+          <div className="flex-shrink-0 mt-0.5">{getVersionIcon()}</div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-semibold text-foreground truncate">
@@ -94,7 +96,7 @@ export function VersionCard({ version, isActive, onClick, previousVersion }: Ver
         {/* File Count & Expand Button */}
         <div className="flex items-center justify-between mt-2">
           <span className="text-xs text-muted-foreground">
-            {fileCount} {fileCount === 1 ? 'file' : 'files'}
+            {fileCount} {fileCount === 1 ? "file" : "files"}
           </span>
           <button
             onClick={(e) => {
@@ -105,10 +107,10 @@ export function VersionCard({ version, isActive, onClick, previousVersion }: Ver
           >
             <ChevronRight
               className={`size-3.5 transition-transform ${
-                isExpanded ? 'rotate-90' : ''
+                isExpanded ? "rotate-90" : ""
               }`}
             />
-            {isExpanded ? 'Hide' : 'Show'} files
+            {isExpanded ? "Hide" : "Show"} files
           </button>
         </div>
       </div>
@@ -118,7 +120,7 @@ export function VersionCard({ version, isActive, onClick, previousVersion }: Ver
         {isExpanded && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
+            animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="overflow-hidden border-t border-border"
@@ -136,7 +138,9 @@ export function VersionCard({ version, isActive, onClick, previousVersion }: Ver
                       className="flex items-center gap-1.5 text-xs py-1"
                     >
                       <Sparkles className="size-3 text-blue-500 flex-shrink-0" />
-                      <span className="truncate text-foreground">{filename}</span>
+                      <span className="truncate text-foreground">
+                        {filename}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -154,7 +158,9 @@ export function VersionCard({ version, isActive, onClick, previousVersion }: Ver
                       className="flex items-center gap-1.5 text-xs py-1"
                     >
                       <Edit className="size-3 text-amber-500 flex-shrink-0" />
-                      <span className="truncate text-foreground">{filename}</span>
+                      <span className="truncate text-foreground">
+                        {filename}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -173,7 +179,9 @@ export function VersionCard({ version, isActive, onClick, previousVersion }: Ver
                         className="flex items-center gap-1.5 text-xs py-0.5"
                       >
                         <FileCode className="size-3 text-muted-foreground flex-shrink-0" />
-                        <span className="truncate text-muted-foreground">{filename}</span>
+                        <span className="truncate text-muted-foreground">
+                          {filename}
+                        </span>
                       </div>
                     ))}
                     {filesGrouped.unchanged.length > 5 && (
@@ -190,14 +198,14 @@ export function VersionCard({ version, isActive, onClick, previousVersion }: Ver
       </AnimatePresence>
 
       {/* Status indicator */}
-      {version.status === 'generating' && (
+      {version.status === "generating" && (
         <div className="px-3 py-1.5 bg-blue-500/10 border-t border-blue-500/20">
           <p className="text-xs text-blue-600 dark:text-blue-400">
             Generating...
           </p>
         </div>
       )}
-      {version.status === 'failed' && (
+      {version.status === "failed" && (
         <div className="px-3 py-1.5 bg-red-500/10 border-t border-red-500/20">
           <p className="text-xs text-red-600 dark:text-red-400">
             Generation failed
@@ -207,4 +215,3 @@ export function VersionCard({ version, isActive, onClick, previousVersion }: Ver
     </motion.div>
   );
 }
-

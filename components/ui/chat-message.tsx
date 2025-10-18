@@ -2,19 +2,19 @@
 
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  User, 
-  Bot, 
-  CheckCircle, 
-  Loader2, 
-  Copy, 
-  ThumbsUp, 
+import {
+  User,
+  Bot,
+  CheckCircle,
+  Loader2,
+  Copy,
+  ThumbsUp,
   ThumbsDown,
   FileCode,
   FileText,
   Sparkles,
   Clock,
-  AlertCircle
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -53,7 +53,7 @@ export function ChatMessageComponent({
   isLast = false,
   onCopy,
   onFeedback,
-  className
+  className,
 }: ChatMessageProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [copiedText, setCopiedText] = useState<string | null>(null);
@@ -77,7 +77,7 @@ export function ChatMessageComponent({
     return new Intl.DateTimeFormat("en-US", {
       hour: "2-digit",
       minute: "2-digit",
-      hour12: true
+      hour12: true,
     }).format(date);
   };
 
@@ -86,17 +86,16 @@ export function ChatMessageComponent({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: "easeOut" }}
-      className={cn(
-        "group relative w-full",
-        className
-      )}
+      className={cn("group relative w-full", className)}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className={cn(
-        "flex gap-3 p-4",
-        isUser ? "justify-end" : "justify-start"
-      )}>
+      <div
+        className={cn(
+          "flex gap-3 p-4",
+          isUser ? "justify-end" : "justify-start",
+        )}
+      >
         {/* Avatar */}
         {!isUser && (
           <motion.div
@@ -105,9 +104,9 @@ export function ChatMessageComponent({
             transition={{ delay: 0.1 }}
             className={cn(
               "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-              isSystem 
-                ? "bg-orange-500/10 text-orange-500" 
-                : "bg-primary/10 text-primary"
+              isSystem
+                ? "bg-orange-500/10 text-orange-500"
+                : "bg-primary/10 text-primary",
             )}
           >
             {isSystem ? (
@@ -119,10 +118,12 @@ export function ChatMessageComponent({
         )}
 
         {/* Message content */}
-        <div className={cn(
-          "flex flex-col gap-2 max-w-[80%] sm:max-w-[70%]",
-          isUser && "items-end"
-        )}>
+        <div
+          className={cn(
+            "flex flex-col gap-2 max-w-[80%] sm:max-w-[70%]",
+            isUser && "items-end",
+          )}
+        >
           {/* File being edited indicator */}
           <AnimatePresence>
             {message.metadata?.fileBeingEdited && (
@@ -156,8 +157,8 @@ export function ChatMessageComponent({
               isUser
                 ? "bg-primary text-primary-foreground ml-auto"
                 : isSystem
-                ? "bg-orange-50 dark:bg-orange-950/30 text-orange-900 dark:text-orange-100"
-                : "bg-muted/50 text-foreground"
+                  ? "bg-orange-50 dark:bg-orange-950/30 text-orange-900 dark:text-orange-100"
+                  : "bg-muted/50 text-foreground",
             )}
           >
             {/* Streaming indicator */}
@@ -211,13 +212,15 @@ export function ChatMessageComponent({
                       transition={{ delay: index * 0.1 }}
                       className={cn(
                         "rounded-lg border border-border/30 overflow-hidden",
-                        fragment.type === "code" && "bg-muted/30"
+                        fragment.type === "code" && "bg-muted/30",
                       )}
                     >
                       {fragment.filename && (
                         <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 border-b border-border/30">
                           <FileText className="size-4" />
-                          <span className="text-xs font-medium">{fragment.filename}</span>
+                          <span className="text-xs font-medium">
+                            {fragment.filename}
+                          </span>
                         </div>
                       )}
                       <div className="p-3">

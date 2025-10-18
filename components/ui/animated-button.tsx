@@ -60,7 +60,7 @@ const buttonVariants = cva(
       uppercase: true,
       rounded: "custom",
     },
-  }
+  },
 );
 
 export interface AnimatedButtonProps
@@ -97,7 +97,7 @@ const AnimatedButton = React.forwardRef<HTMLButtonElement, AnimatedButtonProps>(
       children,
       ...props
     },
-    ref
+    ref,
   ) => {
     const Comp = asChild ? Slot : "button";
 
@@ -189,7 +189,7 @@ const AnimatedButton = React.forwardRef<HTMLButtonElement, AnimatedButtonProps>(
             rounded,
             className,
           }),
-          glow && "shadow-glow-scoped"
+          glow && "shadow-glow-scoped",
         )}
         style={combinedStyle}
         ref={ref}
@@ -215,14 +215,14 @@ const AnimatedButton = React.forwardRef<HTMLButtonElement, AnimatedButtonProps>(
         <span
           className={cn(
             "relative z-10 transition-all duration-300 flex items-center justify-center",
-            textEffect === "spread" && "group-hover:tracking-wider"
+            textEffect === "spread" && "group-hover:tracking-wider",
           )}
         >
           {children}
         </span>
       </Comp>
     );
-  }
+  },
 );
 
 AnimatedButton.displayName = "AnimatedButton";

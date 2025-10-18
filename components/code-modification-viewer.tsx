@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Check, X, FileCode, AlertCircle, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import {
+  Check,
+  X,
+  FileCode,
+  AlertCircle,
+  Loader2,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
 import { Highlight, themes } from "prism-react-renderer";
 import { useTheme } from "next-themes";
 import { api } from "@/lib/trpc-client";
@@ -23,7 +31,7 @@ interface CodeModification {
   new_content: string;
   line_start: number | null;
   line_end: number | null;
-  modification_type: 'edit' | 'create' | 'delete';
+  modification_type: "edit" | "create" | "delete";
   reason: string | null;
   applied: boolean;
   created_at: string;
@@ -35,19 +43,23 @@ interface CodeModificationViewerProps {
   projectId: string;
 }
 
-export function CodeModificationViewer({ messageId, projectId }: CodeModificationViewerProps) {
+export function CodeModificationViewer({
+  messageId,
+  projectId,
+}: CodeModificationViewerProps) {
   const { resolvedTheme } = useTheme();
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
-  
-  const codeTheme = resolvedTheme === 'dark' ? themes.vsDark : themes.vsLight;
+
+  const codeTheme = resolvedTheme === "dark" ? themes.vsDark : themes.vsLight;
 
   // Fetch modifications for this message
-  const { data: modifications = [], refetch } = api.codeModifications.getByMessage.useQuery(
-    { messageId },
-    {
-      refetchOnWindowFocus: false,
-    }
-  );
+  const { data: modifications = [], refetch } =
+    api.codeModifications.getByMessage.useQuery(
+      { messageId },
+      {
+        refetchOnWindowFocus: false,
+      },
+    );
 
   const applyMutation = api.codeModifications.apply.useMutation({
     onSuccess: () => {
@@ -61,11 +73,13 @@ export function CodeModificationViewer({ messageId, projectId }: CodeModificatio
     },
   });
 
-  const applyMultipleMutation = api.codeModifications.applyMultiple.useMutation({
-    onSuccess: () => {
-      refetch();
+  const applyMultipleMutation = api.codeModifications.applyMultiple.useMutation(
+    {
+      onSuccess: () => {
+        refetch();
+      },
     },
-  });
+  );
 
   const handleApply = (id: string) => {
     applyMutation.mutate({ id });
@@ -77,16 +91,16 @@ export function CodeModificationViewer({ messageId, projectId }: CodeModificatio
 
   const handleApplyAll = () => {
     const unappliedIds = modifications
-      .filter(mod => !mod.applied)
-      .map(mod => mod.id);
-    
+      .filter((mod) => !mod.applied)
+      .map((mod) => mod.id);
+
     if (unappliedIds.length > 0) {
       applyMultipleMutation.mutate({ modification_ids: unappliedIds });
     }
   };
 
   const toggleFile = (filePath: string) => {
-    setExpandedFiles(prev => {
+    setExpandedFiles((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(filePath)) {
         newSet.delete(filePath);
@@ -102,15 +116,18 @@ export function CodeModificationViewer({ messageId, projectId }: CodeModificatio
   }
 
   // Group modifications by file
-  const modsByFile = modifications.reduce((acc, mod) => {
-    if (!acc[mod.file_path]) {
-      acc[mod.file_path] = [];
-    }
-    acc[mod.file_path].push(mod);
-    return acc;
-  }, {} as Record<string, CodeModification[]>);
+  const modsByFile = modifications.reduce(
+    (acc, mod) => {
+      if (!acc[mod.file_path]) {
+        acc[mod.file_path] = [];
+      }
+      acc[mod.file_path].push(mod);
+      return acc;
+    },
+    {} as Record<string, CodeModification[]>,
+  );
 
-  const unappliedCount = modifications.filter(m => !m.applied).length;
+  const unappliedCount = modifications.filter((m) => !m.applied).length;
 
   return (
     <div className="mt-3 space-y-2">
@@ -119,7 +136,10 @@ export function CodeModificationViewer({ messageId, projectId }: CodeModificatio
         <div className="flex items-center justify-between p-2 bg-muted/50 dark:bg-[#1D1D1D] rounded-lg border border-border/50 dark:border-[#333433]">
           <div className="text-xs text-muted-foreground flex items-center gap-2">
             <AlertCircle className="size-3.5" />
-            <span>{unappliedCount} modification{unappliedCount !== 1 ? 's' : ''} pending review</span>
+            <span>
+              {unappliedCount} modification{unappliedCount !== 1 ? "s" : ""}{" "}
+              pending review
+            </span>
           </div>
           <button
             onClick={handleApplyAll}
@@ -144,8 +164,8 @@ export function CodeModificationViewer({ messageId, projectId }: CodeModificatio
       {/* File modifications */}
       {Object.entries(modsByFile).map(([filePath, mods]) => {
         const isExpanded = expandedFiles.has(filePath);
-        const fileUnapplied = mods.filter(m => !m.applied).length;
-        
+        const fileUnapplied = mods.filter((m) => !m.applied).length;
+
         return (
           <div
             key={filePath}
@@ -163,7 +183,9 @@ export function CodeModificationViewer({ messageId, projectId }: CodeModificatio
                   <ChevronRight className="size-4 flex-shrink-0 text-muted-foreground" />
                 )}
                 <FileCode className="size-4 flex-shrink-0 text-blue-500" />
-                <span className="text-sm font-medium text-foreground truncate">{filePath}</span>
+                <span className="text-sm font-medium text-foreground truncate">
+                  {filePath}
+                </span>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 {fileUnapplied > 0 && (
@@ -172,7 +194,7 @@ export function CodeModificationViewer({ messageId, projectId }: CodeModificatio
                   </span>
                 )}
                 <span className="text-xs text-muted-foreground">
-                  {mods.length} change{mods.length !== 1 ? 's' : ''}
+                  {mods.length} change{mods.length !== 1 ? "s" : ""}
                 </span>
               </div>
             </button>
@@ -183,7 +205,7 @@ export function CodeModificationViewer({ messageId, projectId }: CodeModificatio
                 {mods.map((mod, idx) => (
                   <div
                     key={mod.id}
-                    className={`p-3 ${idx > 0 ? 'border-t border-border/30 dark:border-[#2A2A2A]' : ''}`}
+                    className={`p-3 ${idx > 0 ? "border-t border-border/30 dark:border-[#2A2A2A]" : ""}`}
                   >
                     {/* Modification header */}
                     <div className="flex items-start justify-between mb-2">
@@ -199,7 +221,7 @@ export function CodeModificationViewer({ messageId, projectId }: CodeModificatio
                           </div>
                         )}
                       </div>
-                      
+
                       {/* Action buttons */}
                       {!mod.applied && (
                         <div className="flex items-center gap-1 flex-shrink-0 ml-2">
@@ -229,7 +251,7 @@ export function CodeModificationViewer({ messageId, projectId }: CodeModificatio
                           </button>
                         </div>
                       )}
-                      
+
                       {mod.applied && (
                         <div className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 flex-shrink-0 ml-2">
                           <Check className="size-3" />
@@ -252,15 +274,28 @@ export function CodeModificationViewer({ messageId, projectId }: CodeModificatio
                               code={mod.old_content}
                               language="javascript"
                             >
-                              {({ className, style, tokens, getLineProps, getTokenProps }) => (
+                              {({
+                                className,
+                                style,
+                                tokens,
+                                getLineProps,
+                                getTokenProps,
+                              }) => (
                                 <pre
                                   className={`${className} text-xs p-2`}
-                                  style={{ ...style, margin: 0, background: 'transparent' }}
+                                  style={{
+                                    ...style,
+                                    margin: 0,
+                                    background: "transparent",
+                                  }}
                                 >
                                   {tokens.map((line, i) => (
                                     <div key={i} {...getLineProps({ line })}>
                                       {line.map((token, key) => (
-                                        <span key={key} {...getTokenProps({ token })} />
+                                        <span
+                                          key={key}
+                                          {...getTokenProps({ token })}
+                                        />
                                       ))}
                                     </div>
                                   ))}
@@ -274,7 +309,7 @@ export function CodeModificationViewer({ messageId, projectId }: CodeModificatio
                       {/* New content */}
                       <div className="rounded border border-emerald-500/30 dark:border-emerald-500/20 overflow-hidden">
                         <div className="bg-emerald-500/10 px-2 py-1 text-xs text-emerald-700 dark:text-emerald-400 border-b border-emerald-500/30 dark:border-emerald-500/20">
-                          {mod.old_content ? 'After' : 'New Code'}
+                          {mod.old_content ? "After" : "New Code"}
                         </div>
                         <div className="bg-emerald-500/5 dark:bg-emerald-500/5 overflow-x-auto">
                           <Highlight
@@ -282,15 +317,28 @@ export function CodeModificationViewer({ messageId, projectId }: CodeModificatio
                             code={mod.new_content}
                             language="javascript"
                           >
-                            {({ className, style, tokens, getLineProps, getTokenProps }) => (
+                            {({
+                              className,
+                              style,
+                              tokens,
+                              getLineProps,
+                              getTokenProps,
+                            }) => (
                               <pre
                                 className={`${className} text-xs p-2`}
-                                style={{ ...style, margin: 0, background: 'transparent' }}
+                                style={{
+                                  ...style,
+                                  margin: 0,
+                                  background: "transparent",
+                                }}
                               >
                                 {tokens.map((line, i) => (
                                   <div key={i} {...getLineProps({ line })}>
                                     {line.map((token, key) => (
-                                      <span key={key} {...getTokenProps({ token })} />
+                                      <span
+                                        key={key}
+                                        {...getTokenProps({ token })}
+                                      />
                                     ))}
                                   </div>
                                 ))}
@@ -310,5 +358,3 @@ export function CodeModificationViewer({ messageId, projectId }: CodeModificatio
     </div>
   );
 }
-
-

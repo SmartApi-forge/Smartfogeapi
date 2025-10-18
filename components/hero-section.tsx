@@ -1,7 +1,7 @@
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Card } from "@/components/ui/card"
-import { Sparkles, Zap, Code, ArrowRight } from "lucide-react"
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Card } from "@/components/ui/card";
+import { Sparkles, Zap, Code, ArrowRight } from "lucide-react";
 
 export function HeroSection() {
   return (
@@ -20,11 +20,13 @@ export function HeroSection() {
               AI-Powered API Generation
             </div>
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-foreground leading-tight">
-              Transform Your Ideas into <span className="text-primary">APIs Instantly</span>
+              Transform Your Ideas into{" "}
+              <span className="text-primary">APIs Instantly</span>
             </h1>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-              Harness the power of AI for effortless API creation. No coding required. Just describe what you need, and
-              watch SmartAPIForge build, test, and deploy your APIs automatically.
+              Harness the power of AI for effortless API creation. No coding
+              required. Just describe what you need, and watch SmartAPIForge
+              build, test, and deploy your APIs automatically.
             </p>
           </div>
 
@@ -38,7 +40,9 @@ export function HeroSection() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-lg">Describe Your API</h3>
-                    <p className="text-muted-foreground text-sm">Tell us what you want to build in plain English</p>
+                    <p className="text-muted-foreground text-sm">
+                      Tell us what you want to build in plain English
+                    </p>
                   </div>
                 </div>
 
@@ -48,12 +52,19 @@ export function HeroSection() {
                 />
 
                 <div className="flex flex-col sm:flex-row gap-4">
-                  <Button size="lg" className="flex-1 h-12 text-base font-semibold">
+                  <Button
+                    size="lg"
+                    className="flex-1 h-12 text-base font-semibold"
+                  >
                     <Zap className="w-5 h-5 mr-2" />
                     Generate API
                     <ArrowRight className="w-5 h-5 ml-2" />
                   </Button>
-                  <Button variant="outline" size="lg" className="h-12 text-base bg-transparent">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="h-12 text-base bg-transparent"
+                  >
                     View Example
                   </Button>
                 </div>
@@ -69,7 +80,8 @@ export function HeroSection() {
               </div>
               <h3 className="font-semibold text-lg">AI-Powered Generation</h3>
               <p className="text-muted-foreground text-sm">
-                Advanced language models understand your requirements and generate production-ready code
+                Advanced language models understand your requirements and
+                generate production-ready code
               </p>
             </div>
 
@@ -79,7 +91,8 @@ export function HeroSection() {
               </div>
               <h3 className="font-semibold text-lg">Instant Deployment</h3>
               <p className="text-muted-foreground text-sm">
-                Automatically deploy to cloud platforms with built-in testing and documentation
+                Automatically deploy to cloud platforms with built-in testing
+                and documentation
               </p>
             </div>
 
@@ -89,12 +102,13 @@ export function HeroSection() {
               </div>
               <h3 className="font-semibold text-lg">No Code Required</h3>
               <p className="text-muted-foreground text-sm">
-                Perfect for non-developers and experts alike - just describe what you need
+                Perfect for non-developers and experts alike - just describe
+                what you need
               </p>
             </div>
           </div>
         </div>
       </div>
     </section>
-  )
+  );
 }

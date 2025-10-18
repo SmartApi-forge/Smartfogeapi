@@ -25,7 +25,9 @@ export function LoadingAnimation({ onComplete }: LoadingAnimationProps) {
         <div className="mb-8">
           <div className="flex items-center justify-center mb-4">
             <div className="w-6 h-6 bg-purple-500 rounded-full mr-2"></div>
-            <span className="text-white text-lg font-medium">SmartAPIForge</span>
+            <span className="text-white text-lg font-medium">
+              SmartAPIForge
+            </span>
           </div>
         </div>
 
@@ -38,26 +40,41 @@ export function LoadingAnimation({ onComplete }: LoadingAnimationProps) {
           >
             <Clock className="w-8 h-8" />
           </motion.div>
-          
+
           <motion.div
             animate={{ rotate: 360 }}
-            transition={{ duration: 2, repeat: Infinity, ease: "linear", delay: 0.2 }}
+            transition={{
+              duration: 2,
+              repeat: Infinity,
+              ease: "linear",
+              delay: 0.2,
+            }}
             className="text-green-400"
           >
             <Code className="w-8 h-8" />
           </motion.div>
-          
+
           <motion.div
             animate={{ rotate: 360 }}
-            transition={{ duration: 2, repeat: Infinity, ease: "linear", delay: 0.4 }}
+            transition={{
+              duration: 2,
+              repeat: Infinity,
+              ease: "linear",
+              delay: 0.4,
+            }}
             className="text-orange-400"
           >
             <Database className="w-8 h-8" />
           </motion.div>
-          
+
           <motion.div
             animate={{ rotate: 360 }}
-            transition={{ duration: 2, repeat: Infinity, ease: "linear", delay: 0.6 }}
+            transition={{
+              duration: 2,
+              repeat: Infinity,
+              ease: "linear",
+              delay: 0.6,
+            }}
             className="text-yellow-400"
           >
             <Brain className="w-8 h-8" />
@@ -71,4 +88,4 @@ export function LoadingAnimation({ onComplete }: LoadingAnimationProps) {
   );
 }
 
-export default LoadingAnimation
+export default LoadingAnimation;

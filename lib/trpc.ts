@@ -1,14 +1,14 @@
-import { initTRPC, TRPCError } from '@trpc/server';
-import { type FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';
-import { createClient } from '@supabase/supabase-js';
-import superjson from 'superjson';
-import { ZodError } from 'zod';
-import type { User } from '@supabase/supabase-js';
+import { initTRPC, TRPCError } from "@trpc/server";
+import { type FetchCreateContextFnOptions } from "@trpc/server/adapters/fetch";
+import { createClient } from "@supabase/supabase-js";
+import superjson from "superjson";
+import { ZodError } from "zod";
+import type { User } from "@supabase/supabase-js";
 
 // Create Supabase client
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
 );
 
 export type Context = {
@@ -21,7 +21,9 @@ export type Context = {
  *
  * This section defines the "contexts" that are available in the backend API.
  */
-export const createTRPCContext = async (opts: FetchCreateContextFnOptions): Promise<Context> => {
+export const createTRPCContext = async (
+  opts: FetchCreateContextFnOptions,
+): Promise<Context> => {
   const { req } = opts;
 
   try {
@@ -29,15 +31,18 @@ export const createTRPCContext = async (opts: FetchCreateContextFnOptions): Prom
     let refreshToken: string | undefined;
 
     // First, check for Authorization header (Bearer token)
-    const authHeader = req.headers.get('authorization');
-    if (authHeader && authHeader.startsWith('Bearer ')) {
+    const authHeader = req.headers.get("authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
       accessToken = authHeader.substring(7); // Remove 'Bearer ' prefix
-      
+
       // Verify the access token by getting user info
-      const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser(accessToken);
 
       if (error) {
-        console.error('Error verifying access token:', error);
+        console.error("Error verifying access token:", error);
         return { user: null, supabase };
       }
 
@@ -45,29 +50,35 @@ export const createTRPCContext = async (opts: FetchCreateContextFnOptions): Prom
     }
 
     // Fallback to cookies if no Authorization header
-    const cookieHeader = req.headers.get('cookie');
+    const cookieHeader = req.headers.get("cookie");
     if (cookieHeader) {
       // Parse cookies manually since we're in a fetch context
-      const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
-        const [key, value] = cookie.trim().split('=');
-        if (key && value) {
-          acc[key] = decodeURIComponent(value);
-        }
-        return acc;
-      }, {} as Record<string, string>);
+      const cookies = cookieHeader.split(";").reduce(
+        (acc, cookie) => {
+          const [key, value] = cookie.trim().split("=");
+          if (key && value) {
+            acc[key] = decodeURIComponent(value);
+          }
+          return acc;
+        },
+        {} as Record<string, string>,
+      );
 
-      accessToken = cookies['sb-access-token'];
-      refreshToken = cookies['sb-refresh-token'];
+      accessToken = cookies["sb-access-token"];
+      refreshToken = cookies["sb-refresh-token"];
 
       if (accessToken && refreshToken) {
         // Set the session in Supabase
-        const { data: { user }, error } = await supabase.auth.setSession({
+        const {
+          data: { user },
+          error,
+        } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken,
         });
 
         if (error) {
-          console.error('Error setting Supabase session:', error);
+          console.error("Error setting Supabase session:", error);
           return { user: null, supabase };
         }
 
@@ -77,7 +88,7 @@ export const createTRPCContext = async (opts: FetchCreateContextFnOptions): Prom
 
     return { user: null, supabase };
   } catch (error) {
-    console.error('Error creating tRPC context:', error);
+    console.error("Error creating tRPC context:", error);
     return { user: null, supabase };
   }
 };
@@ -118,7 +129,7 @@ export const publicProcedure = t.procedure;
  */
 export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
   if (!ctx.user) {
-    throw new TRPCError({ code: 'UNAUTHORIZED' });
+    throw new TRPCError({ code: "UNAUTHORIZED" });
   }
   return next({
     ctx: {

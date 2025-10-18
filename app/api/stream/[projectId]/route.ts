@@ -1,8 +1,8 @@
-import { streamingService } from '../../../../src/services/streaming-service';
-import { NextRequest } from 'next/server';
+import { streamingService } from "../../../../src/services/streaming-service";
+import { NextRequest } from "next/server";
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 /**
  * Server-Sent Events endpoint for streaming API generation progress
@@ -10,20 +10,20 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ projectId: string }> }
+  { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
 
   if (!projectId) {
-    return new Response('Project ID required', { status: 400 });
+    return new Response("Project ID required", { status: 400 });
   }
 
   // Set up SSE headers
   const headers = new Headers({
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache, no-transform',
-    'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no', // Disable buffering for Nginx
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no", // Disable buffering for Nginx
   });
 
   // Create a TransformStream for streaming
@@ -37,7 +37,7 @@ export async function GET(
   };
 
   // Send initial heartbeat
-  send(': connected\n\n');
+  send(": connected\n\n");
 
   // Set up connection callback
   const cleanup = streamingService.addConnection(projectId, (data: string) => {
@@ -46,11 +46,11 @@ export async function GET(
 
   // Set up heartbeat to keep connection alive
   const heartbeatInterval = setInterval(() => {
-    send(': heartbeat\n\n');
+    send(": heartbeat\n\n");
   }, 30000); // Every 30 seconds
 
   // Handle client disconnect
-  request.signal.addEventListener('abort', () => {
+  request.signal.addEventListener("abort", () => {
     console.log(`[SSE] Client disconnected from project ${projectId}`);
     clearInterval(heartbeatInterval);
     cleanup();
@@ -61,4 +61,3 @@ export async function GET(
 
   return new Response(stream.readable, { headers });
 }
-

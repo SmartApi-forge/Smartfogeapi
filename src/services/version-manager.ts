@@ -1,15 +1,15 @@
-import { createClient } from '@supabase/supabase-js';
-import type { 
-  Version, 
-  CreateVersionInput, 
+import { createClient } from "@supabase/supabase-js";
+import type {
+  Version,
+  CreateVersionInput,
   UpdateVersionInput,
   VersionComparison,
-  FileDiff 
-} from '../modules/versions/types';
+  FileDiff,
+} from "../modules/versions/types";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
 /**
@@ -23,7 +23,7 @@ export class VersionManager {
    */
   static async createVersion(input: CreateVersionInput): Promise<Version> {
     const { data, error } = await supabase
-      .from('versions')
+      .from("versions")
       .insert({
         project_id: input.project_id,
         version_number: input.version_number,
@@ -33,14 +33,14 @@ export class VersionManager {
         command_type: input.command_type || null,
         prompt: input.prompt,
         parent_version_id: input.parent_version_id || null,
-        status: input.status || 'generating',
+        status: input.status || "generating",
         metadata: input.metadata || {},
       })
       .select()
       .single();
 
     if (error) {
-      console.error('Error creating version:', error);
+      console.error("Error creating version:", error);
       throw new Error(`Failed to create version: ${error.message}`);
     }
 
@@ -52,18 +52,18 @@ export class VersionManager {
    */
   static async getVersion(id: string): Promise<Version> {
     const { data, error } = await supabase
-      .from('versions')
-      .select('*')
-      .eq('id', id)
+      .from("versions")
+      .select("*")
+      .eq("id", id)
       .single();
 
     if (error) {
-      console.error('Error fetching version:', error);
+      console.error("Error fetching version:", error);
       throw new Error(`Failed to fetch version: ${error.message}`);
     }
 
     if (!data) {
-      throw new Error('Version not found');
+      throw new Error("Version not found");
     }
 
     return data as Version;
@@ -75,17 +75,17 @@ export class VersionManager {
   static async listVersions(
     projectId: string,
     limit: number = 50,
-    offset: number = 0
+    offset: number = 0,
   ): Promise<Version[]> {
     const { data, error } = await supabase
-      .from('versions')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('version_number', { ascending: true })
+      .from("versions")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("version_number", { ascending: true })
       .range(offset, offset + limit - 1);
 
     if (error) {
-      console.error('Error listing versions:', error);
+      console.error("Error listing versions:", error);
       throw new Error(`Failed to list versions: ${error.message}`);
     }
 
@@ -97,16 +97,16 @@ export class VersionManager {
    */
   static async getLatestVersion(projectId: string): Promise<Version | null> {
     const { data, error } = await supabase
-      .from('versions')
-      .select('*')
-      .eq('project_id', projectId)
-      .eq('status', 'complete')
-      .order('version_number', { ascending: false })
+      .from("versions")
+      .select("*")
+      .eq("project_id", projectId)
+      .eq("status", "complete")
+      .order("version_number", { ascending: false })
       .limit(1)
       .maybeSingle();
 
     if (error) {
-      console.error('Error fetching latest version:', error);
+      console.error("Error fetching latest version:", error);
       throw new Error(`Failed to fetch latest version: ${error.message}`);
     }
 
@@ -118,15 +118,15 @@ export class VersionManager {
    */
   static async getNextVersionNumber(projectId: string): Promise<number> {
     const { data, error } = await supabase
-      .from('versions')
-      .select('version_number')
-      .eq('project_id', projectId)
-      .order('version_number', { ascending: false })
+      .from("versions")
+      .select("version_number")
+      .eq("project_id", projectId)
+      .order("version_number", { ascending: false })
       .limit(1)
       .maybeSingle();
 
     if (error) {
-      console.error('Error fetching version number:', error);
+      console.error("Error fetching version number:", error);
       return 1; // Default to version 1
     }
 
@@ -142,17 +142,17 @@ export class VersionManager {
    */
   static async updateVersion(
     id: string,
-    updates: UpdateVersionInput
+    updates: UpdateVersionInput,
   ): Promise<Version> {
     const { data, error } = await supabase
-      .from('versions')
+      .from("versions")
       .update(updates)
-      .eq('id', id)
+      .eq("id", id)
       .select()
       .single();
 
     if (error) {
-      console.error('Error updating version:', error);
+      console.error("Error updating version:", error);
       throw new Error(`Failed to update version: ${error.message}`);
     }
 
@@ -163,13 +163,10 @@ export class VersionManager {
    * Delete a version
    */
   static async deleteVersion(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('versions')
-      .delete()
-      .eq('id', id);
+    const { error } = await supabase.from("versions").delete().eq("id", id);
 
     if (error) {
-      console.error('Error deleting version:', error);
+      console.error("Error deleting version:", error);
       throw new Error(`Failed to delete version: ${error.message}`);
     }
   }
@@ -178,15 +175,15 @@ export class VersionManager {
    * Compare two versions and generate diff
    * For UI display only - actual storage uses full snapshots
    */
-  static compareVersions(version1: Version, version2: Version): VersionComparison {
+  static compareVersions(
+    version1: Version,
+    version2: Version,
+  ): VersionComparison {
     const diffs: FileDiff[] = [];
     const files1 = version1.files || {};
     const files2 = version2.files || {};
-    
-    const allFiles = new Set([
-      ...Object.keys(files1),
-      ...Object.keys(files2),
-    ]);
+
+    const allFiles = new Set([...Object.keys(files1), ...Object.keys(files2)]);
 
     let filesAdded = 0;
     let filesModified = 0;
@@ -201,7 +198,7 @@ export class VersionManager {
         // File was added
         diffs.push({
           filename,
-          status: 'added',
+          status: "added",
           newContent: content2,
         });
         filesAdded++;
@@ -209,7 +206,7 @@ export class VersionManager {
         // File was deleted
         diffs.push({
           filename,
-          status: 'deleted',
+          status: "deleted",
           oldContent: content1,
         });
         filesDeleted++;
@@ -217,7 +214,7 @@ export class VersionManager {
         // File was modified
         diffs.push({
           filename,
-          status: 'modified',
+          status: "modified",
           oldContent: content1,
           newContent: content2,
         });
@@ -226,7 +223,7 @@ export class VersionManager {
         // File unchanged
         diffs.push({
           filename,
-          status: 'unchanged',
+          status: "unchanged",
           oldContent: content1,
           newContent: content2,
         });
@@ -252,12 +249,12 @@ export class VersionManager {
    */
   static async getVersionCount(projectId: string): Promise<number> {
     const { count, error } = await supabase
-      .from('versions')
-      .select('*', { count: 'exact', head: true })
-      .eq('project_id', projectId);
+      .from("versions")
+      .select("*", { count: "exact", head: true })
+      .eq("project_id", projectId);
 
     if (error) {
-      console.error('Error counting versions:', error);
+      console.error("Error counting versions:", error);
       return 0;
     }
 
@@ -284,14 +281,13 @@ export class VersionManager {
    * Mark version as complete
    */
   static async markComplete(id: string): Promise<Version> {
-    return this.updateVersion(id, { status: 'complete' });
+    return this.updateVersion(id, { status: "complete" });
   }
 
   /**
    * Mark version as failed
    */
   static async markFailed(id: string): Promise<Version> {
-    return this.updateVersion(id, { status: 'failed' });
+    return this.updateVersion(id, { status: "failed" });
   }
 }
-

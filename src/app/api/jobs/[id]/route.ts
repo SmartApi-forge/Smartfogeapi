@@ -3,12 +3,12 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   try {
     const jobId = params.id;
@@ -16,14 +16,15 @@ export async function GET(
     if (!jobId) {
       return NextResponse.json(
         { error: "Job ID is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     // Fetch job details from database
     const { data: job, error } = await supabase
       .from("jobs")
-      .select(`
+      .select(
+        `
         *,
         api_fragments (
           id,
@@ -35,7 +36,8 @@ export async function GET(
           pr_url,
           created_at
         )
-      `)
+      `,
+      )
       .eq("id", jobId)
       .single();
 
@@ -43,15 +45,12 @@ export async function GET(
       console.error("Database error:", error);
       return NextResponse.json(
         { error: "Failed to fetch job status" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
     if (!job) {
-      return NextResponse.json(
-        { error: "Job not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
     // Return job status with related data
@@ -71,7 +70,7 @@ export async function GET(
     console.error("Error fetching job status:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState } from 'react';
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useState } from "react";
 
-import { api, trpcClient } from '../../lib/trpc-client';
+import { api, trpcClient } from "../../lib/trpc-client";
 
 export function TRPCProvider({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -16,14 +16,17 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
             staleTime: 60 * 1000, // 1 minute
             retry: (failureCount, error: any) => {
               // Don't retry on 4xx errors
-              if (error?.data?.httpStatus >= 400 && error?.data?.httpStatus < 500) {
+              if (
+                error?.data?.httpStatus >= 400 &&
+                error?.data?.httpStatus < 500
+              ) {
                 return false;
               }
               return failureCount < 3;
             },
           },
         },
-      })
+      }),
   );
 
   return (

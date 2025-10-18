@@ -1,10 +1,7 @@
-import { createTRPCRouter, protectedProcedure } from '../../trpc/init'
-import { TRPCError } from '@trpc/server'
-import { ProjectService } from './service'
-import {
-  GetProjectSchema,
-  GetProjectsSchema,
-} from './types'
+import { createTRPCRouter, protectedProcedure } from "../../trpc/init";
+import { TRPCError } from "@trpc/server";
+import { ProjectService } from "./service";
+import { GetProjectSchema, GetProjectsSchema } from "./types";
 
 export const projectsRouter = createTRPCRouter({
   /**
@@ -15,19 +12,19 @@ export const projectsRouter = createTRPCRouter({
     .input(GetProjectSchema)
     .query(async ({ input, ctx }) => {
       try {
-        return await ProjectService.getOne(input, ctx.user.id)
+        return await ProjectService.getOne(input, ctx.user.id);
       } catch (error) {
         // Re-throw TRPCError if it's already a TRPCError
         if (error instanceof TRPCError) {
-          throw error
+          throw error;
         }
-        
+
         // Otherwise wrap in TRPCError
         throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch project',
-          cause: error
-        })
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch project",
+          cause: error,
+        });
       }
     }),
 
@@ -38,19 +35,19 @@ export const projectsRouter = createTRPCRouter({
     .input(GetProjectsSchema)
     .query(async ({ input, ctx }) => {
       try {
-        return await ProjectService.getMany(input, ctx.user.id)
+        return await ProjectService.getMany(input, ctx.user.id);
       } catch (error) {
         // Re-throw TRPCError if it's already a TRPCError
         if (error instanceof TRPCError) {
-          throw error
+          throw error;
         }
-        
+
         // Otherwise wrap in TRPCError
         throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch projects',
-          cause: error
-        })
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch projects",
+          cause: error,
+        });
       }
     }),
-})
+});

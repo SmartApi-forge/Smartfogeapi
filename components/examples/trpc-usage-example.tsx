@@ -1,23 +1,33 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { api } from '@/lib/trpc-client';
-import { Loader2, Play, Trash2 } from 'lucide-react';
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { api } from "@/lib/trpc-client";
+import { Loader2, Play, Trash2 } from "lucide-react";
 
 export function TRPCUsageExample() {
-  const [prompt, setPrompt] = useState('');
-  const [framework, setFramework] = useState<'fastapi' | 'express'>('fastapi');
+  const [prompt, setPrompt] = useState("");
+  const [framework, setFramework] = useState<"fastapi" | "express">("fastapi");
 
   // tRPC queries and mutations
-  const { data: projects, isLoading: projectsLoading, refetch: refetchProjects } = api.apiGeneration.getProjects.useQuery();
+  const {
+    data: projects,
+    isLoading: projectsLoading,
+    refetch: refetchProjects,
+  } = api.apiGeneration.getProjects.useQuery();
 
   const generateApiMutation = api.apiGeneration.invoke.useMutation({
     onSuccess: () => {
-      setPrompt('');
+      setPrompt("");
       refetchProjects();
     },
   });
@@ -30,29 +40,34 @@ export function TRPCUsageExample() {
 
   const handleGenerate = () => {
     if (!prompt.trim()) return;
-    
+
     generateApiMutation.mutate({
       text: prompt,
-      mode: 'direct',
-      repoUrl: undefined
+      mode: "direct",
+      repoUrl: undefined,
     });
   };
 
   const handleDelete = (projectId: string) => {
-    deleteProjectMutation.mutate({ 
+    deleteProjectMutation.mutate({
       text: `Delete project ${projectId}`,
-      mode: 'direct',
-      repoUrl: undefined
+      mode: "direct",
+      repoUrl: undefined,
     });
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return 'bg-green-500';
-      case 'generating': return 'bg-yellow-500';
-      case 'failed': return 'bg-red-500';
-      case 'deployed': return 'bg-blue-500';
-      default: return 'bg-gray-500';
+      case "completed":
+        return "bg-green-500";
+      case "generating":
+        return "bg-yellow-500";
+      case "failed":
+        return "bg-red-500";
+      case "deployed":
+        return "bg-blue-500";
+      default:
+        return "bg-gray-500";
     }
   };
 
@@ -75,25 +90,25 @@ export function TRPCUsageExample() {
               disabled={generateApiMutation.isPending}
             />
           </div>
-          
+
           <div className="flex items-center gap-4">
             <div className="flex gap-2">
               <Button
-                variant={framework === 'fastapi' ? 'default' : 'outline'}
+                variant={framework === "fastapi" ? "default" : "outline"}
                 size="sm"
-                onClick={() => setFramework('fastapi')}
+                onClick={() => setFramework("fastapi")}
               >
                 FastAPI
               </Button>
               <Button
-                variant={framework === 'express' ? 'default' : 'outline'}
+                variant={framework === "express" ? "default" : "outline"}
                 size="sm"
-                onClick={() => setFramework('express')}
+                onClick={() => setFramework("express")}
               >
                 Express
               </Button>
             </div>
-            
+
             <Button
               onClick={handleGenerate}
               disabled={!prompt.trim() || generateApiMutation.isPending}
@@ -163,7 +178,7 @@ export function TRPCUsageExample() {
                       </a>
                     )}
                   </div>
-                  
+
                   <Button
                     variant="ghost"
                     size="sm"

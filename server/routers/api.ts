@@ -1,11 +1,15 @@
-import { z } from 'zod';
-import { createTRPCRouter, publicProcedure, protectedProcedure } from '../../lib/trpc';
-import { TRPCError } from '@trpc/server';
+import { z } from "zod";
+import {
+  createTRPCRouter,
+  publicProcedure,
+  protectedProcedure,
+} from "../../lib/trpc";
+import { TRPCError } from "@trpc/server";
 
 // Input schemas
 const generateApiSchema = z.object({
-  prompt: z.string().min(10, 'Prompt must be at least 10 characters'),
-  framework: z.enum(['fastapi', 'express']).default('fastapi'),
+  prompt: z.string().min(10, "Prompt must be at least 10 characters"),
+  framework: z.enum(["fastapi", "express"]).default("fastapi"),
   advanced: z.boolean().default(false),
   name: z.string().optional(),
 });
@@ -20,17 +24,17 @@ export const apiRouter = createTRPCRouter({
     .input(generateApiSchema)
     .mutation(async ({ ctx, input }) => {
       const { user, supabase } = ctx;
-      
+
       try {
         // Create a new project record (without storing prompt here)
         const { data: project, error: projectError } = await supabase
-          .from('projects')
+          .from("projects")
           .insert({
             user_id: user.id,
             name: input.name || `API from "${input.prompt.slice(0, 30)}..."`,
             framework: input.framework,
             advanced: input.advanced,
-            status: 'generating',
+            status: "generating",
             created_at: new Date().toISOString(),
           })
           .select()
@@ -38,41 +42,41 @@ export const apiRouter = createTRPCRouter({
 
         if (projectError) {
           throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to create project',
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to create project",
             cause: projectError,
           });
         }
 
         // Store user prompt in messages table
         const { data: message, error: messageError } = await supabase
-          .from('messages')
+          .from("messages")
           .insert({
             content: input.prompt,
-            role: 'user',
-            type: 'text',
+            role: "user",
+            type: "text",
             project_id: project.id,
-            sender_id: user.id
+            sender_id: user.id,
           })
           .select()
           .single();
 
         if (messageError) {
           throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to store user message',
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to store user message",
             cause: messageError,
           });
         }
 
         // Create a job record for tracking
         const { data: job, error: jobError } = await supabase
-          .from('jobs')
+          .from("jobs")
           .insert({
             project_id: project.id,
             user_id: user.id,
-            type: 'generate_api',
-            status: 'pending',
+            type: "generate_api",
+            status: "pending",
             payload: {
               prompt: input.prompt,
               framework: input.framework,
@@ -85,8 +89,8 @@ export const apiRouter = createTRPCRouter({
 
         if (jobError) {
           throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to create job',
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to create job",
             cause: jobError,
           });
         }
@@ -97,12 +101,12 @@ export const apiRouter = createTRPCRouter({
         return {
           projectId: project.id,
           jobId: job.id,
-          status: 'started',
+          status: "started",
         };
       } catch (error) {
         throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to generate API',
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to generate API",
           cause: error,
         });
       }
@@ -115,16 +119,16 @@ export const apiRouter = createTRPCRouter({
       const { user, supabase } = ctx;
 
       const { data: project, error } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('id', input.id)
-        .eq('user_id', user.id)
+        .from("projects")
+        .select("*")
+        .eq("id", input.id)
+        .eq("user_id", user.id)
         .single();
 
       if (error || !project) {
         throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Project not found',
+          code: "NOT_FOUND",
+          message: "Project not found",
         });
       }
 
@@ -137,22 +141,22 @@ export const apiRouter = createTRPCRouter({
       z.object({
         limit: z.number().min(1).max(100).default(20),
         offset: z.number().min(0).default(0),
-      })
+      }),
     )
     .query(async ({ ctx, input }) => {
       const { user, supabase } = ctx;
 
       const { data: projects, error } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
+        .from("projects")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
         .range(input.offset, input.offset + input.limit - 1);
 
       if (error) {
         throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch projects',
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch projects",
           cause: error,
         });
       }
@@ -167,16 +171,16 @@ export const apiRouter = createTRPCRouter({
       const { user, supabase } = ctx;
 
       const { data: job, error } = await supabase
-        .from('jobs')
-        .select('*')
-        .eq('id', input.jobId)
-        .eq('user_id', user.id)
+        .from("jobs")
+        .select("*")
+        .eq("id", input.jobId)
+        .eq("user_id", user.id)
         .single();
 
       if (error || !job) {
         throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Job not found',
+          code: "NOT_FOUND",
+          message: "Job not found",
         });
       }
 
@@ -190,15 +194,15 @@ export const apiRouter = createTRPCRouter({
       const { user, supabase } = ctx;
 
       const { error } = await supabase
-        .from('projects')
+        .from("projects")
         .delete()
-        .eq('id', input.id)
-        .eq('user_id', user.id);
+        .eq("id", input.id)
+        .eq("user_id", user.id);
 
       if (error) {
         throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to delete project',
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to delete project",
           cause: error,
         });
       }

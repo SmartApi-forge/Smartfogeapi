@@ -1,9 +1,9 @@
-import { initTRPC, TRPCError } from '@trpc/server';
-import { cache } from 'react';
+import { initTRPC, TRPCError } from "@trpc/server";
+import { cache } from "react";
 import superjson from "superjson";
-import { supabase } from '../../lib/supabase';
-import { cookies } from 'next/headers';
-import type { User } from '@supabase/supabase-js';
+import { supabase } from "../../lib/supabase";
+import { cookies } from "next/headers";
+import type { User } from "@supabase/supabase-js";
 
 export type Context = {
   user: User | null;
@@ -17,16 +17,19 @@ export const createTRPCContext = cache(async (): Promise<Context> => {
   try {
     // Get the session from cookies
     const cookieStore = await cookies();
-    const accessToken = cookieStore.get('sb-access-token')?.value;
-    const refreshToken = cookieStore.get('sb-refresh-token')?.value;
+    const accessToken = cookieStore.get("sb-access-token")?.value;
+    const refreshToken = cookieStore.get("sb-refresh-token")?.value;
 
     if (accessToken) {
       // Verify the access token by getting user info
       // Don't use setSession as it consumes the refresh token
-      const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser(accessToken);
 
       if (error) {
-        console.error('Error verifying access token:', error);
+        console.error("Error verifying access token:", error);
         return { user: null, supabase };
       }
 
@@ -34,7 +37,7 @@ export const createTRPCContext = cache(async (): Promise<Context> => {
     }
     return { user: null, supabase };
   } catch (error) {
-    console.error('Error creating tRPC context:', error);
+    console.error("Error creating tRPC context:", error);
     return { user: null, supabase };
   }
 });
@@ -58,7 +61,10 @@ export const baseProcedure = t.procedure;
 // Protected procedure that requires authentication
 export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
   if (!ctx.user) {
-    throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Authentication required' });
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Authentication required",
+    });
   }
   return next({
     ctx: {

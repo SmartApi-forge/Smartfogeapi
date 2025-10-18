@@ -1,5 +1,8 @@
-import OpenAI from 'openai';
-import type { CommandClassification, CommandType } from '../modules/versions/types';
+import OpenAI from "openai";
+import type {
+  CommandClassification,
+  CommandType,
+} from "../modules/versions/types";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -40,9 +43,11 @@ const CACHE_MAX_SIZE = 1000;
  * Fast keyword-based classification
  * Returns classification with confidence score
  */
-function keywordClassify(prompt: string): { type: CommandType; confidence: number } | null {
+function keywordClassify(
+  prompt: string,
+): { type: CommandType; confidence: number } | null {
   const normalizedPrompt = prompt.toLowerCase().trim();
-  
+
   // Check cache first
   if (classificationCache.has(normalizedPrompt)) {
     const cached = classificationCache.get(normalizedPrompt)!;
@@ -50,7 +55,7 @@ function keywordClassify(prompt: string): { type: CommandType; confidence: numbe
   }
 
   let bestMatch: { type: CommandType; confidence: number } | null = null;
-  
+
   for (const [type, patterns] of Object.entries(KEYWORD_PATTERNS)) {
     for (const pattern of patterns) {
       if (pattern.test(normalizedPrompt)) {
@@ -61,7 +66,7 @@ function keywordClassify(prompt: string): { type: CommandType; confidence: numbe
       }
     }
   }
-  
+
   return bestMatch;
 }
 
@@ -71,14 +76,14 @@ function keywordClassify(prompt: string): { type: CommandType; confidence: numbe
  */
 async function aiClassify(
   prompt: string,
-  currentFiles: string[] = []
+  currentFiles: string[] = [],
 ): Promise<CommandClassification> {
   try {
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: "gpt-4o-mini",
       messages: [
         {
-          role: 'system',
+          role: "system",
           content: `You are a command classifier for a code generation system. Analyze user prompts and classify them into one of these categories:
 - CREATE_FILE: User wants to create new files/components/features
 - MODIFY_FILE: User wants to modify existing files/code
@@ -89,76 +94,90 @@ async function aiClassify(
 Also determine if this should create a new version (usually yes, unless it's a very minor change).
 Extract any mentioned file names, function names, or entities.
 
-Current files in project: ${currentFiles.length > 0 ? currentFiles.join(', ') : 'none (new project)'}`,
+Current files in project: ${currentFiles.length > 0 ? currentFiles.join(", ") : "none (new project)"}`,
         },
         {
-          role: 'user',
+          role: "user",
           content: prompt,
         },
       ],
       functions: [
         {
-          name: 'classify_command',
-          description: 'Classify the user command and extract relevant information',
+          name: "classify_command",
+          description:
+            "Classify the user command and extract relevant information",
           parameters: {
-            type: 'object',
+            type: "object",
             properties: {
               command_type: {
-                type: 'string',
-                enum: ['CREATE_FILE', 'MODIFY_FILE', 'DELETE_FILE', 'REFACTOR_CODE', 'GENERATE_API'],
-                description: 'The type of command',
+                type: "string",
+                enum: [
+                  "CREATE_FILE",
+                  "MODIFY_FILE",
+                  "DELETE_FILE",
+                  "REFACTOR_CODE",
+                  "GENERATE_API",
+                ],
+                description: "The type of command",
               },
               confidence: {
-                type: 'number',
-                description: 'Confidence level 0-100',
+                type: "number",
+                description: "Confidence level 0-100",
                 minimum: 0,
                 maximum: 100,
               },
               should_create_new_version: {
-                type: 'boolean',
-                description: 'Whether this command should create a new version',
+                type: "boolean",
+                description: "Whether this command should create a new version",
               },
               entities: {
-                type: 'array',
-                items: { type: 'string' },
-                description: 'Extracted file names, function names, or other entities mentioned',
+                type: "array",
+                items: { type: "string" },
+                description:
+                  "Extracted file names, function names, or other entities mentioned",
               },
               reasoning: {
-                type: 'string',
-                description: 'Brief explanation of the classification',
+                type: "string",
+                description: "Brief explanation of the classification",
               },
             },
-            required: ['command_type', 'confidence', 'should_create_new_version', 'entities', 'reasoning'],
+            required: [
+              "command_type",
+              "confidence",
+              "should_create_new_version",
+              "entities",
+              "reasoning",
+            ],
           },
         },
       ],
-      function_call: { name: 'classify_command' },
+      function_call: { name: "classify_command" },
       temperature: 0.3,
     });
 
     const functionCall = completion.choices[0]?.message?.function_call;
     if (!functionCall) {
-      throw new Error('No function call in AI response');
+      throw new Error("No function call in AI response");
     }
 
     const result = JSON.parse(functionCall.arguments);
-    
+
     return {
       type: result.command_type as CommandType,
       confidence: result.confidence,
       shouldCreateNewVersion: result.should_create_new_version,
       entities: result.entities || [],
-      reasoning: result.reasoning || 'AI classification',
+      reasoning: result.reasoning || "AI classification",
     };
   } catch (error) {
-    console.error('AI classification error:', error);
+    console.error("AI classification error:", error);
     // Fallback to safe defaults
     return {
-      type: 'GENERATE_API',
+      type: "GENERATE_API",
       confidence: 50,
       shouldCreateNewVersion: true,
       entities: [],
-      reasoning: 'Fallback classification due to error',
+      reasoning: "Fallback classification due to error",
     };
   }
 }
@@ -171,10 +190,10 @@ Current files in project: ${currentFiles.length > 0 ? currentFiles.join(', ') : 
  */
 export async function classifyCommand(
   prompt: string,
-  currentFiles: string[] = []
+  currentFiles: string[] = [],
 ): Promise<CommandClassification> {
   const normalizedPrompt = prompt.toLowerCase().trim();
-  
+
   // Check cache
   if (classificationCache.has(normalizedPrompt)) {
     return classificationCache.get(normalizedPrompt)!;
@@ -182,7 +201,7 @@ export async function classifyCommand(
 
   // Try keyword classification first
   const keywordResult = keywordClassify(prompt);
-  
+
   if (keywordResult && keywordResult.confidence >= 80) {
     // High confidence keyword match
     const classification: CommandClassification = {
@@ -190,21 +209,21 @@ export async function classifyCommand(
       confidence: keywordResult.confidence,
       shouldCreateNewVersion: true, // Default to creating new version
       entities: extractEntities(prompt),
-      reasoning: 'Keyword pattern match',
+      reasoning: "Keyword pattern match",
     };
-    
+
     // Cache result
     cacheClassification(normalizedPrompt, classification);
-    
+
     return classification;
   }
 
   // Low confidence or no match - use AI
   const aiResult = await aiClassify(prompt, currentFiles);
-  
+
   // Cache result
   cacheClassification(normalizedPrompt, aiResult);
-  
+
   return aiResult;
 }
 
@@ -213,34 +232,37 @@ export async function classifyCommand(
  */
 function extractEntities(prompt: string): string[] {
   const entities: string[] = [];
-  
+
   // Match file names (e.g., "auth.js", "UserProfile.tsx", "api/users.ts")
   const filePattern = /\b[\w-]+\.[\w]+\b/g;
   const fileMatches = prompt.match(filePattern);
   if (fileMatches) {
     entities.push(...fileMatches);
   }
-  
+
   // Match quoted strings (likely file or function names)
   const quotedPattern = /["']([^"']+)["']/g;
   let match;
   while ((match = quotedPattern.exec(prompt)) !== null) {
     entities.push(match[1]);
   }
-  
+
   return [...new Set(entities)]; // Remove duplicates
 }
 
 /**
  * Cache classification with size limit
  */
-function cacheClassification(prompt: string, classification: CommandClassification): void {
+function cacheClassification(
+  prompt: string,
+  classification: CommandClassification,
+): void {
   if (classificationCache.size >= CACHE_MAX_SIZE) {
     // Remove oldest entry
     const firstKey = classificationCache.keys().next().value;
     classificationCache.delete(firstKey);
   }
-  
+
   classificationCache.set(prompt, classification);
 }
 
@@ -250,4 +272,3 @@ function cacheClassification(prompt: string, classification: CommandClassificati
 export function clearClassificationCache(): void {
   classificationCache.clear();
 }
-

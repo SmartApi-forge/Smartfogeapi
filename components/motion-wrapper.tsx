@@ -1,9 +1,9 @@
-"use client"
+"use client";
 
-import { motion, AnimatePresence } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion";
 
 // Re-export specific components from framer-motion instead of using "export *"
-export { motion, AnimatePresence }
+export { motion, AnimatePresence };
 
 // Add any other specific exports you need from framer-motion here
 // For example:

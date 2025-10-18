@@ -2,18 +2,18 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Send, 
-  Loader2, 
-  ArrowUp, 
-  Paperclip, 
+import {
+  Send,
+  Loader2,
+  ArrowUp,
+  Paperclip,
   SlidersHorizontal,
   Mic,
   MicOff,
   Image,
   Code,
   FileText,
-  Sparkles
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -50,7 +50,7 @@ export function DynamicChatInput({
   minHeight = 44,
   onFileAttach,
   onVoiceToggle,
-  isRecording = false
+  isRecording = false,
 }: DynamicChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -62,7 +62,7 @@ export function DynamicChatInput({
     const textarea = textareaRef.current;
     if (!textarea) return;
 
-    textarea.style.height = 'auto';
+    textarea.style.height = "auto";
     const scrollHeight = textarea.scrollHeight;
     const newHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight);
     textarea.style.height = `${newHeight}px`;
@@ -102,27 +102,24 @@ export function DynamicChatInput({
   const canSubmit = value.trim().length > 0 && !isLoading && !disabled;
 
   return (
-    <div className={cn(
-      "relative w-full",
-      className
-    )}>
+    <div className={cn("relative w-full", className)}>
       {/* Main input container */}
       <motion.div
         initial={false}
         animate={{
           scale: isFocused ? 1.02 : 1,
-          boxShadow: isFocused 
+          boxShadow: isFocused
             ? "0 8px 32px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(59, 130, 246, 0.3)"
-            : "0 4px 16px rgba(0, 0, 0, 0.08)"
+            : "0 4px 16px rgba(0, 0, 0, 0.08)",
         }}
         transition={{ duration: 0.2, ease: "easeOut" }}
         className={cn(
           "relative rounded-2xl border bg-background/80 backdrop-blur-sm",
           "transition-all duration-200",
-          isFocused 
-            ? "border-primary/30 bg-background/90" 
+          isFocused
+            ? "border-primary/30 bg-background/90"
             : "border-border/50 hover:border-border/80",
-          disabled && "opacity-50 cursor-not-allowed"
+          disabled && "opacity-50 cursor-not-allowed",
         )}
       >
         {/* Typing indicator */}
@@ -155,7 +152,7 @@ export function DynamicChatInput({
               "w-full bg-transparent text-foreground placeholder-muted-foreground",
               "outline-none border-none resize-none",
               "text-sm leading-relaxed",
-              "scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent"
+              "scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent",
             )}
             style={{
               minHeight: `${minHeight}px`,
@@ -176,7 +173,7 @@ export function DynamicChatInput({
                     "h-8 px-3 rounded-full text-xs font-medium",
                     "border border-border/50 bg-transparent",
                     "hover:bg-muted/50 transition-colors",
-                    "flex items-center gap-1.5"
+                    "flex items-center gap-1.5",
                   )}
                   disabled={disabled}
                 >
@@ -202,7 +199,7 @@ export function DynamicChatInput({
                     className={cn(
                       "h-8 w-8 rounded-full",
                       "hover:bg-muted/50 transition-colors",
-                      "flex items-center justify-center"
+                      "flex items-center justify-center",
                     )}
                     disabled={disabled}
                   >
@@ -219,9 +216,9 @@ export function DynamicChatInput({
                   className={cn(
                     "h-8 w-8 rounded-full transition-colors",
                     "flex items-center justify-center",
-                    isRecording 
-                      ? "bg-red-500 text-white hover:bg-red-600" 
-                      : "hover:bg-muted/50"
+                    isRecording
+                      ? "bg-red-500 text-white hover:bg-red-600"
+                      : "hover:bg-muted/50",
                   )}
                   disabled={disabled}
                 >
@@ -245,7 +242,7 @@ export function DynamicChatInput({
                 "flex items-center justify-center",
                 canSubmit
                   ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg"
-                  : "bg-muted/50 text-muted-foreground cursor-not-allowed"
+                  : "bg-muted/50 text-muted-foreground cursor-not-allowed",
               )}
             >
               <AnimatePresence mode="wait">

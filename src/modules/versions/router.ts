@@ -1,13 +1,13 @@
-import { createTRPCRouter, baseProcedure } from '../../trpc/init';
-import { VersionService } from './service';
+import { createTRPCRouter, baseProcedure } from "../../trpc/init";
+import { VersionService } from "./service";
 import {
   createVersionSchema,
   updateVersionSchema,
   getVersionSchema,
   getVersionsSchema,
   getLatestVersionSchema,
-} from './types';
-import { z } from 'zod';
+} from "./types";
+import { z } from "zod";
 
 /**
  * Versions tRPC Router
@@ -26,20 +26,16 @@ export const versionsRouter = createTRPCRouter({
   /**
    * Get a version by ID
    */
-  getOne: baseProcedure
-    .input(getVersionSchema)
-    .query(async ({ input }) => {
-      return await VersionService.getById(input);
-    }),
+  getOne: baseProcedure.input(getVersionSchema).query(async ({ input }) => {
+    return await VersionService.getById(input);
+  }),
 
   /**
    * Get all versions for a project
    */
-  getMany: baseProcedure
-    .input(getVersionsSchema)
-    .query(async ({ input }) => {
-      return await VersionService.getMany(input);
-    }),
+  getMany: baseProcedure.input(getVersionsSchema).query(async ({ input }) => {
+    return await VersionService.getMany(input);
+  }),
 
   /**
    * Get the latest version for a project
@@ -58,7 +54,7 @@ export const versionsRouter = createTRPCRouter({
       z.object({
         id: z.string().uuid(),
         updates: updateVersionSchema,
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       return await VersionService.update(input.id, input.updates);
@@ -67,12 +63,10 @@ export const versionsRouter = createTRPCRouter({
   /**
    * Delete a version
    */
-  delete: baseProcedure
-    .input(getVersionSchema)
-    .mutation(async ({ input }) => {
-      await VersionService.delete(input);
-      return { success: true };
-    }),
+  delete: baseProcedure.input(getVersionSchema).mutation(async ({ input }) => {
+    await VersionService.delete(input);
+    return { success: true };
+  }),
 
   /**
    * Compare two versions
@@ -82,7 +76,7 @@ export const versionsRouter = createTRPCRouter({
       z.object({
         version1Id: z.string().uuid(),
         version2Id: z.string().uuid(),
-      })
+      }),
     )
     .query(async ({ input }) => {
       return await VersionService.compare(input.version1Id, input.version2Id);
@@ -106,4 +100,3 @@ export const versionsRouter = createTRPCRouter({
       return await VersionService.getHistory(input.versionId);
     }),
 });
-

@@ -1,15 +1,19 @@
-import { z } from 'zod';
-import { createTRPCRouter, publicProcedure, protectedProcedure } from '../../lib/trpc';
-import { TRPCError } from '@trpc/server';
+import { z } from "zod";
+import {
+  createTRPCRouter,
+  publicProcedure,
+  protectedProcedure,
+} from "../../lib/trpc";
+import { TRPCError } from "@trpc/server";
 
 // Input schemas
 const signInSchema = z.object({
-  email: z.string().email('Invalid email address'),
+  email: z.string().email("Invalid email address"),
 });
 
 const verifyOtpSchema = z.object({
   email: z.string().email(),
-  token: z.string().min(6, 'Token must be at least 6 characters'),
+  token: z.string().min(6, "Token must be at least 6 characters"),
 });
 
 export const authRouter = createTRPCRouter({
@@ -29,16 +33,16 @@ export const authRouter = createTRPCRouter({
 
         if (error) {
           throw new TRPCError({
-            code: 'BAD_REQUEST',
+            code: "BAD_REQUEST",
             message: error.message,
           });
         }
 
-        return { success: true, message: 'Magic link sent to your email' };
+        return { success: true, message: "Magic link sent to your email" };
       } catch (error) {
         throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to send magic link',
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to send magic link",
           cause: error,
         });
       }
@@ -54,12 +58,12 @@ export const authRouter = createTRPCRouter({
         const { data, error } = await supabase.auth.verifyOtp({
           email: input.email,
           token: input.token,
-          type: 'email',
+          type: "email",
         });
 
         if (error) {
           throw new TRPCError({
-            code: 'BAD_REQUEST',
+            code: "BAD_REQUEST",
             message: error.message,
           });
         }
@@ -71,8 +75,8 @@ export const authRouter = createTRPCRouter({
         };
       } catch (error) {
         throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to verify OTP',
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to verify OTP",
           cause: error,
         });
       }
@@ -92,7 +96,7 @@ export const authRouter = createTRPCRouter({
 
       if (error) {
         throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
+          code: "INTERNAL_SERVER_ERROR",
           message: error.message,
         });
       }
@@ -100,8 +104,8 @@ export const authRouter = createTRPCRouter({
       return { success: true };
     } catch (error) {
       throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to sign out',
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to sign out",
         cause: error,
       });
     }
@@ -113,7 +117,7 @@ export const authRouter = createTRPCRouter({
       z.object({
         full_name: z.string().optional(),
         avatar_url: z.string().url().optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const { user, supabase } = ctx;
@@ -125,7 +129,7 @@ export const authRouter = createTRPCRouter({
 
         if (error) {
           throw new TRPCError({
-            code: 'BAD_REQUEST',
+            code: "BAD_REQUEST",
             message: error.message,
           });
         }
@@ -133,8 +137,8 @@ export const authRouter = createTRPCRouter({
         return data.user;
       } catch (error) {
         throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to update profile',
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to update profile",
           cause: error,
         });
       }

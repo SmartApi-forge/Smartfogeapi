@@ -1,5 +1,5 @@
-import { StreamEvent, StreamEventWithTimestamp } from '../types/streaming';
-import { supabaseServer } from '../../lib/supabase-server';
+import { StreamEvent, StreamEventWithTimestamp } from "../types/streaming";
+import { supabaseServer } from "../../lib/supabase-server";
 
 type ConnectionCallback = (data: string) => void;
 
@@ -13,9 +13,11 @@ interface Connection {
  * Streaming service for managing Server-Sent Events connections
  * Enables real-time progress updates during API generation
  */
-class StreamingService {
+export class StreamingService {
   private connections: Map<string, Connection[]> = new Map();
   private static instance: StreamingService;
+  private eventSource: EventSource | null = null;
+  private listeners: Map<string, Function[]> = new Map();
 
   private constructor() {
     // Cleanup old connections every 5 minutes
@@ -43,7 +45,9 @@ class StreamingService {
     connections.push(connection);
     this.connections.set(projectId, connections);
 
-    console.log(`[StreamingService] Added connection for project ${projectId}. Total connections: ${connections.length}`);
+    console.log(
+      `[StreamingService] Added connection for project ${projectId}. Total connections: ${connections.length}`,
+    );
 
     // Return cleanup function
     return () => {
@@ -64,7 +68,9 @@ class StreamingService {
       this.connections.set(projectId, filtered);
     }
 
-    console.log(`[StreamingService] Removed connection for project ${projectId}. Remaining: ${filtered.length}`);
+    console.log(
+      `[StreamingService] Removed connection for project ${projectId}. Remaining: ${filtered.length}`,
+    );
   }
 
   /**
@@ -74,7 +80,9 @@ class StreamingService {
     const connections = this.connections.get(projectId);
 
     if (!connections || connections.length === 0) {
-      console.log(`[StreamingService] No connections for project ${projectId}. Event: ${event.type}`);
+      console.log(
+        `[StreamingService] No connections for project ${projectId}. Event: ${event.type}`,
+      );
       return;
     }
 
@@ -85,7 +93,9 @@ class StreamingService {
 
     const formattedData = this.formatSSE(eventWithTimestamp);
 
-    console.log(`[StreamingService] Emitting ${event.type} to ${connections.length} connection(s) for project ${projectId}`);
+    console.log(
+      `[StreamingService] Emitting ${event.type} to ${connections.length} connection(s) for project ${projectId}`,
+    );
 
     // Send to all connections
     connections.forEach((connection) => {
@@ -103,21 +113,28 @@ class StreamingService {
   /**
    * Save generation event to database for persistence across reloads
    */
-  private async saveEventToDatabase(projectId: string, event: StreamEventWithTimestamp): Promise<void> {
+  private async saveEventToDatabase(
+    projectId: string,
+    event: StreamEventWithTimestamp,
+  ): Promise<void> {
     try {
       // Only save completed events (not the "generating..." states) for cleaner reload experience
-    const relevantEvents: Record<string, { icon: string; messageFormatter: (event: any) => string }> = {
-      'file:complete': {
-        icon: 'complete',
-        messageFormatter: (e) => `✓ Created ${e.filename}`
-      },
-        'validation:complete': { 
-          icon: 'complete', 
-          messageFormatter: (e) => `✓ ${e.summary || 'Code validated successfully'}` 
+      const relevantEvents: Record<
+        string,
+        { icon: string; messageFormatter: (event: any) => string }
+      > = {
+        "file:complete": {
+          icon: "complete",
+          messageFormatter: (e) => `✓ Created ${e.filename}`,
         },
-        'complete': { 
-          icon: 'complete', 
-          messageFormatter: (e) => `✓ ${e.summary}` 
+        "validation:complete": {
+          icon: "complete",
+          messageFormatter: (e) =>
+            `✓ ${e.summary || "Code validated successfully"}`,
+        },
+        complete: {
+          icon: "complete",
+          messageFormatter: (e) => `✓ ${e.summary}`,
         },
       };
 
@@ -127,41 +144,46 @@ class StreamingService {
       }
 
       const message = eventConfig.messageFormatter(event);
-      
+
       // Check if this event already exists to avoid duplicates
       const { data: existing } = await supabaseServer
-        .from('generation_events')
-        .select('id')
-        .eq('project_id', projectId)
-        .eq('event_type', event.type)
-        .eq('message', message)
+        .from("generation_events")
+        .select("id")
+        .eq("project_id", projectId)
+        .eq("event_type", event.type)
+        .eq("message", message)
         .maybeSingle();
 
       if (existing) {
-        console.log(`[StreamingService] Event already exists, skipping: ${event.type} for project ${projectId}`);
+        console.log(
+          `[StreamingService] Event already exists, skipping: ${event.type} for project ${projectId}`,
+        );
         return;
       }
-      
-      const { error } = await supabaseServer
-        .from('generation_events')
-        .insert({
-          project_id: projectId,
-          event_type: event.type,
-          filename: 'filename' in event ? event.filename : null,
-          message,
-          icon: eventConfig.icon,
-          timestamp: new Date(event.timestamp).toISOString(),
-          metadata: event,
-          version_id: 'versionId' in event ? event.versionId : null,
-        });
+
+      const { error } = await supabaseServer.from("generation_events").insert({
+        project_id: projectId,
+        event_type: event.type,
+        filename: "filename" in event ? event.filename : null,
+        message,
+        icon: eventConfig.icon,
+        timestamp: new Date(event.timestamp).toISOString(),
+        metadata: event,
+        version_id: "versionId" in event ? event.versionId : null,
+      });
 
       if (error) {
-        console.error('[StreamingService] Error saving event to database:', error);
+        console.error(
+          "[StreamingService] Error saving event to database:",
+          error,
+        );
       } else {
-        console.log(`[StreamingService] Saved ${event.type} event to database for project ${projectId}`);
+        console.log(
+          `[StreamingService] Saved ${event.type} event to database for project ${projectId}`,
+        );
       }
     } catch (error) {
-      console.error('[StreamingService] Error in saveEventToDatabase:', error);
+      console.error("[StreamingService] Error in saveEventToDatabase:", error);
     }
   }
 
@@ -172,12 +194,14 @@ class StreamingService {
     const connections = this.connections.get(projectId);
 
     if (connections) {
-      console.log(`[StreamingService] Closing ${connections.length} connection(s) for project ${projectId}`);
+      console.log(
+        `[StreamingService] Closing ${connections.length} connection(s) for project ${projectId}`,
+      );
 
       // Send close event
       connections.forEach((connection) => {
         try {
-          connection.callback('event: close\ndata: {}\n\n');
+          connection.callback("event: close\ndata: {}\n\n");
         } catch (error) {
           console.error(`[StreamingService] Error closing connection:`, error);
         }
@@ -214,7 +238,9 @@ class StreamingService {
     });
 
     if (cleaned > 0) {
-      console.log(`[StreamingService] Cleaned up ${cleaned} stale connection(s)`);
+      console.log(
+        `[StreamingService] Cleaned up ${cleaned} stale connection(s)`,
+      );
     }
   }
 
@@ -239,4 +265,3 @@ class StreamingService {
 
 // Export singleton instance
 export const streamingService = StreamingService.getInstance();
-

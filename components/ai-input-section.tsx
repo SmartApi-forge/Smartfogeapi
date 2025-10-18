@@ -1,49 +1,51 @@
-"use client"
-import React from "react"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Card } from "@/components/ui/card"
-import { Sparkles, Zap, ArrowRight } from "lucide-react"
-import { api } from "@/lib/trpc-client"
-import { toast } from "sonner"
+"use client";
+import React from "react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Card } from "@/components/ui/card";
+import { Sparkles, Zap, ArrowRight } from "lucide-react";
+import { api } from "@/lib/trpc-client";
+import { toast } from "sonner";
 
 export const AIInputSection = () => {
-  const [prompt, setPrompt] = React.useState("")
-  const [isGenerating, setIsGenerating] = React.useState(false)
+  const [prompt, setPrompt] = React.useState("");
+  const [isGenerating, setIsGenerating] = React.useState(false);
 
   const createMessage = api.messages.create.useMutation({
     onSuccess: (data: any) => {
-      console.log("Message created successfully:", data)
-      toast.success("API generation started! Check your dashboard for progress.")
-      setPrompt("")
-      setIsGenerating(false)
+      console.log("Message created successfully:", data);
+      toast.success(
+        "API generation started! Check your dashboard for progress.",
+      );
+      setPrompt("");
+      setIsGenerating(false);
     },
     onError: (error: any) => {
-      console.error("Error creating message:", error)
-      toast.error(`Failed to start API generation: ${error.message}`)
-      setIsGenerating(false)
-    }
-  })
+      console.error("Error creating message:", error);
+      toast.error(`Failed to start API generation: ${error.message}`);
+      setIsGenerating(false);
+    },
+  });
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
-      toast.error("Please enter a description for your API")
-      return
+      toast.error("Please enter a description for your API");
+      return;
     }
 
-    setIsGenerating(true)
-    
+    setIsGenerating(true);
+
     try {
       await createMessage.mutateAsync({
         content: prompt,
         role: "user",
-        type: "text"
-      })
+        type: "text",
+      });
     } catch (error) {
-      console.error("Error in handleGenerate:", error)
+      console.error("Error in handleGenerate:", error);
       // Error is already handled in onError callback
     }
-  }
+  };
 
   return (
     <div className="mx-auto max-w-4xl px-6">
@@ -55,7 +57,9 @@ export const AIInputSection = () => {
             </div>
             <div>
               <h3 className="text-xl font-semibold">Describe Your API</h3>
-              <p className="text-muted-foreground">Tell us what you want to build in plain English</p>
+              <p className="text-muted-foreground">
+                Tell us what you want to build in plain English
+              </p>
             </div>
           </div>
 
@@ -77,12 +81,16 @@ export const AIInputSection = () => {
               {isGenerating ? "Generating..." : "Generate API"}
               <ArrowRight className="ml-2 size-5" />
             </Button>
-            <Button variant="outline" size="lg" className="h-12 bg-transparent text-base">
+            <Button
+              variant="outline"
+              size="lg"
+              className="h-12 bg-transparent text-base"
+            >
               View Example
             </Button>
           </div>
         </div>
       </Card>
     </div>
-  )
-}
+  );
+};

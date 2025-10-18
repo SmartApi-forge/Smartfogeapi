@@ -1,16 +1,16 @@
-"use client"
-import React from "react"
-import { motion } from "@/components/motion-wrapper"
-import type { JSX } from "react/jsx-runtime" // Import JSX to fix the undeclared variable error
+"use client";
+import React from "react";
+import { motion } from "@/components/motion-wrapper";
+import type { JSX } from "react/jsx-runtime"; // Import JSX to fix the undeclared variable error
 
 interface TextEffectProps {
-  children: string
-  className?: string
-  preset?: "fade-in-blur"
-  speedSegment?: number
-  delay?: number
-  as?: React.ElementType
-  per?: "line" | "word" | "char"
+  children: string;
+  className?: string;
+  preset?: "fade-in-blur";
+  speedSegment?: number;
+  delay?: number;
+  as?: React.ElementType;
+  per?: "line" | "word" | "char";
 }
 
 export const TextEffect: React.FC<TextEffectProps> = ({
@@ -22,15 +22,15 @@ export const TextEffect: React.FC<TextEffectProps> = ({
   as: Component = "div",
   per = "word",
 }) => {
-  const text = typeof children === "string" ? children : ""
+  const text = typeof children === "string" ? children : "";
 
   const variants = {
     hidden: { opacity: 0, filter: "blur(12px)", y: 12 },
     visible: { opacity: 1, filter: "blur(0px)", y: 0 },
-  }
+  };
 
   if (per === "line") {
-    const lines = text.split("\n")
+    const lines = text.split("\n");
     return React.createElement(
       Component,
       { className },
@@ -48,8 +48,8 @@ export const TextEffect: React.FC<TextEffectProps> = ({
         >
           {line}
         </motion.div>
-      ))
-    )
+      )),
+    );
   }
 
   return (
@@ -64,7 +64,9 @@ export const TextEffect: React.FC<TextEffectProps> = ({
         ease: "easeOut",
       }}
     >
-      {Component === "div" ? children : React.createElement(Component, {}, children)}
+      {Component === "div"
+        ? children
+        : React.createElement(Component, {}, children)}
     </motion.div>
-  )
-}
+  );
+};

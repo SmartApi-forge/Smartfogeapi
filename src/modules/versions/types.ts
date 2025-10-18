@@ -1,14 +1,14 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 // Command types for version creation
-export type CommandType = 
-  | 'CREATE_FILE' 
-  | 'MODIFY_FILE' 
-  | 'DELETE_FILE' 
-  | 'REFACTOR_CODE' 
-  | 'GENERATE_API';
+export type CommandType =
+  | "CREATE_FILE"
+  | "MODIFY_FILE"
+  | "DELETE_FILE"
+  | "REFACTOR_CODE"
+  | "GENERATE_API";
 
-export type VersionStatus = 'generating' | 'complete' | 'failed';
+export type VersionStatus = "generating" | "complete" | "failed";
 
 // Database schema types
 export interface Version {
@@ -34,10 +34,18 @@ export const createVersionSchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().optional(),
   files: z.record(z.string()),
-  command_type: z.enum(['CREATE_FILE', 'MODIFY_FILE', 'DELETE_FILE', 'REFACTOR_CODE', 'GENERATE_API']).optional(),
+  command_type: z
+    .enum([
+      "CREATE_FILE",
+      "MODIFY_FILE",
+      "DELETE_FILE",
+      "REFACTOR_CODE",
+      "GENERATE_API",
+    ])
+    .optional(),
   prompt: z.string().min(1),
   parent_version_id: z.string().uuid().optional(),
-  status: z.enum(['generating', 'complete', 'failed']).default('generating'),
+  status: z.enum(["generating", "complete", "failed"]).default("generating"),
   metadata: z.record(z.any()).default({}),
 });
 
@@ -45,7 +53,7 @@ export const updateVersionSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   description: z.string().optional(),
   files: z.record(z.string()).optional(),
-  status: z.enum(['generating', 'complete', 'failed']).optional(),
+  status: z.enum(["generating", "complete", "failed"]).optional(),
   metadata: z.record(z.any()).optional(),
 });
 
@@ -90,7 +98,7 @@ export type ClassifyCommandInput = z.infer<typeof classifyCommandSchema>;
 // Version comparison types
 export interface FileDiff {
   filename: string;
-  status: 'added' | 'modified' | 'deleted' | 'unchanged';
+  status: "added" | "modified" | "deleted" | "unchanged";
   oldContent?: string;
   newContent?: string;
 }
@@ -106,4 +114,3 @@ export interface VersionComparison {
     filesUnchanged: number;
   };
 }
-

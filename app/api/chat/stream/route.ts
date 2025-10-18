@@ -9,7 +9,7 @@ const openai = new OpenAI({
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
 interface ChatMessage {
@@ -36,9 +36,12 @@ export async function POST(request: NextRequest) {
     const messageHistoryStr = formData.get("messageHistory") as string;
     const projectId = formData.get("projectId") as string;
     const userId = formData.get("userId") as string;
-    
+
     if (!message) {
-      return NextResponse.json({ error: "Message is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Message is required" },
+        { status: 400 },
+      );
     }
 
     // Parse message history
@@ -62,20 +65,21 @@ export async function POST(request: NextRequest) {
 
           // Store user message in database
           if (projectId && userId) {
-            const { data: userMessage, error: userMessageError } = await supabase
-              .from('messages')
-              .insert({
-                content: message,
-                role: 'user',
-                type: 'text',
-                project_id: projectId,
-                user_id: userId
-              })
-              .select()
-              .single();
+            const { data: userMessage, error: userMessageError } =
+              await supabase
+                .from("messages")
+                .insert({
+                  content: message,
+                  role: "user",
+                  type: "text",
+                  project_id: projectId,
+                  user_id: userId,
+                })
+                .select()
+                .single();
 
             if (userMessageError) {
-              console.error('Error storing user message:', userMessageError);
+              console.error("Error storing user message:", userMessageError);
             } else {
               // Trigger message created event
               await inngest.send({
@@ -83,11 +87,11 @@ export async function POST(request: NextRequest) {
                 data: {
                   messageId: userMessage.id,
                   content: message,
-                  role: 'user',
-                  type: 'text',
+                  role: "user",
+                  type: "text",
                   project_id: projectId,
-                  user_id: userId
-                }
+                  user_id: userId,
+                },
               });
             }
           }
@@ -108,7 +112,7 @@ export async function POST(request: NextRequest) {
 
             // The code modification will be handled by the messageCreated function
             // which will trigger the editCode function
-            
+
             // Send progress updates
             sendData({
               type: "progress",
@@ -119,7 +123,7 @@ export async function POST(request: NextRequest) {
               },
             });
 
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise((resolve) => setTimeout(resolve, 1000));
 
             sendData({
               type: "progress",
@@ -129,7 +133,7 @@ export async function POST(request: NextRequest) {
               },
             });
 
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            await new Promise((resolve) => setTimeout(resolve, 1500));
 
             sendData({
               type: "progress",
@@ -139,7 +143,7 @@ export async function POST(request: NextRequest) {
               },
             });
 
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise((resolve) => setTimeout(resolve, 1000));
 
             // Send completion
             sendData({
@@ -149,22 +153,25 @@ export async function POST(request: NextRequest) {
                 progress: 100,
               },
             });
-
           } else {
             // Handle regular chat conversation with OpenAI streaming
             const messages = [
               {
                 role: "system" as const,
-                content: "You are a helpful AI assistant that specializes in code analysis and modification. Provide clear, concise responses and suggest specific improvements when discussing code."
+                content:
+                  "You are a helpful AI assistant that specializes in code analysis and modification. Provide clear, concise responses and suggest specific improvements when discussing code.",
               },
-              ...messageHistory.map(msg => ({
-                role: msg.type === "user" ? "user" as const : "assistant" as const,
-                content: msg.content
+              ...messageHistory.map((msg) => ({
+                role:
+                  msg.type === "user"
+                    ? ("user" as const)
+                    : ("assistant" as const),
+                content: msg.content,
               })),
               {
                 role: "user" as const,
-                content: message
-              }
+                content: message,
+              },
             ];
 
             const completion = await openai.chat.completions.create({
@@ -191,17 +198,20 @@ export async function POST(request: NextRequest) {
             // Store assistant response in database
             if (fullResponse.trim() && projectId && userId) {
               const { error: assistantMessageError } = await supabase
-                .from('messages')
+                .from("messages")
                 .insert({
                   content: fullResponse,
-                  role: 'assistant',
-                  type: 'text',
+                  role: "assistant",
+                  type: "text",
                   project_id: projectId,
-                  user_id: userId
+                  user_id: userId,
                 });
 
               if (assistantMessageError) {
-                console.error('Error storing assistant message:', assistantMessageError);
+                console.error(
+                  "Error storing assistant message:",
+                  assistantMessageError,
+                );
               }
             }
 
@@ -212,16 +222,20 @@ export async function POST(request: NextRequest) {
           const doneChunk = encoder.encode("data: [DONE]\n\n");
           controller.enqueue(doneChunk);
           controller.close();
-
         } catch (error) {
           console.error("Stream error:", error);
           const errorData: StreamResponse = {
             type: "error",
             metadata: {
-              error: error instanceof Error ? error.message : "Unknown error occurred",
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "Unknown error occurred",
             },
           };
-          const errorChunk = encoder.encode(`data: ${JSON.stringify(errorData)}\n\n`);
+          const errorChunk = encoder.encode(
+            `data: ${JSON.stringify(errorData)}\n\n`,
+          );
           controller.enqueue(errorChunk);
           controller.close();
         }
@@ -232,18 +246,17 @@ export async function POST(request: NextRequest) {
       headers: {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
+        Connection: "keep-alive",
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
       },
     });
-
   } catch (error) {
     console.error("API error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -255,33 +268,68 @@ async function analyzeMessageIntent(message: string): Promise<{
 }> {
   // Simple keyword-based analysis for code modification requests
   const codeKeywords = [
-    "modify", "change", "update", "edit", "fix", "create", "add", "remove", 
-    "delete", "refactor", "optimize", "improve", "implement", "build"
+    "modify",
+    "change",
+    "update",
+    "edit",
+    "fix",
+    "create",
+    "add",
+    "remove",
+    "delete",
+    "refactor",
+    "optimize",
+    "improve",
+    "implement",
+    "build",
   ];
-  
-  const fileExtensions = [".js", ".ts", ".jsx", ".tsx", ".py", ".java", ".cpp", ".c", ".css", ".html"];
-  
+
+  const fileExtensions = [
+    ".js",
+    ".ts",
+    ".jsx",
+    ".tsx",
+    ".py",
+    ".java",
+    ".cpp",
+    ".c",
+    ".css",
+    ".html",
+  ];
+
   const lowerMessage = message.toLowerCase();
-  const hasCodeKeyword = codeKeywords.some(keyword => lowerMessage.includes(keyword));
-  const hasFileReference = fileExtensions.some(ext => lowerMessage.includes(ext));
-  
+  const hasCodeKeyword = codeKeywords.some((keyword) =>
+    lowerMessage.includes(keyword),
+  );
+  const hasFileReference = fileExtensions.some((ext) =>
+    lowerMessage.includes(ext),
+  );
+
   // Extract potential file name
   let targetFile = undefined;
-  const fileMatch = message.match(/(\w+\.(js|ts|jsx|tsx|py|java|cpp|c|css|html))/i);
+  const fileMatch = message.match(
+    /(\w+\.(js|ts|jsx|tsx|py|java|cpp|c|css|html))/i,
+  );
   if (fileMatch) {
     targetFile = fileMatch[1];
   }
-  
+
   // Determine operation type
   let operation = "modification";
   if (lowerMessage.includes("create") || lowerMessage.includes("add")) {
     operation = "creation";
-  } else if (lowerMessage.includes("delete") || lowerMessage.includes("remove")) {
+  } else if (
+    lowerMessage.includes("delete") ||
+    lowerMessage.includes("remove")
+  ) {
     operation = "deletion";
-  } else if (lowerMessage.includes("refactor") || lowerMessage.includes("optimize")) {
+  } else if (
+    lowerMessage.includes("refactor") ||
+    lowerMessage.includes("optimize")
+  ) {
     operation = "refactoring";
   }
-  
+
   return {
     isModification: hasCodeKeyword || hasFileReference,
     targetFile,

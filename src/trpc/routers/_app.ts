@@ -1,13 +1,13 @@
-import { createTRPCRouter } from '../init';
+import { createTRPCRouter } from "../init";
 
 // Import modular routers (following YouTube tutorial pattern)
-import { messagesRouter } from '../../modules/messages/router';
-import { fragmentsRouter } from '../../modules/fragments/router';
-import { authRouter } from '../../modules/auth/router';
-import { apiGenerationRouter } from '../../modules/api-generation/router';
-import { projectsRouter } from '../../modules/projects/router';
-import { generationEventsRouter } from '../../modules/generation-events/router';
-import { versionsRouter } from '../../modules/versions/router';
+import { messagesRouter } from "../../modules/messages/router";
+import { fragmentsRouter } from "../../modules/fragments/router";
+import { authRouter } from "../../modules/auth/router";
+import { apiGenerationRouter } from "../../modules/api-generation/router";
+import { projectsRouter } from "../../modules/projects/router";
+import { generationEventsRouter } from "../../modules/generation-events/router";
+import { versionsRouter } from "../../modules/versions/router";
 
 export const appRouter = createTRPCRouter({
   // Modular routers - each module controls its own procedures

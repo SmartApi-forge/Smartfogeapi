@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useMemo } from 'react';
-import { AnimatePresence } from 'framer-motion';
-import { VersionCard } from './version-card';
-import { Loader2 } from 'lucide-react';
-import type { Version } from '../src/modules/versions/types';
+import { useMemo } from "react";
+import { AnimatePresence } from "framer-motion";
+import { VersionCard } from "./version-card";
+import { Loader2 } from "lucide-react";
+import type { Version } from "../src/modules/versions/types";
 
 interface VersionListProps {
   versions: Version[];
@@ -68,4 +68,3 @@ export function VersionList({
     </div>
   );
 }
-

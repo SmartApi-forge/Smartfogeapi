@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState, useRef } from 'react';
-import { Highlight, themes } from 'prism-react-renderer';
-import { motion } from 'framer-motion';
-import { Loader2, Copy, Check, Download, ChevronDown } from 'lucide-react';
-import { GeneratedFile } from '../src/types/streaming';
-import { useTheme } from 'next-themes';
+import React, { useEffect, useState, useRef } from "react";
+import { Highlight, themes } from "prism-react-renderer";
+import { motion } from "framer-motion";
+import { Loader2, Copy, Check, Download, ChevronDown } from "lucide-react";
+import { GeneratedFile } from "../src/types/streaming";
+import { useTheme } from "next-themes";
 
 interface Version {
   id: string;
@@ -38,7 +38,7 @@ export function StreamingCodeViewer({
   onVersionChange,
 }: StreamingCodeViewerProps) {
   const { resolvedTheme } = useTheme();
-  const [displayedContent, setDisplayedContent] = useState('');
+  const [displayedContent, setDisplayedContent] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [isVersionDropdownOpen, setIsVersionDropdownOpen] = useState(false);
@@ -46,28 +46,29 @@ export function StreamingCodeViewer({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Determine which file to display
-  const fileToDisplay = files.find(
-    (f) => f.filename === (selectedFile || currentFile)
-  ) || files.find((f) => f.filename === currentFile) || files[files.length - 1];
+  const fileToDisplay =
+    files.find((f) => f.filename === (selectedFile || currentFile)) ||
+    files.find((f) => f.filename === currentFile) ||
+    files[files.length - 1];
 
   const handleCopyCode = async () => {
     if (!fileToDisplay?.content) return;
-    
+
     try {
       await navigator.clipboard.writeText(fileToDisplay.content);
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
     } catch (err) {
-      console.error('Failed to copy code:', err);
+      console.error("Failed to copy code:", err);
     }
   };
 
   const handleDownload = () => {
     if (!fileToDisplay?.content || !fileToDisplay?.filename) return;
 
-    const blob = new Blob([fileToDisplay.content], { type: 'text/plain' });
+    const blob = new Blob([fileToDisplay.content], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
     a.download = fileToDisplay.filename;
     document.body.appendChild(a);
@@ -78,7 +79,7 @@ export function StreamingCodeViewer({
 
   useEffect(() => {
     if (!fileToDisplay) {
-      setDisplayedContent('');
+      setDisplayedContent("");
       return;
     }
 
@@ -101,7 +102,10 @@ export function StreamingCodeViewer({
 
       const timer = setInterval(() => {
         setDisplayedContent((prev) => {
-          const nextLength = Math.min(prev.length + chunkSize, targetContent.length);
+          const nextLength = Math.min(
+            prev.length + chunkSize,
+            targetContent.length,
+          );
           const newContent = targetContent.slice(0, nextLength);
 
           if (nextLength >= targetContent.length) {
@@ -120,21 +124,26 @@ export function StreamingCodeViewer({
   // Auto-scroll to bottom when content updates during streaming
   useEffect(() => {
     if (isTyping && scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      scrollContainerRef.current.scrollTop =
+        scrollContainerRef.current.scrollHeight;
     }
   }, [displayedContent, isTyping]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setIsVersionDropdownOpen(false);
       }
     };
 
     if (isVersionDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      document.addEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [isVersionDropdownOpen]);
 
@@ -158,7 +167,7 @@ export function StreamingCodeViewer({
   }
 
   const language = getLanguageFromFilename(fileToDisplay.filename);
-  const codeTheme = resolvedTheme === 'dark' ? themes.vsDark : themes.github;
+  const codeTheme = resolvedTheme === "dark" ? themes.vsDark : themes.github;
 
   return (
     <div className="h-full flex flex-col">
@@ -182,9 +191,9 @@ export function StreamingCodeViewer({
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground">
-            {displayedContent.split('\n').length} lines
+            {displayedContent.split("\n").length} lines
           </span>
-          
+
           {/* Version Dropdown */}
           {versions.length > 0 && (
             <div className="relative" ref={dropdownRef}>
@@ -194,11 +203,17 @@ export function StreamingCodeViewer({
                 title="Switch version"
               >
                 <span className="font-medium">
-                  v{versions.find(v => v.id === selectedVersionId)?.version_number || versions[versions.length - 1]?.version_number || 1}
+                  v
+                  {versions.find((v) => v.id === selectedVersionId)
+                    ?.version_number ||
+                    versions[versions.length - 1]?.version_number ||
+                    1}
                 </span>
-                <ChevronDown className={`h-3 w-3 transition-transform ${isVersionDropdownOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown
+                  className={`h-3 w-3 transition-transform ${isVersionDropdownOpen ? "rotate-180" : ""}`}
+                />
               </button>
-              
+
               {isVersionDropdownOpen && (
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
@@ -216,12 +231,18 @@ export function StreamingCodeViewer({
                           setIsVersionDropdownOpen(false);
                         }}
                         className={`w-full text-left px-3 py-2 text-xs hover:bg-muted dark:hover:bg-gray-700 transition-colors flex items-center justify-between ${
-                          selectedVersionId === version.id ? 'bg-primary/10 text-primary' : ''
+                          selectedVersionId === version.id
+                            ? "bg-primary/10 text-primary"
+                            : ""
                         }`}
                       >
                         <div className="flex flex-col">
-                          <span className="font-medium">v{version.version_number}</span>
-                          <span className="text-muted-foreground truncate">{version.name}</span>
+                          <span className="font-medium">
+                            v{version.version_number}
+                          </span>
+                          <span className="text-muted-foreground truncate">
+                            {version.name}
+                          </span>
                         </div>
                         {selectedVersionId === version.id && (
                           <Check className="h-3 w-3 text-primary" />
@@ -232,7 +253,7 @@ export function StreamingCodeViewer({
               )}
             </div>
           )}
-          
+
           <div className="flex items-center gap-1">
             <button
               onClick={handleCopyCode}
@@ -242,7 +263,9 @@ export function StreamingCodeViewer({
               {copySuccess ? (
                 <>
                   <Check className="h-3 w-3 text-green-400" />
-                  <span className="text-green-400 hidden sm:inline">Copied!</span>
+                  <span className="text-green-400 hidden sm:inline">
+                    Copied!
+                  </span>
                 </>
               ) : (
                 <>
@@ -251,7 +274,7 @@ export function StreamingCodeViewer({
                 </>
               )}
             </button>
-            
+
             <button
               onClick={handleDownload}
               className="flex items-center gap-1 px-2 py-1 rounded text-xs hover:bg-muted dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-1 focus:ring-primary"
@@ -265,10 +288,13 @@ export function StreamingCodeViewer({
       </div>
 
       {/* Code content */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-auto relative bg-muted/30 dark:bg-[#1D1D1D]">
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-auto relative bg-muted/30 dark:bg-[#1D1D1D]"
+      >
         <Highlight
           theme={codeTheme}
-          code={displayedContent || '// Waiting for code...'}
+          code={displayedContent || "// Waiting for code..."}
           language={language}
         >
           {({ className, style, tokens, getLineProps, getTokenProps }) => (
@@ -277,25 +303,25 @@ export function StreamingCodeViewer({
               style={{
                 ...style,
                 margin: 0,
-                background: 'transparent',
+                background: "transparent",
                 fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-                fontSize: '14px',
+                fontSize: "14px",
               }}
             >
               {tokens.map((line, i) => {
-                const lineText = line.map(token => token.content).join('');
+                const lineText = line.map((token) => token.content).join("");
                 const indentLevel = getIndentationLevel(lineText);
-                
+
                 return (
                   <div
                     key={i}
                     {...getLineProps({ line })}
                     className="flex hover:bg-muted/20 dark:hover:bg-gray-800/30 transition-colors relative"
-                    style={{ minHeight: '20px' }}
+                    style={{ minHeight: "20px" }}
                   >
                     {/* Indentation guides */}
                     {renderIndentationGuides(indentLevel, i)}
-                    
+
                     <span className="inline-block w-10 text-right mr-3 text-gray-500 select-none flex-shrink-0 text-xs leading-5 relative z-10">
                       {i + 1}
                     </span>
@@ -325,7 +351,7 @@ export function StreamingCodeViewer({
       <div className="bg-muted/30 dark:bg-[#1D1D1D] border-t border-border dark:border-[#333433] px-4 py-1 flex items-center justify-between text-xs text-muted-foreground">
         <span>
           {fileToDisplay.isComplete
-            ? 'Ready'
+            ? "Ready"
             : `Writing code... (${Math.round((displayedContent.length / (fileToDisplay.content.length || 1)) * 100)}%)`}
         </span>
         <span>{language.toUpperCase()}</span>
@@ -340,9 +366,9 @@ export function StreamingCodeViewer({
 function getIndentationLevel(line: string, tabSize: number = 2): number {
   let spaces = 0;
   for (let i = 0; i < line.length; i++) {
-    if (line[i] === ' ') {
+    if (line[i] === " ") {
       spaces++;
-    } else if (line[i] === '\t') {
+    } else if (line[i] === "\t") {
       spaces += tabSize;
     } else {
       break;
@@ -354,14 +380,17 @@ function getIndentationLevel(line: string, tabSize: number = 2): number {
 /**
  * Generate indentation guides for a line
  */
-function renderIndentationGuides(indentLevel: number, lineNumber: number): React.ReactElement[] {
+function renderIndentationGuides(
+  indentLevel: number,
+  lineNumber: number,
+): React.ReactElement[] {
   const guides = [];
   const lineNumberWidth = 52; // Width of line number column in pixels (increased for better alignment)
   const charWidth = 8.4; // Approximate character width in pixels for monospace font
   const tabSize = 2; // Tab size for indentation
-  
+
   for (let i = 0; i < indentLevel; i++) {
-    const leftPosition = lineNumberWidth + (i * tabSize * charWidth); // Precise positioning
+    const leftPosition = lineNumberWidth + i * tabSize * charWidth; // Precise positioning
     guides.push(
       <div
         key={`guide-${lineNumber}-${i}`}
@@ -372,7 +401,7 @@ function renderIndentationGuides(indentLevel: number, lineNumber: number): React
           bottom: 0,
           zIndex: 1,
         }}
-      />
+      />,
     );
   }
   return guides;
@@ -382,36 +411,35 @@ function renderIndentationGuides(indentLevel: number, lineNumber: number): React
  * Determine programming language from filename for syntax highlighting
  */
 function getLanguageFromFilename(filename: string): string {
-  const extension = filename.split('.').pop()?.toLowerCase() || '';
+  const extension = filename.split(".").pop()?.toLowerCase() || "";
 
   const languageMap: Record<string, string> = {
-    js: 'javascript',
-    jsx: 'jsx',
-    ts: 'typescript',
-    tsx: 'tsx',
-    py: 'python',
-    java: 'java',
-    go: 'go',
-    rs: 'rust',
-    cpp: 'cpp',
-    c: 'c',
-    cs: 'csharp',
-    rb: 'ruby',
-    php: 'php',
-    swift: 'swift',
-    kt: 'kotlin',
-    json: 'json',
-    yaml: 'yaml',
-    yml: 'yaml',
-    md: 'markdown',
-    html: 'html',
-    css: 'css',
-    scss: 'scss',
-    sql: 'sql',
-    sh: 'bash',
-    dockerfile: 'dockerfile',
+    js: "javascript",
+    jsx: "jsx",
+    ts: "typescript",
+    tsx: "tsx",
+    py: "python",
+    java: "java",
+    go: "go",
+    rs: "rust",
+    cpp: "cpp",
+    c: "c",
+    cs: "csharp",
+    rb: "ruby",
+    php: "php",
+    swift: "swift",
+    kt: "kotlin",
+    json: "json",
+    yaml: "yaml",
+    yml: "yaml",
+    md: "markdown",
+    html: "html",
+    css: "css",
+    scss: "scss",
+    sql: "sql",
+    sh: "bash",
+    dockerfile: "dockerfile",
   };
 
-  return languageMap[extension] || 'javascript';
+  return languageMap[extension] || "javascript";
 }
-

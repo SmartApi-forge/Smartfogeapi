@@ -1,7 +1,7 @@
-'use client'
+"use client";
 
-import { useEffect } from 'react'
-import { initAuthHandler } from '@/lib/auth-handler'
+import { useEffect } from "react";
+import { initAuthHandler } from "@/lib/auth-handler";
 
 /**
  * Component that initializes authentication handling
@@ -9,8 +9,8 @@ import { initAuthHandler } from '@/lib/auth-handler'
  */
 export function AuthInitializer() {
   useEffect(() => {
-    initAuthHandler()
-  }, [])
+    initAuthHandler();
+  }, []);
 
-  return null
+  return null;
 }

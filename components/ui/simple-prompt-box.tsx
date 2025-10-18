@@ -1,27 +1,31 @@
-"use client"
+"use client";
 
 import React from "react";
 import { ArrowUp, Square } from "lucide-react";
 import { TypingAnimation } from "./typing-animation";
 
 // Utility function for className merging
-const cn = (...classes: (string | undefined | null | false)[]) => classes.filter(Boolean).join(" ");
+const cn = (...classes: (string | undefined | null | false)[]) =>
+  classes.filter(Boolean).join(" ");
 
 // Simple Textarea Component
-interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+interface TextareaProps
+  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   className?: string;
 }
-const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(({ className, ...props }, ref) => (
-  <textarea
-    className={cn(
-      "flex w-full rounded-md border-none bg-transparent px-4 py-3 text-base text-gray-100 placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50 min-h-[48px] resize-none",
-      className
-    )}
-    ref={ref}
-    rows={1}
-    {...props}
-  />
-));
+const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
+  ({ className, ...props }, ref) => (
+    <textarea
+      className={cn(
+        "flex w-full rounded-md border-none bg-transparent px-4 py-3 text-base text-gray-100 placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50 min-h-[48px] resize-none",
+        className,
+      )}
+      ref={ref}
+      rows={1}
+      {...props}
+    />
+  ),
+);
 Textarea.displayName = "Textarea";
 
 // Simple Button Component
@@ -48,13 +52,13 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           "inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
           variantClasses[variant],
           sizeClasses[size],
-          className
+          className,
         )}
         ref={ref}
         {...props}
       />
     );
-  }
+  },
 );
 Button.displayName = "Button";
 
@@ -66,8 +70,19 @@ interface SimplePromptBoxProps {
   className?: string;
 }
 
-export const SimplePromptBox = React.forwardRef<HTMLDivElement, SimplePromptBoxProps>(
-  ({ onSend = () => {}, isLoading = false, placeholder = "Type your message here...", className }, ref) => {
+export const SimplePromptBox = React.forwardRef<
+  HTMLDivElement,
+  SimplePromptBoxProps
+>(
+  (
+    {
+      onSend = () => {},
+      isLoading = false,
+      placeholder = "Type your message here...",
+      className,
+    },
+    ref,
+  ) => {
     const [input, setInput] = React.useState("");
     const [isFocused, setIsFocused] = React.useState(false);
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
@@ -113,7 +128,7 @@ export const SimplePromptBox = React.forwardRef<HTMLDivElement, SimplePromptBoxP
         ref={ref}
         className={cn(
           "rounded-3xl border border-[#444444] bg-[#1F2023] p-2 shadow-[0_8px_30px_rgba(0,0,0,0.24)] transition-all duration-300",
-          className
+          className,
         )}
       >
         {/* Textarea with typing animation overlay */}
@@ -152,7 +167,7 @@ export const SimplePromptBox = React.forwardRef<HTMLDivElement, SimplePromptBoxP
               "h-8 w-8 rounded-full transition-all duration-200",
               hasContent
                 ? "bg-white hover:bg-white/80 text-[#1F2023]"
-                : "bg-transparent hover:bg-gray-600/30 text-[#9CA3AF] hover:text-[#D1D5DB]"
+                : "bg-transparent hover:bg-gray-600/30 text-[#9CA3AF] hover:text-[#D1D5DB]",
             )}
             onClick={handleSubmit}
             disabled={isLoading || !hasContent}
@@ -166,7 +181,7 @@ export const SimplePromptBox = React.forwardRef<HTMLDivElement, SimplePromptBoxP
         </div>
       </div>
     );
-  }
+  },
 );
 
 SimplePromptBox.displayName = "SimplePromptBox";

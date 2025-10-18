@@ -1,27 +1,34 @@
-"use client"
+"use client";
 
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export default function NewsletterCTA() {
   return (
-    <section aria-labelledby="newsletter-title" className="w-full border-t border-border/50">
+    <section
+      aria-labelledby="newsletter-title"
+      className="w-full border-t border-border/50"
+    >
       <div className="mx-auto max-w-6xl px-6">
         <div className="my-6 md:my-8 rounded-xl bg-muted/60 border border-border/60">
           <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between px-6 py-5 md:px-8 md:py-6">
             <div className="space-y-1">
-              <h3 id="newsletter-title" className="text-lg md:text-xl font-semibold text-foreground">
+              <h3
+                id="newsletter-title"
+                className="text-lg md:text-xl font-semibold text-foreground"
+              >
                 Stay Ahead of the AI Curve
               </h3>
               <p className="text-sm text-muted-foreground">
-                Join our newsletter for exclusive insights and updates on the latest AI trends.
+                Join our newsletter for exclusive insights and updates on the
+                latest AI trends.
               </p>
             </div>
 
             <form
               className="w-full md:w-auto"
               onSubmit={(e) => {
-                e.preventDefault()
+                e.preventDefault();
                 // TODO: wire up submission
               }}
             >
@@ -42,5 +49,5 @@ export default function NewsletterCTA() {
         </div>
       </div>
     </section>
-  )
+  );
 }

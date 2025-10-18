@@ -1,13 +1,13 @@
-import { fragmentOperations } from '../../../lib/supabase-server'
-import type { 
-  CreateFragmentInput, 
-  UpdateFragmentInput, 
-  GetFragmentInput, 
+import { fragmentOperations } from "../../../lib/supabase-server";
+import type {
+  CreateFragmentInput,
+  UpdateFragmentInput,
+  GetFragmentInput,
   GetFragmentsByMessageInput,
   GetFragmentsInput,
   UpdateFragmentFilesInput,
-  Fragment 
-} from './types'
+  Fragment,
+} from "./types";
 
 export class FragmentService {
   /**
@@ -15,11 +15,11 @@ export class FragmentService {
    */
   static async create(input: CreateFragmentInput): Promise<Fragment> {
     try {
-      const fragment = await fragmentOperations.create(input)
-      return fragment
+      const fragment = await fragmentOperations.create(input);
+      return fragment;
     } catch (error) {
-      console.error('Error creating fragment:', error)
-      throw new Error('Failed to create fragment')
+      console.error("Error creating fragment:", error);
+      throw new Error("Failed to create fragment");
     }
   }
 
@@ -28,11 +28,11 @@ export class FragmentService {
    */
   static async bulkCreate(inputs: CreateFragmentInput[]): Promise<Fragment[]> {
     try {
-      const fragments = await fragmentOperations.bulkCreate(inputs)
-      return fragments
+      const fragments = await fragmentOperations.bulkCreate(inputs);
+      return fragments;
     } catch (error) {
-      console.error('Error bulk creating fragments:', error)
-      throw new Error('Failed to bulk create fragments')
+      console.error("Error bulk creating fragments:", error);
+      throw new Error("Failed to bulk create fragments");
     }
   }
 
@@ -41,33 +41,38 @@ export class FragmentService {
    */
   static async getById(input: GetFragmentInput): Promise<Fragment> {
     try {
-      const fragment = await fragmentOperations.getById(input.id)
-      return fragment
+      const fragment = await fragmentOperations.getById(input.id);
+      return fragment;
     } catch (error) {
-      console.error('Error getting fragment:', error)
-      throw new Error('Fragment not found')
+      console.error("Error getting fragment:", error);
+      throw new Error("Fragment not found");
     }
   }
 
   /**
    * Get fragments by message ID with database-level pagination
    */
-  static async getByMessageId(input: GetFragmentsByMessageInput): Promise<Fragment[]> {
+  static async getByMessageId(
+    input: GetFragmentsByMessageInput,
+  ): Promise<Fragment[]> {
     try {
       // Validate input parameters
-      const limit = Math.min(Math.max(input.limit || 20, 1), 100)
-      const offset = Math.max(input.offset || 0, 0)
-      
+      const limit = Math.min(Math.max(input.limit || 20, 1), 100);
+      const offset = Math.max(input.offset || 0, 0);
+
       // Use database-level pagination
-      const fragments = await fragmentOperations.getByMessageId(input.message_id, {
-        limit,
-        offset
-      })
-      
-      return fragments
+      const fragments = await fragmentOperations.getByMessageId(
+        input.message_id,
+        {
+          limit,
+          offset,
+        },
+      );
+
+      return fragments;
     } catch (error) {
-      console.error('Error getting fragments by message ID:', error)
-      throw new Error('Failed to get fragments')
+      console.error("Error getting fragments by message ID:", error);
+      throw new Error("Failed to get fragments");
     }
   }
 
@@ -77,51 +82,55 @@ export class FragmentService {
   static async getAll(input: GetFragmentsInput): Promise<Fragment[]> {
     try {
       // Validate input parameters
-      const limit = Math.min(Math.max(input.limit || 20, 1), 100)
-      const offset = Math.max(input.offset || 0, 0)
+      const limit = Math.min(Math.max(input.limit || 20, 1), 100);
+      const offset = Math.max(input.offset || 0, 0);
 
       if (input.message_id) {
         // Get fragments for specific message with database-level pagination
         return await fragmentOperations.getByMessageId(input.message_id, {
           limit,
-          offset
-        })
+          offset,
+        });
       } else {
         // Get all fragments with database-level pagination
         return await fragmentOperations.getAll({
           limit,
-          offset
-        })
+          offset,
+        });
       }
     } catch (error) {
-      console.error('Error getting fragments:', error)
-      throw new Error('Failed to get fragments')
+      console.error("Error getting fragments:", error);
+      throw new Error("Failed to get fragments");
     }
   }
 
   /**
    * Search fragments by title with database-level filtering and pagination
    */
-  static async searchByTitle(params: { title: string; limit?: number; offset?: number }): Promise<Fragment[]> {
+  static async searchByTitle(params: {
+    title: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<Fragment[]> {
     try {
       // Validate and sanitize input parameters
-      if (!params.title || typeof params.title !== 'string') {
-        throw new Error('Title parameter is required and must be a string')
+      if (!params.title || typeof params.title !== "string") {
+        throw new Error("Title parameter is required and must be a string");
       }
-      
-      const limit = Math.min(Math.max(params.limit || 10, 1), 100)
-      const offset = Math.max(params.offset || 0, 0)
-      
+
+      const limit = Math.min(Math.max(params.limit || 10, 1), 100);
+      const offset = Math.max(params.offset || 0, 0);
+
       // Use database-level search with pagination
       const fragments = await fragmentOperations.searchByContent(params.title, {
         limit,
-        offset
-      })
-      
-      return fragments
+        offset,
+      });
+
+      return fragments;
     } catch (error) {
-      console.error('Error searching fragments by title:', error)
-      throw new Error('Failed to search fragments')
+      console.error("Error searching fragments by title:", error);
+      throw new Error("Failed to search fragments");
     }
   }
 
@@ -130,12 +139,12 @@ export class FragmentService {
    */
   static async update(input: UpdateFragmentInput): Promise<Fragment> {
     try {
-      const { id, ...updateData } = input
-      const fragment = await fragmentOperations.update(id, updateData)
-      return fragment
+      const { id, ...updateData } = input;
+      const fragment = await fragmentOperations.update(id, updateData);
+      return fragment;
     } catch (error) {
-      console.error('Error updating fragment:', error)
-      throw new Error('Failed to update fragment')
+      console.error("Error updating fragment:", error);
+      throw new Error("Failed to update fragment");
     }
   }
 
@@ -144,11 +153,13 @@ export class FragmentService {
    */
   static async updateFiles(input: UpdateFragmentFilesInput): Promise<Fragment> {
     try {
-      const fragment = await fragmentOperations.update(input.id, { files: input.files })
-      return fragment
+      const fragment = await fragmentOperations.update(input.id, {
+        files: input.files,
+      });
+      return fragment;
     } catch (error) {
-      console.error('Error updating fragment files:', error)
-      throw new Error('Failed to update fragment files')
+      console.error("Error updating fragment files:", error);
+      throw new Error("Failed to update fragment files");
     }
   }
 
@@ -157,10 +168,10 @@ export class FragmentService {
    */
   static async delete(input: GetFragmentInput): Promise<void> {
     try {
-      await fragmentOperations.delete(input.id)
+      await fragmentOperations.delete(input.id);
     } catch (error) {
-      console.error('Error deleting fragment:', error)
-      throw new Error('Failed to delete fragment')
+      console.error("Error deleting fragment:", error);
+      throw new Error("Failed to delete fragment");
     }
   }
 
@@ -170,11 +181,11 @@ export class FragmentService {
   static async getCountByMessage(messageId: string): Promise<number> {
     try {
       // Use database-level count for efficiency
-      const count = await fragmentOperations.getCountByMessageId(messageId)
-      return count
+      const count = await fragmentOperations.getCountByMessageId(messageId);
+      return count;
     } catch (error) {
-      console.error('Error getting fragment count:', error)
-      throw new Error('Failed to get fragment count')
+      console.error("Error getting fragment count:", error);
+      throw new Error("Failed to get fragment count");
     }
   }
 
@@ -184,11 +195,13 @@ export class FragmentService {
   static async getLatestByMessage(messageId: string): Promise<Fragment | null> {
     try {
       // Get only the first fragment (latest) with limit 1 for efficiency
-      const fragments = await fragmentOperations.getByMessageId(messageId, { limit: 1 })
-      return fragments.length > 0 ? fragments[0] : null // Already sorted by created_at desc
+      const fragments = await fragmentOperations.getByMessageId(messageId, {
+        limit: 1,
+      });
+      return fragments.length > 0 ? fragments[0] : null; // Already sorted by created_at desc
     } catch (error) {
-      console.error('Error getting latest fragment:', error)
-      throw new Error('Failed to get latest fragment')
+      console.error("Error getting latest fragment:", error);
+      throw new Error("Failed to get latest fragment");
     }
   }
 
@@ -197,10 +210,10 @@ export class FragmentService {
    */
   static async exists(fragmentId: string): Promise<boolean> {
     try {
-      await fragmentOperations.getById(fragmentId)
-      return true
+      await fragmentOperations.getById(fragmentId);
+      return true;
     } catch (error) {
-      return false
+      return false;
     }
   }
 }

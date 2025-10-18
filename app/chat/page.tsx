@@ -14,7 +14,7 @@ export default function ChatPage() {
     progressInfo,
     sendMessage,
     clearMessages,
-    stopStream
+    stopStream,
   } = useChatStream();
 
   const handleSendMessage = async (message: string) => {
@@ -54,7 +54,7 @@ export default function ChatPage() {
               Chat with AI to modify and generate code for your projects
             </p>
           </div>
-          
+
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
             <ChatInterface
               messages={messages}

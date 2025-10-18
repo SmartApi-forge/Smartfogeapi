@@ -1,203 +1,211 @@
-"use client"
+"use client";
 
-import React, { useState, useEffect, useRef } from "react"
-import { useRouter, usePathname } from "next/navigation"
-import { AnimatePresence, motion } from "framer-motion"
-import { 
-  FolderOpen, 
-  Plus, 
-  Search, 
-  X
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { supabase } from "@/lib/supabase"
-import { cn } from "@/lib/utils"
+import React, { useState, useEffect, useRef } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
+import { FolderOpen, Plus, Search, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { supabase } from "@/lib/supabase";
+import { cn } from "@/lib/utils";
 
 interface Project {
-  id: string
-  name: string
-  description: string | null
-  status: 'generating' | 'completed' | 'failed' | 'deployed'
-  framework: 'fastapi' | 'express'
-  created_at: string
-  updated_at: string
-  deploy_url: string | null
-  swagger_url: string | null
+  id: string;
+  name: string;
+  description: string | null;
+  status: "generating" | "completed" | "failed" | "deployed";
+  framework: "fastapi" | "express";
+  created_at: string;
+  updated_at: string;
+  deploy_url: string | null;
+  swagger_url: string | null;
 }
 
 interface ModernSidebarProps {
-  isOpen: boolean
-  onClose: () => void
-  searchQuery?: string
-  setSearchQuery?: (query: string) => void
-  className?: string
+  isOpen: boolean;
+  onClose: () => void;
+  searchQuery?: string;
+  setSearchQuery?: (query: string) => void;
+  className?: string;
 }
 
-export function ModernSidebar({ 
-  isOpen, 
-  onClose, 
-  searchQuery: externalSearchQuery, 
+export function ModernSidebar({
+  isOpen,
+  onClose,
+  searchQuery: externalSearchQuery,
   setSearchQuery: externalSetSearchQuery,
-  className 
+  className,
 }: ModernSidebarProps) {
-  const router = useRouter()
-  const pathname = usePathname()
-  const [projects, setProjects] = useState<Project[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [internalSearchQuery, setInternalSearchQuery] = useState("")
-  const [isHovering, setIsHovering] = useState(false)
-  const sidebarRef = useRef<HTMLDivElement>(null)
-  const searchInputRef = useRef<HTMLInputElement>(null)
+  const router = useRouter();
+  const pathname = usePathname();
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [internalSearchQuery, setInternalSearchQuery] = useState("");
+  const [isHovering, setIsHovering] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Use external search query if provided, otherwise use internal state
-  const searchQuery = externalSearchQuery !== undefined ? externalSearchQuery : internalSearchQuery
-  const setSearchQuery = externalSetSearchQuery || setInternalSearchQuery
+  const searchQuery =
+    externalSearchQuery !== undefined
+      ? externalSearchQuery
+      : internalSearchQuery;
+  const setSearchQuery = externalSetSearchQuery || setInternalSearchQuery;
 
   // Helper function to get project title
   const getProjectTitle = (project: Project) => {
     if (project.description) {
       let title = project.description
-        .replace(/^API generated from user prompt:\s*/i, '')
-        .replace(/^Create\s+/i, '')
-        .replace(/^Build\s+/i, '')
-        .replace(/^Generate\s+/i, '')
-        .trim()
-      
-      title = title.charAt(0).toUpperCase() + title.slice(1)
-      
+        .replace(/^API generated from user prompt:\s*/i, "")
+        .replace(/^Create\s+/i, "")
+        .replace(/^Build\s+/i, "")
+        .replace(/^Generate\s+/i, "")
+        .trim();
+
+      title = title.charAt(0).toUpperCase() + title.slice(1);
+
       // Instead of truncating, return the full title for better display
-      return title
+      return title;
     }
-    
-    if (project.name && project.name !== `API Project ${new Date(project.created_at).toLocaleDateString()}`) {
-      return project.name
+
+    if (
+      project.name &&
+      project.name !==
+        `API Project ${new Date(project.created_at).toLocaleDateString()}`
+    ) {
+      return project.name;
     }
-    
-    return `${project.framework.toUpperCase()} API`
-  }
+
+    return `${project.framework.toUpperCase()} API`;
+  };
 
   // Get status color and icon
-  const getStatusInfo = (status: Project['status']) => {
+  const getStatusInfo = (status: Project["status"]) => {
     switch (status) {
-      case 'generating':
-        return { color: 'bg-yellow-500', label: 'Generating', pulse: true }
-      case 'completed':
-        return { color: 'bg-green-500', label: 'Ready', pulse: false }
-      case 'failed':
-        return { color: 'bg-red-500', label: 'Failed', pulse: false }
-      case 'deployed':
-        return { color: 'bg-blue-500', label: 'Live', pulse: false }
+      case "generating":
+        return { color: "bg-yellow-500", label: "Generating", pulse: true };
+      case "completed":
+        return { color: "bg-green-500", label: "Ready", pulse: false };
+      case "failed":
+        return { color: "bg-red-500", label: "Failed", pulse: false };
+      case "deployed":
+        return { color: "bg-blue-500", label: "Live", pulse: false };
       default:
-        return { color: 'bg-gray-500', label: 'Unknown', pulse: false }
+        return { color: "bg-gray-500", label: "Unknown", pulse: false };
     }
-  }
+  };
 
   // Fetch projects
   const fetchProjects = async () => {
     try {
-      setLoading(true)
-      setError(null)
-      
-      const { data: { user } } = await supabase.auth.getUser()
+      setLoading(true);
+      setError(null);
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) {
-        setError("Please log in to view your projects")
-        return
+        setError("Please log in to view your projects");
+        return;
       }
 
       const { data, error: fetchError } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
+        .from("projects")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
 
       if (fetchError) {
-        console.error('Error fetching projects:', fetchError)
-        setError("Failed to load projects")
-        return
+        console.error("Error fetching projects:", fetchError);
+        setError("Failed to load projects");
+        return;
       }
 
-      setProjects(data || [])
+      setProjects(data || []);
     } catch (err) {
-      console.error('Error in fetchProjects:', err)
-      setError("An unexpected error occurred")
+      console.error("Error in fetchProjects:", err);
+      setError("An unexpected error occurred");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   // Effects
   useEffect(() => {
     if (isOpen) {
-      fetchProjects()
+      fetchProjects();
       setTimeout(() => {
-        searchInputRef.current?.focus()
-      }, 100)
+        searchInputRef.current?.focus();
+      }, 100);
     }
-  }, [isOpen])
+  }, [isOpen]);
 
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
+      if (e.key === "Escape") {
+        onClose();
       }
-      if (e.key === '/' && e.target !== searchInputRef.current) {
-        e.preventDefault()
-        searchInputRef.current?.focus()
+      if (e.key === "/" && e.target !== searchInputRef.current) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
       }
-    }
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isOpen, onClose])
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
 
   // Handlers
   const handleSidebarMouseEnter = () => {
-    setIsHovering(true)
-  }
+    setIsHovering(true);
+  };
 
   const handleSidebarMouseLeave = () => {
-    setIsHovering(false)
+    setIsHovering(false);
     setTimeout(() => {
       if (!isHovering) {
-        onClose()
+        onClose();
       }
-    }, 300)
-  }
+    }, 300);
+  };
 
   const handleProjectClick = (project: Project) => {
     // Add a small delay for the click animation to complete
     setTimeout(() => {
-      router.push(`/projects/${project.id}`)
-      onClose()
-    }, 150)
-  }
+      router.push(`/projects/${project.id}`);
+      onClose();
+    }, 150);
+  };
 
   const handleNavigationClick = (href: string) => {
-    router.push(href)
-    onClose()
-  }
+    router.push(href);
+    onClose();
+  };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
-    
-    if (diffInHours < 1) return "Just now"
-    if (diffInHours < 24) return `${diffInHours}h ago`
-    if (diffInHours < 168) return `${Math.floor(diffInHours / 24)}d ago`
-    return date.toLocaleDateString()
-  }
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60),
+    );
+
+    if (diffInHours < 1) return "Just now";
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    if (diffInHours < 168) return `${Math.floor(diffInHours / 24)}d ago`;
+    return date.toLocaleDateString();
+  };
 
   // Filter projects based on search query
-  const filteredProjects = projects.filter(project => {
-    return getProjectTitle(project).toLowerCase().includes(searchQuery.toLowerCase())
-  })
+  const filteredProjects = projects.filter((project) => {
+    return getProjectTitle(project)
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase());
+  });
 
   return (
     <AnimatePresence>
@@ -213,37 +221,37 @@ export function ModernSidebar({
             onClick={onClose}
             aria-hidden="true"
           />
-          
+
           {/* Sidebar */}
           <motion.div
             ref={sidebarRef}
-            initial={{ 
-              x: -400, 
+            initial={{
+              x: -400,
               opacity: 0,
-              scale: 0.95 
+              scale: 0.95,
             }}
-            animate={{ 
-              x: 0, 
+            animate={{
+              x: 0,
               opacity: 1,
-              scale: 1 
+              scale: 1,
             }}
-            exit={{ 
-              x: -400, 
+            exit={{
+              x: -400,
               opacity: 0,
-              scale: 0.95 
+              scale: 0.95,
             }}
-            transition={{ 
-              type: "spring", 
-              stiffness: 300, 
+            transition={{
+              type: "spring",
+              stiffness: 300,
               damping: 30,
-              opacity: { duration: 0.2 }
+              opacity: { duration: 0.2 },
             }}
             className={cn(
               "fixed left-0 top-0 bottom-0 w-80 z-50 flex flex-col overflow-hidden",
               "bg-gradient-to-br from-slate-900/95 via-slate-800/95 to-slate-900/95",
               "backdrop-blur-xl border-r border-slate-700/50",
               "shadow-2xl shadow-black/20",
-              className
+              className,
             )}
             style={{
               background: `
@@ -253,12 +261,12 @@ export function ModernSidebar({
                   rgba(15, 23, 42, 0.95) 100%
                 )
               `,
-              backdropFilter: 'blur(20px)',
+              backdropFilter: "blur(20px)",
               boxShadow: `
                 0 0 0 1px rgba(148, 163, 184, 0.1),
                 0 25px 50px -12px rgba(0, 0, 0, 0.4),
                 inset 0 1px 0 rgba(148, 163, 184, 0.1)
-              `
+              `,
             }}
             onClick={(e) => e.stopPropagation()}
             onMouseEnter={handleSidebarMouseEnter}
@@ -271,13 +279,15 @@ export function ModernSidebar({
             <div className="flex items-center justify-between p-6 border-b border-slate-700/50 bg-gradient-to-r from-slate-800/50 to-slate-700/30">
               <div className="flex items-center gap-3">
                 <div>
-                  <h2 
+                  <h2
                     id="sidebar-title"
-                    className="text-lg font-semibold text-white" 
+                    className="text-lg font-semibold text-white"
                   >
                     Smart API Forge
                   </h2>
-                  <p className="text-xs text-slate-400">AI-Powered API Builder</p>
+                  <p className="text-xs text-slate-400">
+                    AI-Powered API Builder
+                  </p>
                 </div>
               </div>
               <Button
@@ -303,8 +313,8 @@ export function ModernSidebar({
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 bg-slate-800/50 border-slate-600/50 text-white placeholder-slate-400 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
                   onKeyDown={(e) => {
-                    if (e.key === 'Escape') {
-                      onClose()
+                    if (e.key === "Escape") {
+                      onClose();
                     }
                   }}
                 />
@@ -316,7 +326,7 @@ export function ModernSidebar({
               <div className="p-4 flex-shrink-0">
                 {/* Create New Project Button */}
                 <motion.button
-                  onClick={() => handleNavigationClick('/ask')}
+                  onClick={() => handleNavigationClick("/ask")}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-slate-800/50 text-slate-200 font-medium transition-all duration-200 hover:bg-slate-700/50 border border-slate-700/30 hover:border-slate-600/50 group"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
@@ -326,8 +336,11 @@ export function ModernSidebar({
                 </motion.button>
               </div>
 
-              <ScrollArea className="flex-1 px-4" style={{ height: 'calc(100vh - 240px)' }}>
-                <div className="space-y-3 pb-16" style={{ minHeight: '400px' }}>
+              <ScrollArea
+                className="flex-1 px-4"
+                style={{ height: "calc(100vh - 240px)" }}
+              >
+                <div className="space-y-3 pb-16" style={{ minHeight: "400px" }}>
                   {loading ? (
                     <div className="space-y-3">
                       {[...Array(6)].map((_, i) => (
@@ -356,32 +369,34 @@ export function ModernSidebar({
                         {searchQuery ? "No projects found" : "No projects yet"}
                       </p>
                       <p className="text-xs text-slate-500">
-                        {searchQuery ? "Try a different search term" : "Create your first API to get started"}
+                        {searchQuery
+                          ? "Try a different search term"
+                          : "Create your first API to get started"}
                       </p>
                     </div>
                   ) : (
                     <div className="space-y-2">
                       {filteredProjects.map((project) => {
-                        const statusInfo = getStatusInfo(project.status)
-                        
+                        const statusInfo = getStatusInfo(project.status);
+
                         return (
                           <motion.button
                             key={project.id}
                             onClick={() => handleProjectClick(project)}
                             className="w-full p-3 rounded-lg bg-slate-800/30 hover:bg-slate-700/50 border border-slate-700/30 hover:border-slate-600/50 transition-all duration-200 text-left group cursor-pointer"
-                            whileHover={{ 
+                            whileHover={{
                               scale: 1.02,
                               backgroundColor: "rgba(51, 65, 85, 0.6)",
-                              borderColor: "rgba(71, 85, 105, 0.6)"
+                              borderColor: "rgba(71, 85, 105, 0.6)",
                             }}
-                            whileTap={{ 
+                            whileTap={{
                               scale: 0.98,
-                              backgroundColor: "rgba(30, 41, 59, 0.8)"
+                              backgroundColor: "rgba(30, 41, 59, 0.8)",
                             }}
                             transition={{
                               type: "spring",
                               stiffness: 400,
-                              damping: 25
+                              damping: 25,
                             }}
                           >
                             <div className="flex items-start justify-between mb-2">
@@ -389,25 +404,23 @@ export function ModernSidebar({
                                 {getProjectTitle(project)}
                               </h3>
                             </div>
-                            
+
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2 text-xs text-slate-400 group-hover:text-slate-300 transition-colors duration-200">
                                 <span>{formatDate(project.created_at)}</span>
                               </div>
                             </div>
                           </motion.button>
-                        )
+                        );
                       })}
                     </div>
                   )}
                 </div>
               </ScrollArea>
             </div>
-
-
           </motion.div>
         </>
       )}
     </AnimatePresence>
-  )
+  );
 }

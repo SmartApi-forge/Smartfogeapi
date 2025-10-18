@@ -1,7 +1,7 @@
-import { VersionManager } from './version-manager';
-import { messageOperations } from '../../lib/supabase-server';
-import type { Version } from '../modules/versions/types';
-import type { Message } from '../modules/messages/types';
+import { VersionManager } from "./version-manager";
+import { messageOperations } from "../../lib/supabase-server";
+import type { Version } from "../modules/versions/types";
+import type { Message } from "../modules/messages/types";
 
 const MAX_CONTEXT_TOKENS = 100000; // ~75K tokens for context, leaving room for response
 const CHARS_PER_TOKEN = 4; // Rough estimate
@@ -26,17 +26,20 @@ export class ContextBuilder {
    */
   static async buildContext(
     projectId: string,
-    messageLimit: number = 20
+    messageLimit: number = 20,
   ): Promise<GenerationContext> {
     // Fetch conversation history
-    const messages = await this.fetchConversationHistory(projectId, messageLimit);
-    
+    const messages = await this.fetchConversationHistory(
+      projectId,
+      messageLimit,
+    );
+
     // Get the latest completed version
     const previousVersion = await VersionManager.getLatestVersion(projectId);
-    
+
     // Extract files from previous version
     const previousFiles = previousVersion?.files || {};
-    
+
     // Build conversation history array
     const conversationHistory = messages.map((msg) => ({
       role: msg.role,
@@ -44,14 +47,14 @@ export class ContextBuilder {
     }));
 
     // Calculate context size and truncate if needed
-    const { truncatedHistory, truncatedFiles, isTruncated } = 
+    const { truncatedHistory, truncatedFiles, isTruncated } =
       this.truncateIfNeeded(conversationHistory, previousFiles);
 
     // Generate summary
     const summary = this.generateSummary(
       truncatedHistory,
       truncatedFiles,
-      previousVersion
+      previousVersion,
     );
 
     return {
@@ -69,7 +72,7 @@ export class ContextBuilder {
    */
   private static async fetchConversationHistory(
     projectId: string,
-    limit: number
+    limit: number,
   ): Promise<Message[]> {
     try {
       const messages = await messageOperations.getWithFragments({
@@ -81,10 +84,11 @@ export class ContextBuilder {
 
       // Sort by created_at ascending (oldest first)
       return messages.sort(
-        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
       );
     } catch (error) {
-      console.error('Error fetching conversation history:', error);
+      console.error("Error fetching conversation history:", error);
       return [];
     }
   }
@@ -95,7 +99,7 @@ export class ContextBuilder {
    */
   private static truncateIfNeeded(
     conversationHistory: Array<{ role: string; content: string }>,
-    previousFiles: Record<string, string>
+    previousFiles: Record<string, string>,
   ): {
     truncatedHistory: Array<{ role: string; content: string }>;
     truncatedFiles: Record<string, string>;
@@ -122,7 +126,10 @@ export class ContextBuilder {
     const filesBudget = Math.floor(MAX_CONTEXT_CHARS * 0.6);
 
     // Truncate conversation history (keep most recent messages)
-    const truncatedHistory = this.truncateHistory(conversationHistory, historyBudget);
+    const truncatedHistory = this.truncateHistory(
+      conversationHistory,
+      historyBudget,
+    );
 
     // Truncate files (keep essential files, truncate large ones)
     const truncatedFiles = this.truncateFiles(previousFiles, filesBudget);
@@ -140,7 +147,7 @@ export class ContextBuilder {
    */
   private static truncateHistory(
     history: Array<{ role: string; content: string }>,
-    budget: number
+    budget: number,
   ): Array<{ role: string; content: string }> {
     const truncated: Array<{ role: string; content: string }> = [];
     let currentSize = 0;
@@ -158,7 +165,7 @@ export class ContextBuilder {
         const truncatedContent = message.content.slice(0, budget);
         truncated.unshift({
           role: message.role,
-          content: truncatedContent + '... [truncated]',
+          content: truncatedContent + "... [truncated]",
         });
         break;
       } else {
@@ -175,11 +182,11 @@ export class ContextBuilder {
    */
   private static truncateFiles(
     files: Record<string, string>,
-    budget: number
+    budget: number,
   ): Record<string, string> {
-    const essentialFiles = ['package.json', 'openapi.json', 'README.md'];
-    const indexFiles = Object.keys(files).filter((f) => 
-      f.includes('index') || f.includes('main') || f.includes('app')
+    const essentialFiles = ["package.json", "openapi.json", "README.md"];
+    const indexFiles = Object.keys(files).filter(
+      (f) => f.includes("index") || f.includes("main") || f.includes("app"),
     );
 
     // Sort files by priority
@@ -192,8 +199,12 @@ export class ContextBuilder {
       const bSize = files[b].length;
 
       // Prioritize: essential > index > smaller files
-      return (aIsEssential + aIsIndex + aSize * 0.001) - 
-             (bIsEssential + bIsIndex + bSize * 0.001);
+      return (
+        aIsEssential +
+        aIsIndex +
+        aSize * 0.001 -
+        (bIsEssential + bIsIndex + bSize * 0.001)
+      );
     });
 
     const truncated: Record<string, string> = {};
@@ -210,7 +221,7 @@ export class ContextBuilder {
       } else if (currentSize < budget) {
         // Include truncated version
         const remaining = budget - currentSize;
-        truncated[filename] = content.slice(0, remaining) + '\n... [truncated]';
+        truncated[filename] = content.slice(0, remaining) + "\n... [truncated]";
         currentSize = budget;
         break;
       } else {
@@ -227,13 +238,13 @@ export class ContextBuilder {
   private static generateSummary(
     history: Array<{ role: string; content: string }>,
     files: Record<string, string>,
-    previousVersion: Version | null
+    previousVersion: Version | null,
   ): string {
     const messageCount = history.length;
     const fileCount = Object.keys(files).length;
-    const versionInfo = previousVersion 
+    const versionInfo = previousVersion
       ? `v${previousVersion.version_number} (${previousVersion.name})`
-      : 'no previous version';
+      : "no previous version";
 
     return `Context: ${messageCount} messages, ${fileCount} files from ${versionInfo}`;
   }
@@ -242,12 +253,15 @@ export class ContextBuilder {
    * Format context for AI prompt
    * Returns a structured prompt string
    */
-  static formatForPrompt(context: GenerationContext, newPrompt: string): string {
+  static formatForPrompt(
+    context: GenerationContext,
+    newPrompt: string,
+  ): string {
     const sections: string[] = [];
 
     // Add conversation history
     if (context.conversationHistory.length > 0) {
-      sections.push('## Conversation History\n');
+      sections.push("## Conversation History\n");
       context.conversationHistory.forEach((msg) => {
         sections.push(`**${msg.role}**: ${msg.content}\n`);
       });
@@ -255,22 +269,22 @@ export class ContextBuilder {
 
     // Add previous codebase state
     if (Object.keys(context.previousFiles).length > 0) {
-      sections.push('\n## Current Codebase\n');
+      sections.push("\n## Current Codebase\n");
       Object.entries(context.previousFiles).forEach(([filename, content]) => {
         sections.push(`### ${filename}\n\`\`\`\n${content}\n\`\`\`\n`);
       });
     }
 
     // Add new request
-    sections.push('\n## New Request\n');
+    sections.push("\n## New Request\n");
     sections.push(newPrompt);
 
     // Add truncation warning if needed
     if (context.truncated) {
-      sections.push('\n*Note: Context was truncated to fit token limits*\n');
+      sections.push("\n*Note: Context was truncated to fit token limits*\n");
     }
 
-    return sections.join('\n');
+    return sections.join("\n");
   }
 
   /**
@@ -280,4 +294,3 @@ export class ContextBuilder {
     return Object.keys(context.previousFiles);
   }
 }
-

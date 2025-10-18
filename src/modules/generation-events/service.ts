@@ -1,6 +1,9 @@
-import { supabaseServer } from '../../../lib/supabase-server'
-import { TRPCError } from '@trpc/server'
-import type { CreateGenerationEventInput, GetGenerationEventsInput } from './types'
+import { supabaseServer } from "../../../lib/supabase-server";
+import { TRPCError } from "@trpc/server";
+import type {
+  CreateGenerationEventInput,
+  GetGenerationEventsInput,
+} from "./types";
 
 export class GenerationEventService {
   /**
@@ -8,7 +11,7 @@ export class GenerationEventService {
    */
   static async create(input: CreateGenerationEventInput) {
     const { data, error } = await supabaseServer
-      .from('generation_events')
+      .from("generation_events")
       .insert({
         project_id: input.project_id,
         event_type: input.event_type,
@@ -19,43 +22,43 @@ export class GenerationEventService {
         metadata: input.metadata || {},
       })
       .select()
-      .single()
+      .single();
 
     if (error) {
-      console.error('Error creating generation event:', error)
+      console.error("Error creating generation event:", error);
       throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to create generation event',
-        cause: error
-      })
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to create generation event",
+        cause: error,
+      });
     }
 
-    return data
+    return data;
   }
 
   /**
    * Get all generation events for a project
    */
   static async getMany(input: GetGenerationEventsInput) {
-    const { projectId, limit = 50 } = input
+    const { projectId, limit = 50 } = input;
 
     const { data, error } = await supabaseServer
-      .from('generation_events')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('timestamp', { ascending: true })
-      .limit(limit)
+      .from("generation_events")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("timestamp", { ascending: true })
+      .limit(limit);
 
     if (error) {
-      console.error('Error fetching generation events:', error)
+      console.error("Error fetching generation events:", error);
       throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to fetch generation events',
-        cause: error
-      })
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to fetch generation events",
+        cause: error,
+      });
     }
 
-    return data || []
+    return data || [];
   }
 
   /**
@@ -63,20 +66,19 @@ export class GenerationEventService {
    */
   static async deleteByProject(projectId: string) {
     const { error } = await supabaseServer
-      .from('generation_events')
+      .from("generation_events")
       .delete()
-      .eq('project_id', projectId)
+      .eq("project_id", projectId);
 
     if (error) {
-      console.error('Error deleting generation events:', error)
+      console.error("Error deleting generation events:", error);
       throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to delete generation events',
-        cause: error
-      })
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to delete generation events",
+        cause: error,
+      });
     }
 
-    return { success: true }
+    return { success: true };
   }
 }
-

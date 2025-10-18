@@ -1,5 +1,5 @@
-import React from "react"
-import { motion } from "@/components/motion-wrapper"
+import React from "react";
+import { motion } from "@/components/motion-wrapper";
 
 export default function BelowFooterBanner() {
   return (
@@ -12,7 +12,7 @@ export default function BelowFooterBanner() {
       viewport={{ once: true, amount: 0.3 }}
     >
       <div className="mx-auto max-w-7xl px-4 pt-8 sm:pt-12 md:pt-16 pb-2 sm:pb-3 md:pb-4">
-        <motion.div 
+        <motion.div
           className="relative grid place-items-center"
           initial={{ opacity: 0, scale: 0.95 }}
           whileInView={{ opacity: 1, scale: 1 }}
@@ -51,7 +51,7 @@ export default function BelowFooterBanner() {
           />
 
           {/* Huge, low-contrast wordmark like screenshot */}
-          <motion.div 
+          <motion.div
             className="relative"
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
@@ -87,5 +87,5 @@ export default function BelowFooterBanner() {
         </motion.div>
       </div>
     </motion.section>
-  )
+  );
 }

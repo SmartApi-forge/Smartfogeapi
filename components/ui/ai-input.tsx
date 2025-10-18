@@ -1,66 +1,65 @@
-"use client"
+"use client";
 
-import { useCallback, useEffect, useRef, useState } from "react"
-import Image from "next/image"
-import { AnimatePresence, motion } from "@/components/motion-wrapper"
-import { Paperclip, Plus, Send, Loader2 } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import { AnimatePresence, motion } from "@/components/motion-wrapper";
+import { Paperclip, Plus, Send, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
-import { cn } from "@/lib/utils"
-import { Textarea } from "@/components/ui/textarea"
-import { api } from "@/lib/trpc-client"
+import { cn } from "@/lib/utils";
+import { Textarea } from "@/components/ui/textarea";
+import { api } from "@/lib/trpc-client";
 
 interface UseAutoResizeTextareaProps {
-  minHeight: number
-  maxHeight?: number
+  minHeight: number;
+  maxHeight?: number;
 }
 
 function useAutoResizeTextarea({
   minHeight,
   maxHeight,
 }: UseAutoResizeTextareaProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const adjustHeight = useCallback(
     (reset?: boolean) => {
-      const textarea = textareaRef.current
-      if (!textarea) return
+      const textarea = textareaRef.current;
+      if (!textarea) return;
 
       if (reset) {
-        textarea.style.height = `${minHeight}px`
-        return
+        textarea.style.height = `${minHeight}px`;
+        return;
       }
 
-      textarea.style.height = `${minHeight}px`
+      textarea.style.height = `${minHeight}px`;
       const newHeight = Math.max(
         minHeight,
-        Math.min(textarea.scrollHeight, maxHeight ?? Number.POSITIVE_INFINITY)
-      )
+        Math.min(textarea.scrollHeight, maxHeight ?? Number.POSITIVE_INFINITY),
+      );
 
-      textarea.style.height = `${newHeight}px`
+      textarea.style.height = `${newHeight}px`;
     },
-    [minHeight, maxHeight]
-  )
+    [minHeight, maxHeight],
+  );
 
   useEffect(() => {
-    const textarea = textareaRef.current
+    const textarea = textareaRef.current;
     if (textarea) {
-      textarea.style.height = `${minHeight}px`
+      textarea.style.height = `${minHeight}px`;
     }
-  }, [minHeight])
+  }, [minHeight]);
 
   useEffect(() => {
-    const handleResize = () => adjustHeight()
-    window.addEventListener("resize", handleResize)
-    return () => window.removeEventListener("resize", handleResize)
-  }, [adjustHeight])
+    const handleResize = () => adjustHeight();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [adjustHeight]);
 
-  return { textareaRef, adjustHeight }
+  return { textareaRef, adjustHeight };
 }
 
-const MIN_HEIGHT = 48
-const MAX_HEIGHT = 164
-
+const MIN_HEIGHT = 48;
+const MAX_HEIGHT = 164;
 
 const AnimatedPlaceholder = ({ isFocused }: { isFocused: boolean }) => {
   const prompts = [
@@ -69,59 +68,58 @@ const AnimatedPlaceholder = ({ isFocused }: { isFocused: boolean }) => {
     "Generate an e‑commerce API for products, cart, and orders…",
     "Build a blog API with posts, comments, and tags…",
     "Design a task manager API with projects, tasks, and statuses…",
-  ]
+  ];
 
-  const TYPING_MS = 28
-  const DELETING_MS = 18
-  const PAUSE_AFTER_TYPE_MS = 1200
-  const PAUSE_AFTER_DELETE_MS = 300
+  const TYPING_MS = 28;
+  const DELETING_MS = 18;
+  const PAUSE_AFTER_TYPE_MS = 1200;
+  const PAUSE_AFTER_DELETE_MS = 300;
 
-  const [idx, setIdx] = useState(0)
-  const [text, setText] = useState("")
-  const [deleting, setDeleting] = useState(false)
-
+  const [idx, setIdx] = useState(0);
+  const [text, setText] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   // Stop animation when focused
   useEffect(() => {
     if (isFocused) {
-      setText("")
-      setDeleting(false)
+      setText("");
+      setDeleting(false);
     }
-  }, [isFocused])
+  }, [isFocused]);
 
   useEffect(() => {
     // Don't animate if focused
-    if (isFocused) return
+    if (isFocused) return;
 
-    const full = prompts[idx % prompts.length]
+    const full = prompts[idx % prompts.length];
 
     if (!deleting && text === full) {
-      const t = setTimeout(() => setDeleting(true), PAUSE_AFTER_TYPE_MS)
-      return () => clearTimeout(t)
+      const t = setTimeout(() => setDeleting(true), PAUSE_AFTER_TYPE_MS);
+      return () => clearTimeout(t);
     }
 
     if (deleting && text === "") {
       const t = setTimeout(() => {
-        setDeleting(false)
-        setIdx((i) => (i + 1) % prompts.length)
-      }, PAUSE_AFTER_DELETE_MS)
-      return () => clearTimeout(t)
+        setDeleting(false);
+        setIdx((i) => (i + 1) % prompts.length);
+      }, PAUSE_AFTER_DELETE_MS);
+      return () => clearTimeout(t);
     }
 
     const step = () => {
       if (deleting) {
-        setText((t) => t.slice(0, -1))
+        setText((t) => t.slice(0, -1));
       } else {
-        setText(full.slice(0, text.length + 1))
+        setText(full.slice(0, text.length + 1));
       }
-    }
+    };
 
-    const interval = setTimeout(step, deleting ? DELETING_MS : TYPING_MS)
-    return () => clearTimeout(interval)
-  }, [text, deleting, idx, prompts, isFocused])
+    const interval = setTimeout(step, deleting ? DELETING_MS : TYPING_MS);
+    return () => clearTimeout(interval);
+  }, [text, deleting, idx, prompts, isFocused]);
 
   // Don't render anything if focused
-  if (isFocused) return null
+  if (isFocused) return null;
 
   return (
     <AnimatePresence mode="wait">
@@ -137,100 +135,100 @@ const AnimatedPlaceholder = ({ isFocused }: { isFocused: boolean }) => {
         <span className="ml-0.5 inline-block w-[1ch] animate-pulse">|</span>
       </motion.p>
     </AnimatePresence>
-  )
-}
+  );
+};
 
 interface AiInputProps {
-  isAuthenticated?: boolean
-  role?: 'user' | 'assistant' | 'system'
-  type?: 'text' | 'image' | 'file' | 'code' | 'result' | 'error'
-  repoUrl?: string
-  metadata?: Record<string, any>
+  isAuthenticated?: boolean;
+  role?: "user" | "assistant" | "system";
+  type?: "text" | "image" | "file" | "code" | "result" | "error";
+  repoUrl?: string;
+  metadata?: Record<string, any>;
 }
 
-export function AiInput({ 
-  isAuthenticated = false, 
-  role = 'user', 
-  type = 'result',
+export function AiInput({
+  isAuthenticated = false,
+  role = "user",
+  type = "result",
   repoUrl,
-  metadata 
+  metadata,
 }: AiInputProps) {
-  const [value, setValue] = useState("")
-  const [isFocused, setIsFocused] = useState(false)
+  const [value, setValue] = useState("");
+  const [isFocused, setIsFocused] = useState(false);
   const { textareaRef, adjustHeight } = useAutoResizeTextarea({
     minHeight: MIN_HEIGHT,
     maxHeight: MAX_HEIGHT,
-  })
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const router = useRouter()
+  });
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
 
   // Create message using tRPC
   const createMessage = api.messages.create.useMutation({
     onSuccess: () => {
-      console.log("Message created successfully!")
+      console.log("Message created successfully!");
     },
     onError: (error: any) => {
-      console.error("Failed to create message:", error)
-    }
-  })
+      console.error("Failed to create message:", error);
+    },
+  });
 
   const handelClose = (e: any) => {
-    e.preventDefault()
-    e.stopPropagation()
+    e.preventDefault();
+    e.stopPropagation();
     if (fileInputRef.current) {
-      fileInputRef.current.value = "" // Reset file input
+      fileInputRef.current.value = ""; // Reset file input
     }
-    setImagePreview(null) // Use null instead of empty string
-  }
+    setImagePreview(null); // Use null instead of empty string
+  };
 
   const handelChange = (e: any) => {
-    const file = e.target.files ? e.target.files[0] : null
+    const file = e.target.files ? e.target.files[0] : null;
     if (file) {
-      setImagePreview(URL.createObjectURL(file))
+      setImagePreview(URL.createObjectURL(file));
     }
-  }
+  };
 
   const handleSubmit = () => {
     if (!isAuthenticated) {
-      router.replace("/?auth=login")
-      return
+      router.replace("/?auth=login");
+      return;
     }
-    
-    if (!value.trim()) return
-    
+
+    if (!value.trim()) return;
+
     // Create message using tRPC
     // Expected message shape: { content: string, role: 'user'|'assistant'|'system', type: 'text'|'image'|'file'|'code'|'result'|'error', repoUrl?: string, metadata?: Record<string, any> }
     // Defaults: role='user', type='result'
-    const messagePayload: any = { 
+    const messagePayload: any = {
       content: value,
       role,
-      type
-    }
-    
+      type,
+    };
+
     // Preserve contextual fields if provided
     if (repoUrl) {
-      messagePayload.repoUrl = repoUrl
+      messagePayload.repoUrl = repoUrl;
     }
     if (metadata) {
-      messagePayload.metadata = metadata
+      messagePayload.metadata = metadata;
     }
-    
-    createMessage.mutate(messagePayload)
-    
+
+    createMessage.mutate(messagePayload);
+
     // Clear the input after submission
-    setValue("")
-    adjustHeight(true)
-  }
+    setValue("");
+    adjustHeight(true);
+  };
 
   useEffect(() => {
     return () => {
       if (imagePreview) {
-        URL.revokeObjectURL(imagePreview)
+        URL.revokeObjectURL(imagePreview);
       }
-    }
-  }, [imagePreview])
-  
+    };
+  }, [imagePreview]);
+
   return (
     <div className="w-full py-4">
       <div className="relative max-w-2xl border rounded-[32px] border-border bg-card shadow-lg p-2 w-full mx-auto">
@@ -250,17 +248,17 @@ export function AiInput({
                 onBlur={() => setIsFocused(false)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault()
-                    handleSubmit()
+                    e.preventDefault();
+                    handleSubmit();
                   }
                 }}
                 onChange={(e) => {
-                  setValue(e.target.value)
-                  adjustHeight()
+                  setValue(e.target.value);
+                  adjustHeight();
                 }}
               />
               {!value && (
-                <div 
+                <div
                   className="absolute inset-x-4 top-3 text-left cursor-text"
                   onClick={() => textareaRef.current?.focus()}
                 >
@@ -277,7 +275,7 @@ export function AiInput({
                   "cursor-pointer relative rounded-full p-2",
                   imagePreview
                     ? "bg-blue-500/15 border border-blue-500 text-blue-500"
-                    : "bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground"
+                    : "bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground",
                 )}
               >
                 <input
@@ -289,7 +287,7 @@ export function AiInput({
                 <Paperclip
                   className={cn(
                     "w-4 h-4 transition-colors",
-                    imagePreview && "text-blue-500"
+                    imagePreview && "text-blue-500",
                   )}
                 />
                 {imagePreview && (
@@ -320,7 +318,7 @@ export function AiInput({
                   "rounded-full p-2 transition-colors",
                   value && !createMessage.isPending
                     ? "bg-blue-600 hover:bg-blue-700 text-white shadow-lg"
-                    : "bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80"
+                    : "bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80",
                 )}
               >
                 {createMessage.isPending ? (
@@ -334,5 +332,5 @@ export function AiInput({
         </div>
       </div>
     </div>
-  )
+  );
 }

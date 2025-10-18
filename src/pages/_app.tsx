@@ -1,11 +1,11 @@
-import { AppType } from 'next/app';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { httpBatchLink } from '@trpc/client';
-import { useState } from 'react';
-import superjson from 'superjson';
-import { trpc } from '../utils/trpc';
-import { ThemeProvider } from '@/components/theme-provider';
-import '../../styles/globals.css';
+import { AppType } from "next/app";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { httpBatchLink } from "@trpc/client";
+import { useState } from "react";
+import superjson from "superjson";
+import { trpc } from "../utils/trpc";
+import { ThemeProvider } from "@/components/theme-provider";
+import "../../styles/globals.css";
 
 const MyApp: AppType = ({ Component, pageProps }) => {
   const [queryClient] = useState(
@@ -16,14 +16,17 @@ const MyApp: AppType = ({ Component, pageProps }) => {
             staleTime: 60 * 1000, // 1 minute
             retry: (failureCount, error: any) => {
               // Don't retry on 4xx errors
-              if (error?.data?.httpStatus >= 400 && error?.data?.httpStatus < 500) {
+              if (
+                error?.data?.httpStatus >= 400 &&
+                error?.data?.httpStatus < 500
+              ) {
                 return false;
               }
               return failureCount < 3;
             },
           },
         },
-      })
+      }),
   );
 
   const [trpcClient] = useState(() =>
@@ -31,10 +34,10 @@ const MyApp: AppType = ({ Component, pageProps }) => {
       transformer: superjson,
       links: [
         httpBatchLink({
-          url: '/api/trpc',
+          url: "/api/trpc",
         }),
       ],
-    })
+    }),
   );
 
   return (

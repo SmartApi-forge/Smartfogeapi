@@ -1,19 +1,64 @@
-import { Button } from '@/components/ui/button'
-import { Check, Sparkles, Star } from 'lucide-react'
-import Link from 'next/link'
+import { Button } from "@/components/ui/button";
+import { Check, Sparkles, Star } from "lucide-react";
+import Link from "next/link";
 
 const tableData = [
-  { feature: 'API generation/month', starter: '10', developer: '100', pro: 'Unlimited' },
-  { feature: 'Templates', starter: 'Basic Express.js & Node.js', developer: 'Express, FastAPI, Django', pro: 'All + Microservices' },
-  { feature: 'API types', starter: 'REST', developer: 'REST & GraphQL', pro: 'REST, GraphQL, Realtime' },
-  { feature: 'Database integration', starter: '', developer: 'MongoDB, PostgreSQL', pro: 'All + Advanced config' },
-  { feature: 'Auth (AuthN/Z)', starter: '', developer: 'Included', pro: 'Advanced policies' },
-  { feature: 'Docs', starter: 'Basic', developer: 'Swagger/OpenAPI auto‑generated', pro: 'Custom + Advanced' },
-  { feature: 'Deployment', starter: '', developer: 'One‑click to Vercel', pro: 'Custom domain + pipelines' },
-  { feature: 'Support', starter: 'Community', developer: 'Email & chat', pro: 'Priority & SLA' },
-  { feature: 'Rate limiting', starter: '100 req/day', developer: '10K req/day', pro: '100K req/day' },
-  { feature: 'Team members', starter: '', developer: '', pro: 'Up to 5' },
-]
+  {
+    feature: "API generation/month",
+    starter: "10",
+    developer: "100",
+    pro: "Unlimited",
+  },
+  {
+    feature: "Templates",
+    starter: "Basic Express.js & Node.js",
+    developer: "Express, FastAPI, Django",
+    pro: "All + Microservices",
+  },
+  {
+    feature: "API types",
+    starter: "REST",
+    developer: "REST & GraphQL",
+    pro: "REST, GraphQL, Realtime",
+  },
+  {
+    feature: "Database integration",
+    starter: "",
+    developer: "MongoDB, PostgreSQL",
+    pro: "All + Advanced config",
+  },
+  {
+    feature: "Auth (AuthN/Z)",
+    starter: "",
+    developer: "Included",
+    pro: "Advanced policies",
+  },
+  {
+    feature: "Docs",
+    starter: "Basic",
+    developer: "Swagger/OpenAPI auto‑generated",
+    pro: "Custom + Advanced",
+  },
+  {
+    feature: "Deployment",
+    starter: "",
+    developer: "One‑click to Vercel",
+    pro: "Custom domain + pipelines",
+  },
+  {
+    feature: "Support",
+    starter: "Community",
+    developer: "Email & chat",
+    pro: "Priority & SLA",
+  },
+  {
+    feature: "Rate limiting",
+    starter: "100 req/day",
+    developer: "10K req/day",
+    pro: "100K req/day",
+  },
+  { feature: "Team members", starter: "", developer: "", pro: "Up to 5" },
+];
 
 export default function PricingComparator() {
   return (
@@ -85,5 +130,5 @@ export default function PricingComparator() {
         </div>
       </div>
     </section>
-  )
+  );
 }

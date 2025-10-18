@@ -34,7 +34,7 @@ const ThemeSwitch = React.forwardRef<HTMLDivElement, ThemeSwitchProps>(
       animationVariant = "circle-blur",
       ...props
     },
-    ref
+    ref,
   ) => {
     const { theme, setTheme } = useTheme();
     const [isAnimating, setIsAnimating] = React.useState(false);
@@ -64,53 +64,76 @@ const ThemeSwitch = React.forwardRef<HTMLDivElement, ThemeSwitchProps>(
       if (variant === "circle-blur") {
         const animation = createAnimation(animationVariant, start);
         updateStyles(animation.css, animation.name);
-        
+
         setIsAnimating(true);
         setTimeout(() => setIsAnimating(false), 800);
       }
-      
+
       const nextIndex = (currentModeIndex + 1) % modes.length;
-      
+
       const switchTheme = () => {
         setTheme(modes[nextIndex]);
       };
 
       // Check if there are any active EventSource connections (streaming in progress)
       // Skip view transition during streaming to prevent DOM update blocking
-      const hasActiveStreaming = typeof window !== "undefined" && 
+      const hasActiveStreaming =
+        typeof window !== "undefined" &&
         (window as any).__activeStreamingSessions > 0;
 
-      if (variant === "circle-blur" && typeof window !== "undefined" && document.startViewTransition && !hasActiveStreaming) {
+      if (
+        variant === "circle-blur" &&
+        typeof window !== "undefined" &&
+        document.startViewTransition &&
+        !hasActiveStreaming
+      ) {
         document.startViewTransition(switchTheme);
       } else {
         switchTheme();
       }
-    }, [currentModeIndex, modes, setTheme, variant, start, animationVariant, updateStyles]);
+    }, [
+      currentModeIndex,
+      modes,
+      setTheme,
+      variant,
+      start,
+      animationVariant,
+      updateStyles,
+    ]);
 
-    const handleIconClick = React.useCallback((idx: number) => {
-      if (variant === "circle-blur") {
-        const animation = createAnimation(animationVariant, start);
-        updateStyles(animation.css, animation.name);
-        
-        setIsAnimating(true);
-        setTimeout(() => setIsAnimating(false), 800);
-      }
-      
-      const switchTheme = () => {
-        setTheme(modes[idx]);
-      };
+    const handleIconClick = React.useCallback(
+      (idx: number) => {
+        if (variant === "circle-blur") {
+          const animation = createAnimation(animationVariant, start);
+          updateStyles(animation.css, animation.name);
 
-      // Check if there are any active EventSource connections (streaming in progress)
-      // Skip view transition during streaming to prevent DOM update blocking
-      const hasActiveStreaming = typeof window !== "undefined" && 
-        (window as any).__activeStreamingSessions > 0;
+          setIsAnimating(true);
+          setTimeout(() => setIsAnimating(false), 800);
+        }
 
-      if (variant === "circle-blur" && typeof window !== "undefined" && document.startViewTransition && !hasActiveStreaming) {
-        document.startViewTransition(switchTheme);
-      } else {
-        switchTheme();
-      }
-    }, [modes, setTheme, variant, start, animationVariant, updateStyles]);
+        const switchTheme = () => {
+          setTheme(modes[idx]);
+        };
+
+        // Check if there are any active EventSource connections (streaming in progress)
+        // Skip view transition during streaming to prevent DOM update blocking
+        const hasActiveStreaming =
+          typeof window !== "undefined" &&
+          (window as any).__activeStreamingSessions > 0;
+
+        if (
+          variant === "circle-blur" &&
+          typeof window !== "undefined" &&
+          document.startViewTransition &&
+          !hasActiveStreaming
+        ) {
+          document.startViewTransition(switchTheme);
+        } else {
+          switchTheme();
+        }
+      },
+      [modes, setTheme, variant, start, animationVariant, updateStyles],
+    );
 
     const [isClient, setIsClient] = React.useState(false);
     React.useEffect(() => {
@@ -138,20 +161,27 @@ const ThemeSwitch = React.forwardRef<HTMLDivElement, ThemeSwitchProps>(
       <div
         className={cn(
           "relative inline-flex h-8 rounded-full border border-input bg-background p-1 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          variant === "circle-blur" && "backdrop-blur-md bg-background/80 border-border/50",
+          variant === "circle-blur" &&
+            "backdrop-blur-md bg-background/80 border-border/50",
           switchWidth,
-          className
+          className,
         )}
-        onClick={variant === "default" || variant === "circle-blur" ? handleToggle : undefined}
+        onClick={
+          variant === "default" || variant === "circle-blur"
+            ? handleToggle
+            : undefined
+        }
         ref={ref}
         {...props}
       >
-        {variant === "circle-blur" && start === "bottom-left" && isAnimating && (
-          <div className="absolute inset-0 overflow-hidden rounded-full">
-            <div className="absolute w-full h-full bg-gradient-to-tr from-primary/30 via-primary/20 to-transparent animate-[sweep_0.8s_ease-out_forwards] origin-bottom-left" />
-          </div>
-        )}
-        
+        {variant === "circle-blur" &&
+          start === "bottom-left" &&
+          isAnimating && (
+            <div className="absolute inset-0 overflow-hidden rounded-full">
+              <div className="absolute w-full h-full bg-gradient-to-tr from-primary/30 via-primary/20 to-transparent animate-[sweep_0.8s_ease-out_forwards] origin-bottom-left" />
+            </div>
+          )}
+
         {showActiveIconOnly ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-background z-10">
@@ -173,10 +203,13 @@ const ThemeSwitch = React.forwardRef<HTMLDivElement, ThemeSwitchProps>(
                       currentModeIndex === idx
                         ? "text-background"
                         : "text-muted-foreground",
-                      visible ? "opacity-100" : "opacity-0"
+                      visible ? "opacity-100" : "opacity-0",
                     )}
                     onClick={(e) => {
-                      if (variant === "icon-click" || variant === "circle-blur") {
+                      if (
+                        variant === "icon-click" ||
+                        variant === "circle-blur"
+                      ) {
                         e.stopPropagation();
                         handleIconClick(idx);
                       }
@@ -193,27 +226,32 @@ const ThemeSwitch = React.forwardRef<HTMLDivElement, ThemeSwitchProps>(
             <div
               className={cn(
                 "absolute top-1 h-6 w-6 rounded-full transition-all duration-500 ease-out",
-                variant === "circle-blur" 
-                  ? "bg-foreground/90 backdrop-blur-sm shadow-lg transform-gpu" 
+                variant === "circle-blur"
+                  ? "bg-foreground/90 backdrop-blur-sm shadow-lg transform-gpu"
                   : "bg-foreground",
-                variant === "circle-blur" && start === "bottom-left" && "transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
+                variant === "circle-blur" &&
+                  start === "bottom-left" &&
+                  "transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
                 currentModeIndex === 0
                   ? "left-1"
                   : currentModeIndex === 1
-                  ? modes.length === 2
-                    ? "left-7"
-                    : "left-[calc(50%-12px)]"
-                  : "left-[calc(100%-28px)]"
+                    ? modes.length === 2
+                      ? "left-7"
+                      : "left-[calc(50%-12px)]"
+                    : "left-[calc(100%-28px)]",
               )}
               style={{
-                transformOrigin: variant === "circle-blur" && start === "bottom-left" ? "bottom left" : "center"
+                transformOrigin:
+                  variant === "circle-blur" && start === "bottom-left"
+                    ? "bottom left"
+                    : "center",
               }}
             />
           </>
         )}
       </div>
     );
-  }
+  },
 );
 
 ThemeSwitch.displayName = "ThemeSwitch";

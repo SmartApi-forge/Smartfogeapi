@@ -1,8 +1,8 @@
 // Export all types
-export * from './types'
+export * from "./types";
 
 // Export service
-export { FragmentService } from './service'
+export { FragmentService } from "./service";
 
 // Export router
-export { fragmentsRouter } from './router'
+export { fragmentsRouter } from "./router";

@@ -1,8 +1,8 @@
 // Export all types
-export * from './types'
+export * from "./types";
 
 // Export service
-export { ApiGenerationService } from './service'
+export { ApiGenerationService } from "./service";
 
 // Export router
-export { apiGenerationRouter } from './router'
+export { apiGenerationRouter } from "./router";

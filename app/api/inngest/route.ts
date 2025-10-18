@@ -1,6 +1,11 @@
 import { serve } from "inngest/next";
 import { inngest } from "@/src/inngest/client";
-import { generateAPI, deployAPI, messageCreated, iterateAPI } from "@/src/inngest/functions";
+import {
+  generateAPI,
+  deployAPI,
+  messageCreated,
+  iterateAPI,
+} from "@/src/inngest/functions";
 
 // Create an API that serves the SmartAPIForge functions
 export const { GET, POST, PUT } = serve({

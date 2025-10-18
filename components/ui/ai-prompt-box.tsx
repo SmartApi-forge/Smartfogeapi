@@ -4,7 +4,8 @@ import { ArrowUp, Square, Paperclip, SlidersHorizontal } from "lucide-react";
 import { TypingAnimation } from "./typing-animation";
 
 // Utility function for className merging
-const cn = (...classes: (string | undefined | null | false)[]) => classes.filter(Boolean).join(" ");
+const cn = (...classes: (string | undefined | null | false)[]) =>
+  classes.filter(Boolean).join(" ");
 
 // Embedded CSS for minimal custom styles
 const styles = `
@@ -28,8 +29,8 @@ const styles = `
 `;
 
 // Inject styles into document with guard to prevent duplicates
-if (typeof document !== 'undefined') {
-  const styleId = 'ai-prompt-box-styles';
+if (typeof document !== "undefined") {
+  const styleId = "ai-prompt-box-styles";
   if (!document.getElementById(styleId)) {
     const styleSheet = document.createElement("style");
     styleSheet.id = styleId;
@@ -39,20 +40,23 @@ if (typeof document !== 'undefined') {
 }
 
 // Textarea Component
-interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+interface TextareaProps
+  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   className?: string;
 }
-const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(({ className, ...props }, ref) => (
-  <textarea
-    className={cn(
-      "flex w-full rounded-md border-none bg-transparent px-4 py-3 text-base text-gray-100 placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50 min-h-[56px] resize-none scrollbar-thin scrollbar-thumb-[#444444] scrollbar-track-transparent hover:scrollbar-thumb-[#555555]",
-      className
-    )}
-    ref={ref}
-    rows={1}
-    {...props}
-  />
-));
+const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
+  ({ className, ...props }, ref) => (
+    <textarea
+      className={cn(
+        "flex w-full rounded-md border-none bg-transparent px-4 py-3 text-base text-gray-100 placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50 min-h-[56px] resize-none scrollbar-thin scrollbar-thumb-[#444444] scrollbar-track-transparent hover:scrollbar-thumb-[#555555]",
+        className,
+      )}
+      ref={ref}
+      rows={1}
+      {...props}
+    />
+  ),
+);
 Textarea.displayName = "Textarea";
 
 // Tooltip Components (simplified)
@@ -82,13 +86,13 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           "inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
           variantClasses[variant],
           sizeClasses[size],
-          className
+          className,
         )}
         ref={ref}
         {...props}
       />
     );
-  }
+  },
 );
 Button.displayName = "Button";
 
@@ -104,14 +108,15 @@ interface PromptInputContextType {
 const PromptInputContext = React.createContext<PromptInputContextType>({
   isLoading: false,
   value: "",
-  setValue: () => { },
+  setValue: () => {},
   maxHeight: 200,
   onSubmit: undefined,
   disabled: false,
 });
 function usePromptInput() {
   const context = React.useContext(PromptInputContext);
-  if (!context) throw new Error("usePromptInput must be used within a PromptInput");
+  if (!context)
+    throw new Error("usePromptInput must be used within a PromptInput");
   return context;
 }
 
@@ -143,7 +148,7 @@ const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
       onDragLeave,
       onDrop,
     },
-    ref
+    ref,
   ) => {
     const [internalValue, setInternalValue] = React.useState(value || "");
     const handleChange = (newValue: string) => {
@@ -167,7 +172,7 @@ const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
             className={cn(
               "rounded-2xl border border-[#444444] bg-[#1F2023] p-3 shadow-[0_8px_30px_rgba(0,0,0,0.24)] transition-all duration-300",
               isLoading && "border-red-500/70",
-              className
+              className,
             )}
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
@@ -178,7 +183,7 @@ const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
         </PromptInputContext.Provider>
       </TooltipProvider>
     );
-  }
+  },
 );
 PromptInput.displayName = "PromptInput";
 
@@ -186,7 +191,9 @@ interface PromptInputTextareaProps {
   disableAutosize?: boolean;
   placeholder?: string;
 }
-const PromptInputTextarea: React.FC<PromptInputTextareaProps & React.ComponentProps<typeof Textarea>> = ({
+const PromptInputTextarea: React.FC<
+  PromptInputTextareaProps & React.ComponentProps<typeof Textarea>
+> = ({
   className,
   onKeyDown,
   disableAutosize = false,
@@ -256,8 +263,13 @@ const PromptInputTextarea: React.FC<PromptInputTextareaProps & React.ComponentPr
   );
 };
 
-interface PromptInputActionsProps extends React.HTMLAttributes<HTMLDivElement> { }
-const PromptInputActions: React.FC<PromptInputActionsProps> = ({ children, className, ...props }) => (
+interface PromptInputActionsProps
+  extends React.HTMLAttributes<HTMLDivElement> {}
+const PromptInputActions: React.FC<PromptInputActionsProps> = ({
+  children,
+  className,
+  ...props
+}) => (
   <div className={cn("flex items-center gap-2", className)} {...props}>
     {children}
   </div>
@@ -269,77 +281,78 @@ interface PromptInputBoxProps {
   isLoading?: boolean;
   className?: string;
 }
-export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxProps>(
-  ({ onSend = () => { }, isLoading = false, className }, ref) => {
-    const [input, setInput] = React.useState("");
-    const promptBoxRef = React.useRef<HTMLDivElement>(null);
+export const PromptInputBox = React.forwardRef<
+  HTMLDivElement,
+  PromptInputBoxProps
+>(({ onSend = () => {}, isLoading = false, className }, ref) => {
+  const [input, setInput] = React.useState("");
+  const promptBoxRef = React.useRef<HTMLDivElement>(null);
 
-    const handleSubmit = () => {
-      if (input.trim()) {
-        onSend(input);
-        setInput("");
-      }
-    };
+  const handleSubmit = () => {
+    if (input.trim()) {
+      onSend(input);
+      setInput("");
+    }
+  };
 
-    const hasContent = input.trim() !== "";
+  const hasContent = input.trim() !== "";
 
-    return (
-      <PromptInput
-        value={input}
-        onValueChange={setInput}
-        isLoading={isLoading}
-        onSubmit={handleSubmit}
-        className={cn(
-          "w-full bg-[#1F2023] border-[#444444] shadow-[0_8px_30px_rgba(0,0,0,0.24)] transition-all duration-300 ease-in-out",
-          className
-        )}
-        disabled={isLoading}
-        ref={ref || promptBoxRef}
-      >
-        <PromptInputTextarea className="text-base" />
-        <PromptInputActions className="flex items-center justify-between p-0 pt-2">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 px-2 py-0 rounded-full text-xs text-gray-200 border-[#444444] bg-transparent hover:bg-gray-700/40"
-            >
-              <SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" />
-              Tools
-            </Button>
-          </div>
+  return (
+    <PromptInput
+      value={input}
+      onValueChange={setInput}
+      isLoading={isLoading}
+      onSubmit={handleSubmit}
+      className={cn(
+        "w-full bg-[#1F2023] border-[#444444] shadow-[0_8px_30px_rgba(0,0,0,0.24)] transition-all duration-300 ease-in-out",
+        className,
+      )}
+      disabled={isLoading}
+      ref={ref || promptBoxRef}
+    >
+      <PromptInputTextarea className="text-base" />
+      <PromptInputActions className="flex items-center justify-between p-0 pt-2">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-2 py-0 rounded-full text-xs text-gray-200 border-[#444444] bg-transparent hover:bg-gray-700/40"
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" />
+            Tools
+          </Button>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-full text-gray-300 hover:bg-gray-600/30"
-              disabled={isLoading}
-            >
-              <Paperclip className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="default"
-              size="icon"
-              className={cn(
-                "h-9 w-9 rounded-full transition-all duration-200",
-                hasContent
-                  ? "bg-white hover:bg-white/80 text-[#1F2023]"
-                  : "bg-transparent hover:bg-gray-600/30 text-[#9CA3AF] hover:text-[#D1D5DB]"
-              )}
-              onClick={handleSubmit}
-              disabled={isLoading || !hasContent}
-            >
-              {isLoading ? (
-                <Square className="h-4 w-4 fill-[#1F2023] animate-pulse" />
-              ) : (
-                <ArrowUp className="h-5 w-5 text-[#1F2023]" />
-              )}
-            </Button>
-          </div>
-        </PromptInputActions>
-      </PromptInput>
-    );
-  }
-);
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-full text-gray-300 hover:bg-gray-600/30"
+            disabled={isLoading}
+          >
+            <Paperclip className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="default"
+            size="icon"
+            className={cn(
+              "h-9 w-9 rounded-full transition-all duration-200",
+              hasContent
+                ? "bg-white hover:bg-white/80 text-[#1F2023]"
+                : "bg-transparent hover:bg-gray-600/30 text-[#9CA3AF] hover:text-[#D1D5DB]",
+            )}
+            onClick={handleSubmit}
+            disabled={isLoading || !hasContent}
+          >
+            {isLoading ? (
+              <Square className="h-4 w-4 fill-[#1F2023] animate-pulse" />
+            ) : (
+              <ArrowUp className="h-5 w-5 text-[#1F2023]" />
+            )}
+          </Button>
+        </div>
+      </PromptInputActions>
+    </PromptInput>
+  );
+});
 PromptInputBox.displayName = "PromptInputBox";

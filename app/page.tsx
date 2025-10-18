@@ -1,78 +1,79 @@
-"use client"
+"use client";
 
-import { Suspense, useState } from "react"
-import { useRouter } from "next/navigation"
-import { HeroHeader } from "@/components/header"
-import AuthDialog from "@/components/auth-dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { PromptInputBox } from "@/components/ui/ai-prompt-box"
-import { Badge } from "@/components/ui/badge"
-import FeaturesSection from "@/components/features-section"
-import IntegrationsSection from "@/components/integrations-section"
-import ContentSection from "@/components/content-section"
-import PricingSection from "@/components/pricing-section"
-import FAQSection from "@/components/faq-section"
-import Footer from "@/components/footer"
-import NewsletterCTA from "@/components/newsletter-cta"
-import Link from "next/link"
-import { motion } from "@/components/motion-wrapper"
-import BelowFooterBanner from "@/components/below-footer-banner"
-import { api } from "@/lib/trpc-client"
-import { authService } from "@/lib/auth"
-
-
+import { Suspense, useState } from "react";
+import { useRouter } from "next/navigation";
+import { HeroHeader } from "@/components/header";
+import AuthDialog from "@/components/auth-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { PromptInputBox } from "@/components/ui/ai-prompt-box";
+import { Badge } from "@/components/ui/badge";
+import FeaturesSection from "@/components/features-section";
+import IntegrationsSection from "@/components/integrations-section";
+import ContentSection from "@/components/content-section";
+import PricingSection from "@/components/pricing-section";
+import FAQSection from "@/components/faq-section";
+import Footer from "@/components/footer";
+import NewsletterCTA from "@/components/newsletter-cta";
+import Link from "next/link";
+import { motion } from "@/components/motion-wrapper";
+import BelowFooterBanner from "@/components/below-footer-banner";
+import { api } from "@/lib/trpc-client";
+import { authService } from "@/lib/auth";
 
 export default function HomePage() {
-  const router = useRouter()
-  const [isLoading, setIsLoading] = useState(false)
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
 
   // Use the tRPC mutation hook
   const generateAPI = api.apiGeneration.generateAPI.useMutation({
     onSuccess: (result) => {
-      console.log('✅ API generation successful, result:', result)
+      console.log("✅ API generation successful, result:", result);
       // Redirect to the loading page with the new project ID
-      console.log('🔄 Redirecting to loading page:', `/loading?projectId=${result.projectId}`)
-      router.push(`/loading?projectId=${result.projectId}`)
-      setIsLoading(false)
+      console.log(
+        "🔄 Redirecting to loading page:",
+        `/loading?projectId=${result.projectId}`,
+      );
+      router.push(`/loading?projectId=${result.projectId}`);
+      setIsLoading(false);
     },
     onError: (error) => {
-      console.error('❌ Failed to create project:', error)
-      setIsLoading(false)
+      console.error("❌ Failed to create project:", error);
+      setIsLoading(false);
       // Handle error - could show a toast or error message
-    }
-  })
+    },
+  });
 
   const handlePromptSubmit = async (prompt: string) => {
-    console.log('🚀 handlePromptSubmit called with prompt:', prompt)
-    
+    console.log("🚀 handlePromptSubmit called with prompt:", prompt);
+
     // Check if user is authenticated using Supabase session
-    const { session } = await authService.getCurrentSession()
-    console.log('👤 Current session:', session)
-    
+    const { session } = await authService.getCurrentSession();
+    console.log("👤 Current session:", session);
+
     if (!session?.user) {
-      console.log('❌ No authenticated session found, redirecting to login')
+      console.log("❌ No authenticated session found, redirecting to login");
       // If not authenticated, show login dialog
-      router.push("/?auth=login")
-      return
+      router.push("/?auth=login");
+      return;
     }
 
-    console.log('✅ User authenticated, starting API generation')
-    setIsLoading(true)
-    
+    console.log("✅ User authenticated, starting API generation");
+    setIsLoading(true);
+
     // Create a new project with the prompt using the API generation router
-    console.log('📡 Calling generateAPI.mutate with:', {
+    console.log("📡 Calling generateAPI.mutate with:", {
       prompt: prompt,
-      framework: 'fastapi',
-      advanced: false
-    })
-    
+      framework: "fastapi",
+      advanced: false,
+    });
+
     generateAPI.mutate({
       prompt: prompt,
-      framework: 'fastapi',
-      advanced: false
-    })
-  }
+      framework: "fastapi",
+      advanced: false,
+    });
+  };
   return (
     <div className="min-h-screen bg-background overflow-x-clip">
       <HeroHeader />
@@ -99,14 +100,18 @@ export default function HomePage() {
             <div className="hidden sm:block" />
             <div className="mx-auto w-full max-w-5xl px-3 sm:px-4 flex flex-col items-center divide-y divide-border/50 h-full">
               {/* Trust signal section - hidden on mobile, with spacing preserved */}
-              <motion.div 
+              <motion.div
                 className="py-4 mb-4 sm:py-1 sm:mt-3 md:mt-6 sm:mb-2 md:mb-6"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.1 }}
               >
                 <div className="hidden sm:flex w-full items-center justify-center">
-                  <Badge variant="default" shiny={true} className="px-2 py-1 text-xs sm:text-sm">
+                  <Badge
+                    variant="default"
+                    shiny={true}
+                    className="px-2 py-1 text-xs sm:text-sm"
+                  >
                     Trusted by developers and non-developers alike
                   </Badge>
                 </div>
@@ -115,47 +120,52 @@ export default function HomePage() {
               {/* Main content area */}
               <div className="flex flex-col items-center justify-center py-2 sm:py-6 md:py-8 text-center space-y-3 sm:space-y-6 flex-1 w-full">
                 {/* Hero headline with responsive clamp and single semantic H1 */}
-                <motion.div 
+                <motion.div
                   className="max-w-5xl mx-auto px-1 sm:px-4 md:px-6 text-center"
                   initial={{ opacity: 0, y: 30 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, delay: 0.2 }}
                 >
                   <h1 className="hero-text mx-auto max-w-[22ch] sm:max-w-[24ch] md:max-w-none text-foreground leading-[1.1] sm:leading-tight tracking-tight text-balance mb-0 sm:mb-2">
-                    <span className="md:whitespace-nowrap">Instantly Build and Deploy Secure</span>
+                    <span className="md:whitespace-nowrap">
+                      Instantly Build and Deploy Secure
+                    </span>
                     <br className="hidden md:block" />
                     <span className="md:hidden"> </span>
-                    <span className="md:whitespace-nowrap">APIs From a Simple Prompt</span>
+                    <span className="md:whitespace-nowrap">
+                      APIs From a Simple Prompt
+                    </span>
                   </h1>
                 </motion.div>
 
                 {/* AI Input Box */}
-                <motion.div 
+                <motion.div
                   className="w-full max-w-2xl mx-auto px-3 sm:px-0"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, delay: 0.4 }}
                 >
-                  <PromptInputBox 
+                  <PromptInputBox
                     onSend={handlePromptSubmit}
                     isLoading={isLoading}
                   />
                 </motion.div>
 
                 {/* Supporting text with precise line breaks */}
-                <motion.div 
+                <motion.div
                   className="max-w-3xl mx-auto mt-0 px-1 sm:px-0"
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: 0.6 }}
                 >
                   <p className="text-muted-foreground text-base sm:text-base md:text-lg text-balance leading-relaxed">
-                    Go from user story to production-ready, documented API in seconds. No setup, no coding, no hassle.
+                    Go from user story to production-ready, documented API in
+                    seconds. No setup, no coding, no hassle.
                   </p>
                 </motion.div>
 
                 {/* CTA Buttons - simplified */}
-                <motion.div 
+                <motion.div
                   className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -193,8 +203,6 @@ export default function HomePage() {
           </motion.div>
         </section>
 
-
-
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -221,7 +229,7 @@ export default function HomePage() {
         >
           <PricingSection />
         </motion.div>
-        
+
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -230,7 +238,7 @@ export default function HomePage() {
         >
           <FAQSection />
         </motion.div>
-        
+
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -239,7 +247,7 @@ export default function HomePage() {
         >
           <NewsletterCTA />
         </motion.div>
-        
+
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -248,14 +256,14 @@ export default function HomePage() {
         >
           <Footer />
         </motion.div>
-        
+
         {/* Below Footer Banner matching provided screenshot */}
         <BelowFooterBanner />
-        
+
         <Suspense fallback={<div />}>
           <AuthDialog />
         </Suspense>
       </main>
     </div>
-  )
+  );
 }
