@@ -2126,42 +2126,103 @@ export const cloneAndPreviewRepository = inngest.createFunction(
           
           const repoFiles: Record<string, string> = {};
           
-          // Get list of common source files
-          const findFilesCommand = `find ${repoPath} -type f \\( -name '*.py' -o -name '*.js' -o -name '*.ts' -o -name '*.tsx' -o -name '*.jsx' -o -name '*.json' -o -name '*.md' -o -name '*.txt' -o -name '*.yml' -o -name '*.yaml' \\) ! -path '*/node_modules/*' ! -path '*/.git/*' ! -path '*/dist/*' ! -path '*/build/*' ! -path '*/__pycache__/*' | head -50`;
+          // Get list of source files - EXCLUDE build/generated folders
+          const findFilesCommand = `find ${repoPath} -type f \\( -name '*.py' -o -name '*.js' -o -name '*.ts' -o -name '*.tsx' -o -name '*.jsx' -o -name '*.json' -o -name '*.md' -o -name '*.txt' -o -name '*.yml' -o -name '*.yaml' -o -name '*.css' -o -name '*.scss' \\) ! -path '*/node_modules/*' ! -path '*/.git/*' ! -path '*/dist/*' ! -path '*/build/*' ! -path '*/.next/*' ! -path '*/__pycache__/*' ! -path '*/coverage/*' ! -path '*/.cache/*' ! -path '*/out/*' ! -path '*/.turbo/*' | head -200`;
           
           const filesListResult = await sandbox.commands.run(findFilesCommand);
           
           if (filesListResult.exitCode === 0 && filesListResult.stdout) {
             const filesList = filesListResult.stdout.trim().split('\n').filter(f => f.trim());
-            console.log(`Found ${filesList.length} files to read`);
+            console.log(`Found ${filesList.length} source files to read`);
             
-            // Read each file (limit to first 50 files to avoid overwhelming)
-            for (const filePath of filesList.slice(0, 50)) {
+            // Categorize files by priority
+            const configFiles = filesList.filter(f => 
+              f.includes('package.json') || 
+              f.includes('tsconfig.json') ||
+              f.includes('next.config') ||
+              f.includes('vite.config') ||
+              f.includes('tailwind.config') ||
+              f.includes('.env.example') ||
+              f.includes('README')
+            );
+            
+            const appFiles = filesList.filter(f => 
+              (f.includes('/app/') || f.includes('/pages/') || f.includes('/src/pages/')) &&
+              !configFiles.includes(f)
+            );
+            
+            const componentFiles = filesList.filter(f => 
+              (f.includes('/components/') || f.includes('/ui/')) &&
+              !configFiles.includes(f) && !appFiles.includes(f)
+            );
+            
+            const utilFiles = filesList.filter(f => 
+              (f.includes('/lib/') || f.includes('/utils/') || f.includes('/hooks/')) &&
+              !configFiles.includes(f) && !appFiles.includes(f) && !componentFiles.includes(f)
+            );
+            
+            const otherFiles = filesList.filter(f => 
+              !configFiles.includes(f) && 
+              !appFiles.includes(f) && 
+              !componentFiles.includes(f) && 
+              !utilFiles.includes(f)
+            );
+            
+            // Smart selection: Get representative files from each category
+            const orderedFiles = [
+              ...configFiles,                          // All config files
+              ...appFiles.slice(0, 30),                // Up to 30 pages/routes
+              ...componentFiles.slice(0, 40),          // Up to 40 components  
+              ...utilFiles.slice(0, 20),               // Up to 20 utils
+              ...otherFiles.slice(0, 10),              // Up to 10 other files
+            ].slice(0, 150); // Max 150 files total
+            
+            console.log(`Reading ${orderedFiles.length} files: ${configFiles.length} config, ${appFiles.slice(0, 30).length} pages, ${componentFiles.slice(0, 40).length} components, ${utilFiles.slice(0, 20).length} utils`);
+            
+            // Read each file
+            let filesRead = 0;
+            let filesSkipped = 0;
+            
+            for (const filePath of orderedFiles) {
               try {
                 const fileContent = await sandbox.files.read(filePath);
                 // Get relative path from repo root
                 const relativePath = filePath.replace(`${repoPath}/`, '');
-                repoFiles[relativePath] = fileContent;
                 
-                // Emit file event for streaming
-                await streamingService.emit(projectId, {
-                  type: 'file:complete',
-                  filename: relativePath,
-                  content: fileContent,
-                  path: relativePath,
-                });
+                // Skip if file is too large (> 200KB)
+                if (fileContent.length > 200000) {
+                  console.log(`Skipping large file: ${relativePath} (${fileContent.length} bytes)`);
+                  filesSkipped++;
+                  continue;
+                }
+                
+                repoFiles[relativePath] = fileContent;
+                filesRead++;
+                
+                // Only emit config files to stream to avoid overwhelming
+                if (configFiles.includes(filePath)) {
+                  await streamingService.emit(projectId, {
+                    type: 'file:complete',
+                    filename: relativePath,
+                    content: fileContent.substring(0, 1000), // Only send preview to stream
+                    path: relativePath,
+                  });
+                }
               } catch (fileError) {
                 console.error(`Failed to read file ${filePath}:`, fileError);
+                filesSkipped++;
               }
             }
+            
+            console.log(`Successfully read ${filesRead} files, skipped ${filesSkipped} files`);
           }
           
-          console.log(`Successfully read ${Object.keys(repoFiles).length} repository files`);
+          console.log(`Successfully read ${Object.keys(repoFiles).length} source files`);
           
           await streamingService.emit(projectId, {
             type: 'step:complete',
             step: 'Reading Files',
-            message: `Read ${Object.keys(repoFiles).length} files from repository`,
+            message: `Read ${Object.keys(repoFiles).length} source files`,
           });
           
           // Install dependencies
