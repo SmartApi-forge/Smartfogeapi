@@ -2469,7 +2469,7 @@ export const cloneAndPreviewRepository = inngest.createFunction(
       // Step 8: Update project with sandbox URL and status
       await step.run("update-project", async () => {
         const updateData: any = {
-          status: 'completed', // Always mark as completed if files were cloned
+          status: 'deployed', // Mark as deployed when preview is ready
           framework: frameworkInfo.framework || 'unknown',
           github_repo_id: githubRepoId,
         };
@@ -2487,7 +2487,7 @@ export const cloneAndPreviewRepository = inngest.createFunction(
         if (error) {
           console.error('Failed to update project:', error);
         } else {
-          console.log(`Project updated - status: completed, framework: ${frameworkInfo.framework}, sandbox URL: ${previewResult.sandboxUrl}`);
+          console.log(`Project updated - status: deployed, framework: ${frameworkInfo.framework}, sandbox URL: ${previewResult.sandboxUrl}`);
         }
       });
       

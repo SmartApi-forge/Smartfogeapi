@@ -115,6 +115,18 @@ function getStatusColor(status: Project['status']) {
   }
 }
 
+// Helper function to sort tree nodes: folders first, then files (VS Code style)
+function sortTreeNodes(nodes: TreeNode[]): TreeNode[] {
+  return nodes.sort((a, b) => {
+    // Folders come before files
+    if (a.type === 'folder' && b.type === 'file') return -1;
+    if (a.type === 'file' && b.type === 'folder') return 1;
+    
+    // Within same type, sort alphabetically (case-insensitive)
+    return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+  });
+}
+
 function generateFileTreeFromProject(project: Project, messages: Message[] = [], streamingFiles: any[] = []): TreeNode[] {
   // Check if we have any generated files from messages OR streaming
   const hasGeneratedFiles = messages.some(
@@ -191,6 +203,17 @@ Waiting for files to be generated or cloned...
     }
   });
 
+  // Sort all levels recursively (folders first, then files)
+  const sortRecursive = (nodes: TreeNode[]) => {
+    sortTreeNodes(nodes);
+    nodes.forEach(node => {
+      if (node.children) {
+        sortRecursive(node.children);
+      }
+    });
+  };
+  
+  sortRecursive(baseStructure);
   return baseStructure;
 }
 
@@ -553,6 +576,17 @@ export function ProjectPageClient({
 
   // Use streaming hook for real-time updates
   const streamState = useGenerationStream(projectId);
+  
+  // Fetch project data with auto-refresh to get updated status
+  const { data: currentProject = project } = api.projects.getOne.useQuery(
+    { id: projectId },
+    {
+      initialData: project as any,
+      refetchOnWindowFocus: true,
+      // Poll every 5 seconds when streaming to catch status changes from "generating" to "deployed"
+      refetchInterval: streamState.isStreaming ? 5000 : false,
+    }
+  );
   
   // Determine code theme based on current theme
   const codeTheme = resolvedTheme === 'dark' ? themes.vsDark : themes.vsLight;
@@ -971,8 +1005,8 @@ export function ProjectPageClient({
     }
     
     // Priority 4: Fallback to project-based tree generation from messages
-    return generateFileTreeFromProject(project, sortedMessages, streamState.generatedFiles);
-  }, [selectedVersionId, versions, streamState.generatedFiles, streamState.isStreaming, project, sortedMessages]);
+    return generateFileTreeFromProject(currentProject, sortedMessages, streamState.generatedFiles);
+  }, [selectedVersionId, versions, streamState.generatedFiles, streamState.isStreaming, currentProject, sortedMessages]);
 
   // When switching versions, ensure the selected file exists in that version.
   // If not, select the first file of the chosen version.
