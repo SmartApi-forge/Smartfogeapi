@@ -191,7 +191,7 @@ export const generateAPI = inngest.createFunction(
           const cloneResult = await githubRepositoryService.cloneToSandbox(
             repoUrl,
             integration.access_token,
-            sandbox.sandboxId
+            sandbox
           );
           
           if (!cloneResult.success) {
@@ -2087,7 +2087,7 @@ export const cloneAndPreviewRepository = inngest.createFunction(
           const cloneResult = await githubRepositoryService.cloneToSandbox(
             repoUrl,
             integration.access_token,
-            sandbox.sandboxId
+            sandbox
           );
           
           if (!cloneResult.success) {

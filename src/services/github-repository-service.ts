@@ -109,14 +109,9 @@ export class GitHubRepositoryService {
   async cloneToSandbox(
     repoUrl: string,
     accessToken: string,
-    sandboxId: string
+    sandbox: Sandbox
   ): Promise<{ success: boolean; path: string; error?: string }> {
-    let sandbox: Sandbox | null = null;
-
     try {
-      // Get or create sandbox
-      sandbox = await Sandbox.create(sandboxId);
-
       // Clone repository with authentication
       const authUrl = repoUrl.replace('https://github.com/', `https://${accessToken}@github.com/`);
       const cloneCommand = `git clone ${authUrl} /home/user/repo`;
