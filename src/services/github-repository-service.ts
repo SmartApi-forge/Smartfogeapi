@@ -429,30 +429,56 @@ export class GitHubRepositoryService {
         };
       } else {
         // Get server logs for debugging
-        const logs = await sandbox.commands.run('cat /tmp/server.log 2>/dev/null || echo "No logs available"');
+        const logs = await sandbox.commands.run('cat /tmp/server.log 2>/dev/null | tail -100 || echo "No logs available"');
         
-        console.error('❌ Preview server failed to start:', result.stderr);
-        console.error('Server logs:', logs.stdout);
+        // Combine all error information
+        const errorParts = [];
+        
+        if (result.stderr && result.stderr.trim()) {
+          errorParts.push(`Start command stderr: ${result.stderr.trim()}`);
+        }
+        
+        if (result.stdout && result.stdout.trim()) {
+          errorParts.push(`Start command stdout: ${result.stdout.trim()}`);
+        }
+        
+        if (logs.stdout && logs.stdout.trim() !== 'No logs available') {
+          errorParts.push(`Server logs (last 100 lines): ${logs.stdout.trim()}`);
+        }
+        
+        const errorMessage = errorParts.length > 0 
+          ? errorParts.join('\n\n')
+          : `Server failed with exit code ${result.exitCode}`;
+        
+        console.error('❌ Preview server failed to start:');
+        console.error(errorMessage);
         
         return {
           success: false,
-          error: `Server failed to start: ${result.stderr || 'Unknown error'}`,
+          error: errorMessage,
+          installOutput: installResult.output, // Include install output for context
         };
       }
     } catch (error: any) {
       console.error('Preview server start error:', error);
       
       // Try to get logs for debugging
+      let serverLogs = '';
       try {
-        const logs = await sandbox.commands.run('cat /tmp/server.log 2>/dev/null || echo "No logs available"');
-        console.error('Server logs:', logs.stdout);
+        const logs = await sandbox.commands.run('cat /tmp/server.log 2>/dev/null | tail -100 || echo "No logs available"');
+        serverLogs = logs.stdout;
+        console.error('Server logs:', serverLogs);
       } catch (logError) {
         console.error('Could not retrieve server logs');
       }
       
+      const errorMessage = error.message + (serverLogs && serverLogs !== 'No logs available' 
+        ? `\n\nServer logs:\n${serverLogs}` 
+        : '');
+      
       return {
         success: false,
-        error: error.message,
+        error: errorMessage,
       };
     }
   }

@@ -335,12 +335,13 @@ start_server_background() {
     echo "✅ Server started with PID: $server_pid"
     
     # Wait for server to be ready
-    if wait_for_server "$port" 60; then
+    # Next.js 15 + Tailwind v4 can take 5-10 minutes for first build, so wait longer
+    if wait_for_server "$port" 600; then
         echo "✅ Server is ready and accepting connections!"
         return 0
     else
         echo "❌ Server failed to start. Check logs: $log_file"
-        tail -20 "$log_file"
+        tail -50 "$log_file"
         return 1
     fi
 }

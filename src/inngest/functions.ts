@@ -2225,39 +2225,19 @@ export const cloneAndPreviewRepository = inngest.createFunction(
             message: `Read ${Object.keys(repoFiles).length} source files`,
           });
           
-          // Install dependencies
-          await streamingService.emit(projectId, {
-            type: 'step:start',
-            step: 'Installing Dependencies',
-            message: `Installing with ${framework.packageManager}...`,
-          });
-          
-          const installResult = await githubRepositoryService.installDependencies(
-            sandbox,
-            repoPath,
-            framework.packageManager
-          );
-          
-          if (!installResult.success) {
-            console.warn('Dependency installation failed:', installResult.error);
-            await streamingService.emit(projectId, {
-              type: 'step:complete',
-              step: 'Installing Dependencies',
-              message: 'Installation completed with warnings',
-            });
-          } else {
-            await streamingService.emit(projectId, {
-              type: 'step:complete',
-              step: 'Installing Dependencies',
-              message: 'Dependencies installed successfully!',
-            });
-          }
-          
-          // Start preview server
+          // Start preview server (this will install dependencies and start the server)
           let previewServer = null;
           
           // Try to start preview even if framework is unknown
           if (framework.startCommand || framework.framework !== 'unknown') {
+            // Emit installing step
+            await streamingService.emit(projectId, {
+              type: 'step:start',
+              step: 'Installing Dependencies',
+              message: `Installing with ${framework.packageManager}...`,
+            });
+            
+            // Then emit starting preview step
             await streamingService.emit(projectId, {
               type: 'step:start',
               step: 'Starting Preview',
@@ -2275,11 +2255,24 @@ export const cloneAndPreviewRepository = inngest.createFunction(
               
               await streamingService.emit(projectId, {
                 type: 'step:complete',
+                step: 'Installing Dependencies',
+                message: 'Dependencies installed successfully!',
+              });
+              
+              await streamingService.emit(projectId, {
+                type: 'step:complete',
                 step: 'Starting Preview',
                 message: `Preview ready on port ${previewServer.port}!`,
               });
             } else {
               console.error('❌ Preview server failed to start:', previewServer.error);
+              console.error('📋 Install output:', previewServer.installOutput);
+              
+              await streamingService.emit(projectId, {
+                type: 'step:complete',
+                step: 'Installing Dependencies',
+                message: 'Installation completed',
+              });
               
               await streamingService.emit(projectId, {
                 type: 'step:complete',
