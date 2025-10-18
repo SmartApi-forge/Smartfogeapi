@@ -1,25 +1,31 @@
 # Sandbox URL Debugging Guide
 
-## ✅ **What I Fixed**
+## ✅ **What I Fixed (Latest)**
 
-Your Modern_UI project was returning:
+### **Issue: Preview Server Timeout**
+
+Your Modern_UI project was timing out with:
 ```json
 {
-  "framework": "nextjs",
-  "sandboxId": "i365ue9ia9ut6ta4dyc1z",
-  "success": true,
-  "repoFiles": { ... 143 files ... }
+  "previewError": "[deadline_exceeded] the operation timed out: This error is likely due to exceeding 'timeoutMs'..."
 }
 ```
 
-BUT - **NO `previewUrl`** was included! This means the preview server failed to start.
+**Root Cause**: The `startPreviewServer` function had only a **90-second timeout**, but:
+- `npm install` for Modern_UI takes ~3-5 minutes (50+ dependencies)
+- Starting Next.js dev server takes another 30-60 seconds
+- **Total: 4-6 minutes needed, but only 90 seconds allowed!**
 
-### **Changes Made:**
+### **Fix Applied:**
 
-1. ✅ **Added detailed logging** to show WHY preview failed
-2. ✅ **Generate all potential URLs** even if server didn't start  
-3. ✅ **Return `potentialUrls`** in Inngest output for easy testing
-4. ✅ **Include `previewError`** to see what went wrong
+1. ✅ **Split into 2 steps**:
+   - Step 1: Install dependencies (5-minute timeout)
+   - Step 2: Start server only (2-minute timeout)
+   
+2. ✅ **Added detailed logging** to show progress
+3. ✅ **Generate all potential URLs** even if server fails  
+4. ✅ **Return `potentialUrls`** in Inngest output for easy testing
+5. ✅ **Include `previewError`** to see what went wrong
 
 ## 🔍 **Next Inngest Run Will Show:**
 
@@ -172,5 +178,42 @@ Now when you clone a repo:
 3. **Detailed errors** explain why preview failed
 4. **You can test manually** even if auto-start fails
 
-**Try cloning Modern_UI again and check the new output!** 🚀
+---
+
+## 🆕 **Latest Fix Applied: Timeout Issue**
+
+### **The Problem You Had:**
+```json
+{
+  "previewError": "[deadline_exceeded] the operation timed out..."
+}
+```
+
+Your sandbox `i6ovb5e0vmjf274p82bmp` timed out because:
+- ❌ Only 90 seconds allowed for `npm install` + server startup
+- ⏱️ Modern_UI needs 4-6 minutes (50+ dependencies!)
+
+### **The Fix (Applied Now):**
+
+**Split into 2 separate steps:**
+1. **Install dependencies** → 5-minute timeout
+2. **Start server only** → 2-minute timeout
+
+### **Expected Timeline (Next Clone):**
+
+```
+0:00 - 0:30   📦 Cloning repository...
+0:30 - 5:30   📦 Installing dependencies (npm install)...
+5:30 - 7:30   🚀 Starting Next.js dev server...
+7:30          ✅ Preview URL ready!
+```
+
+### **What To Do Now:**
+
+1. ✅ **Fix is already deployed** in your codebase
+2. 🔄 **Clone Modern_UI again** in your app
+3. ⏳ **Wait 7-8 minutes** for the full process
+4. 🎉 **Get working preview URL** this time!
+
+**Your current sandbox will NOT work** - you need to clone again with the fix! 🚀
 

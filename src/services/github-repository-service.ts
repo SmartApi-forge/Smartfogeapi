@@ -348,11 +348,25 @@ export class GitHubRepositoryService {
 
       console.log(`🚀 Starting preview server for ${framework.framework} on port ${port}...`);
 
-      // Use the compile_fullstack.sh script to start server in background
+      // Step 1: Install dependencies first (with generous timeout)
+      console.log('📦 Installing dependencies...');
+      const installResult = await this.installDependencies(sandbox, framework.packageManager, repoPath);
+      
+      if (!installResult.success) {
+        console.error('❌ Dependency installation failed:', installResult.error);
+        return {
+          success: false,
+          error: `Failed to install dependencies: ${installResult.error}`,
+        };
+      }
+      
+      console.log('✅ Dependencies installed successfully');
+
+      // Step 2: Start the dev server in background (shorter timeout since deps already installed)
       const startCommand = `source /usr/local/bin/compile_fullstack.sh && start_server_background "${repoPath}" ${port} /tmp/server.log`;
       
       const result = await sandbox.commands.run(startCommand, {
-        timeoutMs: 90000, // 90 seconds timeout for installation + startup
+        timeoutMs: 120000, // 2 minutes timeout for server startup only
       });
 
       // Check if start was successful

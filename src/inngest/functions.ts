@@ -2298,34 +2298,23 @@ export const cloneAndPreviewRepository = inngest.createFunction(
             });
           }
           
-          // Generate potential preview URLs even if server didn't start
+          // Generate the sandbox URL based on framework port
           const defaultPort = framework.port || 3000;
-          const potentialUrls = {
-            port3000: `https://${sandbox.sandboxId}-3000.e2b.dev`,
-            port8000: `https://${sandbox.sandboxId}-8000.e2b.dev`,
-            port5000: `https://${sandbox.sandboxId}-5000.e2b.dev`,
-            defaultPort: defaultPort !== 3000 && defaultPort !== 8000 && defaultPort !== 5000 
-              ? `https://${sandbox.sandboxId}-${defaultPort}.e2b.dev` 
-              : undefined,
-          };
+          const sandboxUrl = previewServer?.url || `https://${sandbox.sandboxId}-${defaultPort}.e2b.dev`;
           
-          console.log('📡 Sandbox URLs available:');
-          console.log('   - Port 3000 (Next.js):', potentialUrls.port3000);
-          console.log('   - Port 8000 (Python):', potentialUrls.port8000);
-          console.log('   - Port 5000 (Flask):', potentialUrls.port5000);
-          if (potentialUrls.defaultPort) {
-            console.log(`   - Port ${defaultPort} (${framework.framework}):`, potentialUrls.defaultPort);
-          }
+          console.log('📡 Sandbox URL:', sandboxUrl);
+          console.log('   - Framework:', framework.framework);
+          console.log('   - Port:', defaultPort);
+          console.log('   - Sandbox ID:', sandbox.sandboxId);
           
           return {
             success: true,
+            sandboxId: sandbox.sandboxId,
+            sandboxUrl, // Single URL for easy access
             framework: framework.framework,
             packageManager: framework.packageManager,
-            previewUrl: previewServer?.url,
-            previewPort: previewServer?.port,
+            previewPort: defaultPort,
             previewError: previewServer?.success === false ? previewServer.error : undefined,
-            sandboxId: sandbox.sandboxId,
-            potentialUrls, // Always include these for debugging
             repoFiles,
           };
         } catch (error) {
@@ -2351,9 +2340,9 @@ export const cloneAndPreviewRepository = inngest.createFunction(
           
           // Create a message with the repository files
           const filesCount = Object.keys(previewResult.repoFiles || {}).length;
-          const previewStatus = previewResult.previewUrl 
-            ? `Preview available at ${previewResult.previewUrl}` 
-            : `Preview not available (${previewResult.framework || 'framework detection failed'})`;
+          const previewStatus = previewResult.sandboxUrl 
+            ? `Sandbox URL: ${previewResult.sandboxUrl}` 
+            : `Sandbox created (${previewResult.framework || 'framework detection failed'})`;
           const messageContent = `Repository cloned successfully! ${previewStatus}`;
           
           await MessageService.saveResult({
@@ -2363,7 +2352,7 @@ export const cloneAndPreviewRepository = inngest.createFunction(
             project_id: projectId,
             fragment: {
               title: `${repoFullName} - Cloned Repository`,
-              sandbox_url: previewResult.previewUrl || `https://github.com/${repoFullName}`,
+              sandbox_url: previewResult.sandboxUrl || `https://github.com/${repoFullName}`,
               files: previewResult.repoFiles || {},
               fragment_type: 'repo_clone',
               order_index: 0,
@@ -2374,19 +2363,20 @@ export const cloneAndPreviewRepository = inngest.createFunction(
                 packageManager: previewResult.packageManager || 'unknown',
                 filesCount,
                 sandboxId: previewResult.sandboxId || 'N/A',
-                previewStatus: previewResult.previewUrl ? 'available' : 'failed',
+                sandboxUrl: previewResult.sandboxUrl,
+                previewError: previewResult.previewError,
               }
             }
           });
           
-          console.log(`Saved ${filesCount} repository files to database with ${previewResult.previewUrl ? 'preview URL' : 'no preview URL'}`);
+          console.log(`Saved ${filesCount} repository files to database with sandbox URL: ${previewResult.sandboxUrl}`);
         } catch (error) {
           console.error('Failed to save repository files:', error);
           // Don't fail the entire workflow if saving fails
         }
       });
       
-      // Step 4: Update project with preview URL and status
+      // Step 4: Update project with sandbox URL and status
       await step.run("update-project", async () => {
         const updateData: any = {
           status: 'completed', // Always mark as completed if files were cloned
@@ -2394,9 +2384,9 @@ export const cloneAndPreviewRepository = inngest.createFunction(
           github_repo_id: githubRepoId,
         };
         
-        // Only add sandbox_url if we have a valid URL
-        if (previewResult.previewUrl) {
-          updateData.sandbox_url = previewResult.previewUrl;
+        // Always add sandbox_url (we always generate it now)
+        if (previewResult.sandboxUrl) {
+          updateData.sandbox_url = previewResult.sandboxUrl;
         }
         
         const { error } = await supabase
@@ -2407,7 +2397,7 @@ export const cloneAndPreviewRepository = inngest.createFunction(
         if (error) {
           console.error('Failed to update project:', error);
         } else {
-          console.log(`Project updated - status: completed, framework: ${previewResult.framework}, preview: ${previewResult.previewUrl ? 'available' : 'not available'}`);
+          console.log(`Project updated - status: completed, framework: ${previewResult.framework}, sandbox URL: ${previewResult.sandboxUrl}`);
         }
       });
       
@@ -2419,7 +2409,7 @@ export const cloneAndPreviewRepository = inngest.createFunction(
           type: 'complete',
           summary: `Repository ${repoFullName} is ready for development!`,
           totalFiles: filesCount,
-          previewUrl: previewResult.previewUrl,
+          sandboxUrl: previewResult.sandboxUrl,
         });
         
         streamingService.closeProject(projectId);
