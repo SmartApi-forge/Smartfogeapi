@@ -218,12 +218,13 @@ export function useGenerationStream(projectId: string | undefined): UseGeneratio
         (window as any).__activeStreamingSessions = Math.max(0, ((window as any).__activeStreamingSessions || 1) - 1);
       }
 
-      // Attempt to reconnect after 5 seconds if not complete or error
+      // Attempt to reconnect after 2 seconds if not complete or error
+      // Faster reconnect for long-running operations (GitHub clone can take 10+ minutes)
       if (state.status !== 'complete' && state.status !== 'error') {
         reconnectTimeoutRef.current = setTimeout(() => {
           console.log('[useGenerationStream] Attempting to reconnect...');
           connect();
-        }, 5000);
+        }, 2000); // 2 seconds for faster recovery
       }
     };
   }, [projectId, state.status]);

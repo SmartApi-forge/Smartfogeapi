@@ -45,9 +45,10 @@ export async function GET(
   });
 
   // Set up heartbeat to keep connection alive
+  // More frequent heartbeat for long-running operations (10+ min clone operations)
   const heartbeatInterval = setInterval(() => {
     send(': heartbeat\n\n');
-  }, 30000); // Every 30 seconds
+  }, 15000); // Every 15 seconds (prevents timeout during long GitHub clone + build)
 
   // Handle client disconnect
   request.signal.addEventListener('abort', () => {
