@@ -2271,7 +2271,7 @@ export const cloneAndPreviewRepository = inngest.createFunction(
             );
             
             if (previewServer.success) {
-              console.log('Preview server started:', previewServer.url);
+              console.log('✅ Preview server started:', previewServer.url);
               
               await streamingService.emit(projectId, {
                 type: 'step:complete',
@@ -2279,13 +2279,17 @@ export const cloneAndPreviewRepository = inngest.createFunction(
                 message: `Preview ready on port ${previewServer.port}!`,
               });
             } else {
+              console.error('❌ Preview server failed to start:', previewServer.error);
+              
               await streamingService.emit(projectId, {
                 type: 'step:complete',
                 step: 'Starting Preview',
-                message: 'Preview server could not be started - framework may require manual setup',
+                message: `Preview server could not be started: ${previewServer.error || 'Unknown error'}`,
               });
             }
           } else {
+            console.warn('⚠️ Skipping preview server - no start command for framework:', framework.framework);
+            
             // Framework unknown and no start command - skip server start
             await streamingService.emit(projectId, {
               type: 'step:complete',
@@ -2294,13 +2298,34 @@ export const cloneAndPreviewRepository = inngest.createFunction(
             });
           }
           
+          // Generate potential preview URLs even if server didn't start
+          const defaultPort = framework.port || 3000;
+          const potentialUrls = {
+            port3000: `https://${sandbox.sandboxId}-3000.e2b.dev`,
+            port8000: `https://${sandbox.sandboxId}-8000.e2b.dev`,
+            port5000: `https://${sandbox.sandboxId}-5000.e2b.dev`,
+            defaultPort: defaultPort !== 3000 && defaultPort !== 8000 && defaultPort !== 5000 
+              ? `https://${sandbox.sandboxId}-${defaultPort}.e2b.dev` 
+              : undefined,
+          };
+          
+          console.log('📡 Sandbox URLs available:');
+          console.log('   - Port 3000 (Next.js):', potentialUrls.port3000);
+          console.log('   - Port 8000 (Python):', potentialUrls.port8000);
+          console.log('   - Port 5000 (Flask):', potentialUrls.port5000);
+          if (potentialUrls.defaultPort) {
+            console.log(`   - Port ${defaultPort} (${framework.framework}):`, potentialUrls.defaultPort);
+          }
+          
           return {
             success: true,
             framework: framework.framework,
             packageManager: framework.packageManager,
             previewUrl: previewServer?.url,
             previewPort: previewServer?.port,
+            previewError: previewServer?.success === false ? previewServer.error : undefined,
             sandboxId: sandbox.sandboxId,
+            potentialUrls, // Always include these for debugging
             repoFiles,
           };
         } catch (error) {
@@ -2326,7 +2351,10 @@ export const cloneAndPreviewRepository = inngest.createFunction(
           
           // Create a message with the repository files
           const filesCount = Object.keys(previewResult.repoFiles || {}).length;
-          const messageContent = `Repository cloned successfully! Preview available at ${previewResult.previewUrl || 'N/A'}`;
+          const previewStatus = previewResult.previewUrl 
+            ? `Preview available at ${previewResult.previewUrl}` 
+            : `Preview not available (${previewResult.framework || 'framework detection failed'})`;
+          const messageContent = `Repository cloned successfully! ${previewStatus}`;
           
           await MessageService.saveResult({
             content: messageContent,
@@ -2335,22 +2363,23 @@ export const cloneAndPreviewRepository = inngest.createFunction(
             project_id: projectId,
             fragment: {
               title: `${repoFullName} - Cloned Repository`,
-              sandbox_url: previewResult.previewUrl || '',
+              sandbox_url: previewResult.previewUrl || `https://github.com/${repoFullName}`,
               files: previewResult.repoFiles || {},
               fragment_type: 'repo_clone',
               order_index: 0,
               metadata: {
                 repoUrl,
                 repoFullName,
-                framework: previewResult.framework,
-                packageManager: previewResult.packageManager,
+                framework: previewResult.framework || 'unknown',
+                packageManager: previewResult.packageManager || 'unknown',
                 filesCount,
-                sandboxId: previewResult.sandboxId,
+                sandboxId: previewResult.sandboxId || 'N/A',
+                previewStatus: previewResult.previewUrl ? 'available' : 'failed',
               }
             }
           });
           
-          console.log(`Saved ${filesCount} repository files to database`);
+          console.log(`Saved ${filesCount} repository files to database with ${previewResult.previewUrl ? 'preview URL' : 'no preview URL'}`);
         } catch (error) {
           console.error('Failed to save repository files:', error);
           // Don't fail the entire workflow if saving fails
@@ -2359,18 +2388,26 @@ export const cloneAndPreviewRepository = inngest.createFunction(
       
       // Step 4: Update project with preview URL and status
       await step.run("update-project", async () => {
+        const updateData: any = {
+          status: 'completed', // Always mark as completed if files were cloned
+          framework: previewResult.framework || 'unknown',
+          github_repo_id: githubRepoId,
+        };
+        
+        // Only add sandbox_url if we have a valid URL
+        if (previewResult.previewUrl) {
+          updateData.sandbox_url = previewResult.previewUrl;
+        }
+        
         const { error } = await supabase
           .from('projects')
-          .update({
-            sandbox_url: previewResult.previewUrl,
-            status: 'completed',
-            framework: previewResult.framework,
-            github_repo_id: githubRepoId,
-          })
+          .update(updateData)
           .eq('id', projectId);
         
         if (error) {
           console.error('Failed to update project:', error);
+        } else {
+          console.log(`Project updated - status: completed, framework: ${previewResult.framework}, preview: ${previewResult.previewUrl ? 'available' : 'not available'}`);
         }
       });
       
