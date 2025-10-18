@@ -56,7 +56,7 @@ export function useGenerationStream(projectId: string | undefined): UseGeneratio
       }
     };
 
-    eventSource.addEventListener('message', (event) => {
+    eventSource.onmessage = (event) => {
       try {
         const streamEvent: StreamEventWithTimestamp = JSON.parse(event.data);
         console.log(`[useGenerationStream] Received event:`, streamEvent.type);
@@ -195,7 +195,7 @@ export function useGenerationStream(projectId: string | undefined): UseGeneratio
       } catch (error) {
         console.error('[useGenerationStream] Error parsing event:', error);
       }
-    });
+    };
 
     eventSource.addEventListener('close', () => {
       console.log(`[useGenerationStream] Stream closed by server`);

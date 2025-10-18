@@ -121,8 +121,8 @@ function generateFileTreeFromProject(project: Project, messages: Message[] = [],
     (message) => message.fragments && message.fragments.length > 0
   ) || streamingFiles.length > 0;
 
-  // Don't show placeholder if project is still generating/cloning
-  const isStillProcessing = project.status === 'generating' || project.status === 'pending';
+  // Don't show placeholder if project is still generating
+  const isStillProcessing = project.status === 'generating';
   
   // Only show placeholder files if:
   // 1. We don't have any real generated files AND

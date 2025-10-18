@@ -191,7 +191,7 @@ class StreamingService {
    * Format event data as SSE
    */
   private formatSSE(event: StreamEventWithTimestamp): string {
-    return `event: message\ndata: ${JSON.stringify(event)}\n\n`;
+    return `data: ${JSON.stringify(event)}\n\n`;
   }
 
   /**
