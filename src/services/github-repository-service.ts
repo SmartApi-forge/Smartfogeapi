@@ -25,7 +25,7 @@ export interface Repository {
 }
 
 export interface FrameworkDetection {
-  framework: 'nextjs' | 'react' | 'vue' | 'angular' | 'express' | 'fastapi' | 'unknown';
+  framework: 'nextjs' | 'react' | 'vue' | 'angular' | 'express' | 'fastapi' | 'flask' | 'django' | 'python' | 'unknown';
   version?: string;
   packageManager: 'npm' | 'yarn' | 'pnpm' | 'pip' | 'poetry' | 'unknown';
   buildCommand?: string;
@@ -141,7 +141,7 @@ export class GitHubRepositoryService {
    */
   async detectFramework(sandbox: Sandbox, repoPath: string = '/home/user/repo'): Promise<FrameworkDetection> {
     try {
-      // Check for package.json (JavaScript/TypeScript projects)
+      // PRIORITY 1: Check for React/Node.js projects first (package.json)
       const packageJsonResult = await sandbox.commands.run(`cat ${repoPath}/package.json 2>/dev/null || echo "not_found"`);
 
       if (!packageJsonResult.stdout.includes('not_found')) {
@@ -215,19 +215,55 @@ export class GitHubRepositoryService {
         }
       }
 
-      // Check for Python projects
+      // PRIORITY 2: Check for Python projects (secondary to React/Node.js)
       const requirementsCheck = await sandbox.commands.run(`test -f ${repoPath}/requirements.txt && echo "found" || echo "not_found"`);
       const pyprojectCheck = await sandbox.commands.run(`test -f ${repoPath}/pyproject.toml && echo "found" || echo "not_found"`);
 
       if (requirementsCheck.stdout.includes('found') || pyprojectCheck.stdout.includes('found')) {
-        const mainPyCheck = await sandbox.commands.run(`grep -l "FastAPI\\|from fastapi" ${repoPath}/*.py 2>/dev/null || echo "not_found"`);
+        const packageManager = pyprojectCheck.stdout.includes('found') ? 'poetry' : 'pip';
         
-        if (!mainPyCheck.stdout.includes('not_found')) {
+        // Check for FastAPI
+        const fastapiCheck = await sandbox.commands.run(`grep -l "FastAPI\\|from fastapi" ${repoPath}/*.py 2>/dev/null || echo "not_found"`);
+        if (!fastapiCheck.stdout.includes('not_found')) {
           return {
             framework: 'fastapi',
-            packageManager: pyprojectCheck.stdout.includes('found') ? 'poetry' : 'pip',
-            startCommand: 'uvicorn main:app --reload',
+            packageManager,
+            startCommand: 'uvicorn main:app --reload --host 0.0.0.0',
             port: 8000,
+          };
+        }
+        
+        // Check for Flask
+        const flaskCheck = await sandbox.commands.run(`grep -l "Flask\\|from flask" ${repoPath}/*.py 2>/dev/null || echo "not_found"`);
+        if (!flaskCheck.stdout.includes('not_found')) {
+          return {
+            framework: 'flask',
+            packageManager,
+            startCommand: 'flask run --host=0.0.0.0',
+            port: 5000,
+          };
+        }
+        
+        // Check for Django
+        const djangoCheck = await sandbox.commands.run(`test -f ${repoPath}/manage.py && echo "found" || echo "not_found"`);
+        if (djangoCheck.stdout.includes('found')) {
+          return {
+            framework: 'django',
+            packageManager,
+            startCommand: 'python manage.py runserver 0.0.0.0:8000',
+            port: 8000,
+          };
+        }
+        
+        // Generic Python project - try to find main entry point
+        const mainPyCheck = await sandbox.commands.run(`test -f ${repoPath}/main.py && echo "main.py" || test -f ${repoPath}/app.py && echo "app.py" || echo "not_found"`);
+        if (!mainPyCheck.stdout.includes('not_found')) {
+          const entryPoint = mainPyCheck.stdout.trim();
+          return {
+            framework: 'python',
+            packageManager,
+            startCommand: `python ${entryPoint}`,
+            port: 8000, // Default port for Python web apps
           };
         }
       }

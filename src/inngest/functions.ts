@@ -2117,6 +2117,53 @@ export const cloneAndPreviewRepository = inngest.createFunction(
             message: `Detected: ${framework.framework}`,
           });
           
+          // Read repository files
+          await streamingService.emit(projectId, {
+            type: 'step:start',
+            step: 'Reading Files',
+            message: 'Reading repository files...',
+          });
+          
+          const repoFiles: Record<string, string> = {};
+          
+          // Get list of common source files
+          const findFilesCommand = `find ${repoPath} -type f \\( -name '*.py' -o -name '*.js' -o -name '*.ts' -o -name '*.tsx' -o -name '*.jsx' -o -name '*.json' -o -name '*.md' -o -name '*.txt' -o -name '*.yml' -o -name '*.yaml' \\) ! -path '*/node_modules/*' ! -path '*/.git/*' ! -path '*/dist/*' ! -path '*/build/*' ! -path '*/__pycache__/*' | head -50`;
+          
+          const filesListResult = await sandbox.commands.run(findFilesCommand);
+          
+          if (filesListResult.exitCode === 0 && filesListResult.stdout) {
+            const filesList = filesListResult.stdout.trim().split('\n').filter(f => f.trim());
+            console.log(`Found ${filesList.length} files to read`);
+            
+            // Read each file (limit to first 50 files to avoid overwhelming)
+            for (const filePath of filesList.slice(0, 50)) {
+              try {
+                const fileContent = await sandbox.files.read(filePath);
+                // Get relative path from repo root
+                const relativePath = filePath.replace(`${repoPath}/`, '');
+                repoFiles[relativePath] = fileContent;
+                
+                // Emit file event for streaming
+                await streamingService.emit(projectId, {
+                  type: 'file:complete',
+                  filename: relativePath,
+                  content: fileContent,
+                  path: relativePath,
+                });
+              } catch (fileError) {
+                console.error(`Failed to read file ${filePath}:`, fileError);
+              }
+            }
+          }
+          
+          console.log(`Successfully read ${Object.keys(repoFiles).length} repository files`);
+          
+          await streamingService.emit(projectId, {
+            type: 'step:complete',
+            step: 'Reading Files',
+            message: `Read ${Object.keys(repoFiles).length} files from repository`,
+          });
+          
           // Install dependencies
           await streamingService.emit(projectId, {
             type: 'step:start',
@@ -2147,7 +2194,9 @@ export const cloneAndPreviewRepository = inngest.createFunction(
           
           // Start preview server
           let previewServer = null;
-          if (framework.framework !== 'unknown' && framework.startCommand) {
+          
+          // Try to start preview even if framework is unknown
+          if (framework.startCommand || framework.framework !== 'unknown') {
             await streamingService.emit(projectId, {
               type: 'step:start',
               step: 'Starting Preview',
@@ -2172,9 +2221,16 @@ export const cloneAndPreviewRepository = inngest.createFunction(
               await streamingService.emit(projectId, {
                 type: 'step:complete',
                 step: 'Starting Preview',
-                message: 'Preview server could not be started',
+                message: 'Preview server could not be started - framework may require manual setup',
               });
             }
+          } else {
+            // Framework unknown and no start command - skip server start
+            await streamingService.emit(projectId, {
+              type: 'step:complete',
+              step: 'Starting Preview',
+              message: 'Unable to auto-start server - framework not detected',
+            });
           }
           
           return {
@@ -2184,6 +2240,7 @@ export const cloneAndPreviewRepository = inngest.createFunction(
             previewUrl: previewServer?.url,
             previewPort: previewServer?.port,
             sandboxId: sandbox.sandboxId,
+            repoFiles,
           };
         } catch (error) {
           console.error('Clone and preview error:', error);
@@ -2201,7 +2258,45 @@ export const cloneAndPreviewRepository = inngest.createFunction(
         }
       });
       
-      // Step 3: Update project with preview URL and status
+      // Step 3: Save repository files to database
+      await step.run("save-repository-files", async () => {
+        try {
+          const { MessageService } = await import('../modules/messages/service');
+          
+          // Create a message with the repository files
+          const filesCount = Object.keys(previewResult.repoFiles || {}).length;
+          const messageContent = `Repository cloned successfully! Preview available at ${previewResult.previewUrl || 'N/A'}`;
+          
+          await MessageService.saveResult({
+            content: messageContent,
+            role: 'assistant',
+            type: 'result',
+            project_id: projectId,
+            fragment: {
+              title: `${repoFullName} - Cloned Repository`,
+              sandbox_url: previewResult.previewUrl || '',
+              files: previewResult.repoFiles || {},
+              fragment_type: 'repo_clone',
+              order_index: 0,
+              metadata: {
+                repoUrl,
+                repoFullName,
+                framework: previewResult.framework,
+                packageManager: previewResult.packageManager,
+                filesCount,
+                sandboxId: previewResult.sandboxId,
+              }
+            }
+          });
+          
+          console.log(`Saved ${filesCount} repository files to database`);
+        } catch (error) {
+          console.error('Failed to save repository files:', error);
+          // Don't fail the entire workflow if saving fails
+        }
+      });
+      
+      // Step 4: Update project with preview URL and status
       await step.run("update-project", async () => {
         const { error } = await supabase
           .from('projects')
@@ -2218,12 +2313,14 @@ export const cloneAndPreviewRepository = inngest.createFunction(
         }
       });
       
-      // Step 4: Emit completion
+      // Step 5: Emit completion
       await step.run("emit-complete", async () => {
+        const filesCount = Object.keys(previewResult.repoFiles || {}).length;
+        
         await streamingService.emit(projectId, {
           type: 'complete',
           summary: `Repository ${repoFullName} is ready for development!`,
-          totalFiles: 0, // No files generated, just cloned
+          totalFiles: filesCount,
           previewUrl: previewResult.previewUrl,
         });
         

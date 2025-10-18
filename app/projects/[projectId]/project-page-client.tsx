@@ -121,67 +121,33 @@ function generateFileTreeFromProject(project: Project, messages: Message[] = [],
     (message) => message.fragments && message.fragments.length > 0
   ) || streamingFiles.length > 0;
 
-  // Only show placeholder files if we don't have any real generated files
-  const baseStructure: TreeNode[] = hasGeneratedFiles ? [] : [
+  // Don't show placeholder if project is still generating/cloning
+  const isStillProcessing = project.status === 'generating' || project.status === 'pending';
+  
+  // Only show placeholder files if:
+  // 1. We don't have any real generated files AND
+  // 2. Project is completed (not still generating)
+  const shouldShowPlaceholder = !hasGeneratedFiles && !isStillProcessing;
+  
+  const baseStructure: TreeNode[] = shouldShowPlaceholder ? [
     {
-      id: "src",
-      name: "src",
-      type: "folder",
-      children: [
-        {
-          id: "main.py",
-          name: "main.py",
-          type: "file",
-          language: "python",
-          content: `# ${project.name} - FastAPI Application
-# Generated API based on: ${project.description || 'No description provided'}
-
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import uvicorn
-
-app = FastAPI(
-    title="${project.name}",
-    description="${project.description || 'Generated API'}",
-    version="1.0.0"
-)
-
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.get("/")
-async def root():
-    return {"message": "Welcome to ${project.name} API"}
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy", "service": "${project.name}"}
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-`
-        }
-      ]
-    },
-    {
-      id: "requirements.txt",
-      name: "requirements.txt",
+      id: "placeholder-info",
+      name: "README.md",
       type: "file",
-      language: "text",
-      content: `fastapi==0.104.1
-uvicorn[standard]==0.24.0
-pydantic==2.5.0
-python-multipart==0.0.6
+      language: "markdown",
+      content: `# ${project.name}
+
+${project.description || 'No description provided'}
+
+## Status
+Waiting for files to be generated or cloned...
+
+## Next Steps
+- If this is a new project, enter a prompt to generate code
+- If this is a GitHub repository, files should appear after cloning completes
 `
     }
-  ];
+  ] : [];
 
   // Add generated files from messages
   messages.forEach((message) => {
