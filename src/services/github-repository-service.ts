@@ -504,6 +504,30 @@ export class GitHubRepositoryService {
 
     return data || [];
   }
+
+  /**
+   * Get branches for a repository
+   */
+  async getBranches(accessToken: string, owner: string, repo: string): Promise<any[]> {
+    const octokit = new Octokit({ auth: accessToken });
+
+    try {
+      const response = await octokit.repos.listBranches({
+        owner,
+        repo,
+        per_page: 100, // Get up to 100 branches
+      });
+
+      return response.data.map(branch => ({
+        name: branch.name,
+        sha: branch.commit.sha,
+        protected: branch.protected,
+      }));
+    } catch (error: any) {
+      console.error('Failed to fetch GitHub branches:', error);
+      throw new Error(`Failed to fetch branches: ${error.message}`);
+    }
+  }
 }
 
 export const githubRepositoryService = new GitHubRepositoryService();

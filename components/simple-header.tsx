@@ -6,13 +6,32 @@ import { Button } from "@/components/ui/button"
 import { Share, Github, Settings, Eye, Code2 } from "lucide-react"
 import { motion } from "framer-motion"
 import { GitHubRepositoryDialog } from "@/components/github-repository-dialog"
+import { GitHubBranchSelector } from "@/components/github-branch-selector"
+
+interface Project {
+  id: string
+  name: string
+  description?: string
+  framework?: 'fastapi' | 'express' | 'nextjs' | 'react' | 'vue' | 'angular' | 'unknown' | 'flask' | 'django' | 'python'
+  github_mode?: boolean
+  github_repo_id?: string | null
+  repo_url?: string | null
+  status: string
+}
 
 interface SimpleHeaderProps {
   viewMode?: 'preview' | 'code'
   onViewModeChange?: (mode: 'preview' | 'code') => void
+  project?: Project
 }
 
-export function SimpleHeader({ viewMode = 'preview', onViewModeChange }: SimpleHeaderProps) {
+export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project }: SimpleHeaderProps) {
+
+  // Only show GitHub dialog for manual projects (not GitHub cloned projects)
+  const shouldShowGitHubDialog = !project?.github_mode && !project?.github_repo_id && !project?.repo_url
+  
+  // Show GitHub branch selector for GitHub cloned projects
+  const shouldShowGitHubBranchSelector = project?.github_mode || project?.github_repo_id || project?.repo_url
 
 
 
@@ -77,17 +96,33 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange }: SimpleH
             <Settings className="h-3.5 w-3.5" />
           </Button>
           
-          {/* GitHub button - Icon only */}
-          <GitHubRepositoryDialog>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="text-white hover:text-white !bg-[#1A1A1A] hover:!bg-[#2A2A2A] transition-colors h-7 sm:h-8 px-1.5 border border-gray-300 dark:border-gray-600 rounded-md"
-              style={{ backgroundColor: '#1A1A1A' }}
-            >
-              <Github className="h-3.5 w-3.5" />
-            </Button>
-          </GitHubRepositoryDialog>
+          {/* GitHub button - Icon only - Conditionally rendered */}
+          {shouldShowGitHubDialog && (
+            <GitHubRepositoryDialog>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-white hover:text-white !bg-[#1A1A1A] hover:!bg-[#2A2A2A] transition-colors h-7 sm:h-8 px-1.5 border border-gray-300 dark:border-gray-600 rounded-md"
+                style={{ backgroundColor: '#1A1A1A' }}
+              >
+                <Github className="h-3.5 w-3.5" />
+              </Button>
+            </GitHubRepositoryDialog>
+          )}
+          
+          {/* GitHub Branch Selector - For GitHub cloned projects */}
+          {shouldShowGitHubBranchSelector && project && (
+            <GitHubBranchSelector project={project}>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-white hover:text-white !bg-[#1A1A1A] hover:!bg-[#2A2A2A] transition-colors h-7 sm:h-8 px-1.5 border border-gray-300 dark:border-gray-600 rounded-md"
+                style={{ backgroundColor: '#1A1A1A' }}
+              >
+                <Github className="h-3.5 w-3.5" />
+              </Button>
+            </GitHubBranchSelector>
+          )}
           
           {/* Share button */}
           <Button 

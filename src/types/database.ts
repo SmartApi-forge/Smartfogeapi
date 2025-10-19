@@ -39,7 +39,7 @@ export interface Database {
           name: string
           description: string | null
           prompt: string
-          framework: 'fastapi' | 'express'
+          framework: 'fastapi' | 'express' | 'nextjs' | 'react' | 'vue' | 'angular' | 'unknown' | 'flask' | 'django' | 'python'
           advanced: boolean
           status: 'generating' | 'completed' | 'failed' | 'deployed'
           openapi_spec: Json | null
@@ -48,6 +48,9 @@ export interface Database {
           swagger_url: string | null
           created_at: string
           updated_at: string
+          github_mode: boolean | null
+          github_repo_id: string | null
+          repo_url: string | null
         }
         Insert: {
           id?: string
@@ -55,7 +58,7 @@ export interface Database {
           name: string
           description?: string | null
           prompt: string
-          framework: 'fastapi' | 'express'
+          framework: 'fastapi' | 'express' | 'nextjs' | 'react' | 'vue' | 'angular' | 'unknown' | 'flask' | 'django' | 'python'
           advanced?: boolean
           status?: 'generating' | 'completed' | 'failed' | 'deployed'
           openapi_spec?: Json | null
@@ -64,6 +67,9 @@ export interface Database {
           swagger_url?: string | null
           created_at?: string
           updated_at?: string
+          github_mode?: boolean | null
+          github_repo_id?: string | null
+          repo_url?: string | null
         }
         Update: {
           id?: string
@@ -71,7 +77,7 @@ export interface Database {
           name?: string
           description?: string | null
           prompt?: string
-          framework?: 'fastapi' | 'express'
+          framework?: 'fastapi' | 'express' | 'nextjs' | 'react' | 'vue' | 'angular' | 'unknown' | 'flask' | 'django' | 'python'
           advanced?: boolean
           status?: 'generating' | 'completed' | 'failed' | 'deployed'
           openapi_spec?: Json | null
@@ -80,6 +86,9 @@ export interface Database {
           swagger_url?: string | null
           created_at?: string
           updated_at?: string
+          github_mode?: boolean | null
+          github_repo_id?: string | null
+          repo_url?: string | null
         }
       }
       jobs: {

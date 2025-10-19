@@ -15,7 +15,7 @@ const projectSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
-  framework: z.enum(['fastapi', 'express']),
+  framework: z.enum(['fastapi', 'express', 'nextjs', 'react', 'vue', 'angular', 'unknown', 'flask', 'django', 'python']),
   status: z.enum(['generating', 'testing', 'deploying', 'deployed', 'failed']),
   created_at: z.date(),
   updated_at: z.date(),

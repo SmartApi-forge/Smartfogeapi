@@ -65,7 +65,7 @@ interface Project {
   id: string;
   name: string;
   description?: string;
-  framework: 'fastapi' | 'express';
+  framework: 'fastapi' | 'express' | 'nextjs' | 'react' | 'vue' | 'angular' | 'unknown' | 'flask' | 'django' | 'python';
   status: 'pending' | 'generating' | 'testing' | 'deploying' | 'deployed' | 'failed';
   created_at: string;
   updated_at: string;
@@ -1126,6 +1126,7 @@ export function ProjectPageClient({
       <SimpleHeader 
         viewMode={viewMode}
         onViewModeChange={setViewMode}
+        project={currentProject}
       />
 
       {/* Mobile view toggle buttons */}

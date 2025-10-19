@@ -382,10 +382,45 @@ export const githubRouter = createTRPCRouter({
       try {
         const history = await githubSyncService.getSyncHistory(
           input.repositoryId,
+          ctx.user.id,
           input.limit
         );
 
         return history;
+      } catch (error: any) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message,
+        });
+      }
+    }),
+
+  /**
+   * Get branches for a repository
+   */
+  getBranches: protectedProcedure
+    .input(z.object({
+      owner: z.string(),
+      repo: z.string(),
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const integration = await githubOAuth.getUserIntegration(ctx.user.id);
+        
+        if (!integration) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'GitHub not connected',
+          });
+        }
+
+        const branches = await githubRepositoryService.getBranches(
+          integration.access_token,
+          input.owner,
+          input.repo
+        );
+
+        return branches;
       } catch (error: any) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
