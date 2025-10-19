@@ -91,7 +91,7 @@ export function GitHubRepoSelector({ onRepositorySelected, children }: GitHubRep
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 pt-4 pb-12">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
@@ -127,12 +127,12 @@ export function GitHubRepoSelector({ onRepositorySelected, children }: GitHubRep
                   <SelectTrigger className="bg-[#2A2A2E] border-[#444444] text-white">
                     <SelectValue placeholder="Choose a repository..." />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#2A2A2E] border-[#444444]">
+                  <SelectContent className="bg-[#2A2A2E] border-[#444444] max-h-[96px] overflow-y-auto">
                     {repositories?.map((repo) => (
                       <SelectItem 
                         key={repo.id} 
                         value={repo.id.toString()}
-                        className="text-white hover:bg-[#3A3A40]"
+                        className="text-white hover:bg-[#3A3A40] data-[state=checked]:bg-[#3A3A40] data-[highlighted]:bg-[#3A3A40]"
                       >
                         <div className="flex items-center gap-2">
                           <span>{repo.full_name}</span>

@@ -1036,6 +1036,17 @@ export function ProjectPageClient({
     }
   }, [streamState.isStreaming, streamState.currentFile]);
 
+  // Auto-select default file when switching to code mode
+  useEffect(() => {
+    if (viewMode === 'code' && !selected && fileTree.length > 0) {
+      // Find the first file (not folder) to select as default
+      const firstFile = fileTree.find(node => node.type === 'file');
+      if (firstFile) {
+        setSelected(firstFile.id);
+      }
+    }
+  }, [viewMode, selected, fileTree]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [allMessages]);
@@ -1112,7 +1123,10 @@ export function ProjectPageClient({
 
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
-      <SimpleHeader />
+      <SimpleHeader 
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+      />
 
       {/* Mobile view toggle buttons */}
       <div className="sm:hidden flex border-b border-border dark:border-[#333433] bg-white dark:bg-[#0E100F]">
@@ -1318,48 +1332,16 @@ export function ProjectPageClient({
           )}
 
           <div className="h-full w-full rounded-lg border border-border bg-muted/30 dark:bg-[#1D1D1D] dark:border-[#1D1D1D] shadow-xl overflow-hidden flex backdrop-blur-sm">
-            {/* File explorer sidebar - responsive width - shrinks on smaller screens */}
+            {/* File explorer sidebar - responsive width - shrinks on smaller screens - hidden in preview mode */}
             <aside className={`
               w-56 sm:w-36 md:w-40 lg:w-44 xl:w-48 2xl:w-52 border-r border-border dark:border-[#333433] flex-shrink-0 transition-all duration-300
+              ${viewMode === 'preview' ? 'hidden' : ''}
               ${isMobileExplorerOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}
               sm:relative absolute sm:z-auto z-40 h-full bg-muted/30 dark:bg-[#1D1D1D]
             `}>
-              {/* Explorer header with animated selector - v0.app style */}
+              {/* Explorer header - simplified without view mode toggle */}
               <div className="h-12 sm:h-10 border-b border-border dark:border-[#333433] px-3 sm:px-3 flex items-center justify-between backdrop-blur-sm bg-muted/30 dark:bg-[#1D1D1D]">
-                <div className="relative flex items-center gap-0 bg-muted/50 dark:bg-[#0E100F] border border-border/50 dark:border-[#333433] rounded-lg p-0.5">
-                  {/* Animated background indicator */}
-                  <motion.div
-                    className="absolute inset-y-0.5 bg-background dark:bg-[#1D1D1D] rounded-md shadow-sm"
-                    initial={false}
-                    animate={{
-                      left: viewMode === 'preview' ? '2px' : 'calc(50%)',
-                      right: viewMode === 'preview' ? 'calc(50%)' : '2px',
-                    }}
-                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                  />
-                  <button
-                    onClick={() => setViewMode('preview')}
-                    className={`relative z-10 px-3 py-1.5 text-xs font-medium transition-colors rounded-md ${
-                      viewMode === 'preview'
-                        ? 'text-foreground'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                    title="Preview"
-                  >
-                    <Eye className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={() => setViewMode('code')}
-                    className={`relative z-10 px-3 py-1.5 text-xs font-medium transition-colors rounded-md ${
-                      viewMode === 'code'
-                        ? 'text-foreground'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                    title="Code view"
-                  >
-                    <Code2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                <span className="text-sm font-medium text-muted-foreground">Files</span>
                 <button
                   onClick={() => setIsMobileExplorerOpen(false)}
                   className="sm:hidden p-1.5 hover:bg-muted rounded text-foreground text-xl leading-none flex-shrink-0"
