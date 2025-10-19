@@ -28,6 +28,7 @@ const supabase = createClient(supabaseUrl, serviceRoleKey)
 export class ProjectService {
   /**
    * Get project by ID using findUnique pattern
+   * Includes automatic status correction for completed workflows
    */
   static async getOne(input: GetProjectInput, userId: string): Promise<Project> {
     try {
@@ -43,6 +44,36 @@ export class ProjectService {
           code: 'NOT_FOUND',
           message: 'Project not found'
         })
+      }
+
+      // FALLBACK FIX: If project status is 'generating' but workflow completed, fix it
+      if (project.status === 'generating' && project.github_mode) {
+        const { data: completeEvent } = await supabase
+          .from('generation_events')
+          .select('id, event_type, message')
+          .eq('project_id', input.id)
+          .eq('event_type', 'complete')
+          .maybeSingle()
+
+        if (completeEvent) {
+          console.log(`[ProjectService] Detected completed workflow for stuck project ${input.id}, fixing status...`)
+          
+          // Update project status to deployed
+          const { error: updateError } = await supabase
+            .from('projects')
+            .update({ 
+              status: 'deployed',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', input.id)
+
+          if (!updateError) {
+            project.status = 'deployed'
+            console.log(`[ProjectService] ✅ Fixed project ${input.id} status to deployed`)
+          } else {
+            console.error(`[ProjectService] ❌ Failed to fix project status:`, updateError)
+          }
+        }
       }
 
       return project

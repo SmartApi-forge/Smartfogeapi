@@ -105,20 +105,40 @@ class StreamingService {
    */
   private async saveEventToDatabase(projectId: string, event: StreamEventWithTimestamp): Promise<void> {
     try {
-      // Only save completed events (not the "generating..." states) for cleaner reload experience
-    const relevantEvents: Record<string, { icon: string; messageFormatter: (event: any) => string }> = {
-      'file:complete': {
-        icon: 'complete',
-        messageFormatter: (e) => `✓ Created ${e.filename}`
-      },
+      // Save progress events for persistence
+      const relevantEvents: Record<string, { icon: string; messageFormatter: (event: any) => string }> = {
+        'project:created': {
+          icon: 'in-progress',
+          messageFormatter: (e) => 'Project created'
+        },
+        'step:start': {
+          icon: 'in-progress',
+          messageFormatter: (e) => e.message || e.step
+        },
+        'step:complete': {
+          icon: 'complete',
+          messageFormatter: (e) => `✓ ${e.message || e.step}`
+        },
+        'file:complete': {
+          icon: 'complete',
+          messageFormatter: (e) => `✓ Created ${e.filename}`
+        },
+        'validation:start': {
+          icon: 'in-progress',
+          messageFormatter: (e) => e.stage || 'Validating...'
+        },
         'validation:complete': { 
           icon: 'complete', 
-          messageFormatter: (e) => `✓ ${e.summary || 'Code validated successfully'}` 
+          messageFormatter: (e) => `✓ ${e.summary || e.stage || 'Code validated successfully'}` 
         },
         'complete': { 
           icon: 'complete', 
           messageFormatter: (e) => `✓ ${e.summary}` 
         },
+        'error': {
+          icon: 'error',
+          messageFormatter: (e) => `✗ ${e.message}`
+        }
       };
 
       const eventConfig = relevantEvents[event.type];
@@ -128,18 +148,20 @@ class StreamingService {
 
       const message = eventConfig.messageFormatter(event);
       
-      // Check if this event already exists to avoid duplicates
-      const { data: existing } = await supabaseServer
-        .from('generation_events')
-        .select('id')
-        .eq('project_id', projectId)
-        .eq('event_type', event.type)
-        .eq('message', message)
-        .maybeSingle();
+      // For step:complete events, check if we already have this step saved to avoid duplicates
+      if (event.type === 'step:complete' || event.type === 'file:complete') {
+        const { data: existing } = await supabaseServer
+          .from('generation_events')
+          .select('id')
+          .eq('project_id', projectId)
+          .eq('event_type', event.type)
+          .eq('message', message)
+          .maybeSingle();
 
-      if (existing) {
-        console.log(`[StreamingService] Event already exists, skipping: ${event.type} for project ${projectId}`);
-        return;
+        if (existing) {
+          console.log(`[StreamingService] Event already exists, skipping: ${event.type} for project ${projectId}`);
+          return;
+        }
       }
       
       const { error } = await supabaseServer

@@ -12,6 +12,7 @@ interface Version {
   version_number: number;
   name: string;
   status: string;
+  sandbox_url?: string;
 }
 
 interface StreamingCodeViewerProps {

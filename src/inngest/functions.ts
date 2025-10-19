@@ -2083,7 +2083,9 @@ export const cloneAndPreviewRepository = inngest.createFunction(
           
           // Create sandbox using full-stack template
           const templateId = process.env.E2B_FULLSTACK_TEMPLATE_ID || 'ckskh5feot2y94v5z07d';
-          sandbox = await Sandbox.create(templateId);
+          sandbox = await Sandbox.create(templateId, {
+            timeoutMs: 3600000, // 1 hour timeout for better user experience
+          });
           
           // Store sandbox ID for later cleanup if needed
           sandboxId = sandbox.sandboxId;
@@ -2466,12 +2468,13 @@ export const cloneAndPreviewRepository = inngest.createFunction(
         }
       });
       
-      // Step 8: Update project with sandbox URL and status
+      // Step 8: Update project with sandbox URL, repo URL, and status
       await step.run("update-project", async () => {
         const updateData: any = {
           status: 'deployed', // Mark as deployed when preview is ready
           framework: frameworkInfo.framework || 'unknown',
           github_repo_id: githubRepoId,
+          repo_url: repoUrl, // Store repo URL for easier access
         };
         
         // Always add sandbox_url (we always generate it now)
@@ -2479,30 +2482,52 @@ export const cloneAndPreviewRepository = inngest.createFunction(
           updateData.sandbox_url = previewResult.sandboxUrl;
         }
         
-        const { error } = await supabase
+        console.log('🔄 Updating project with data:', JSON.stringify(updateData, null, 2));
+        console.log('   Project ID:', projectId);
+        console.log('   GitHub Repo ID:', githubRepoId);
+        console.log('   Repo URL:', repoUrl);
+        console.log('   Sandbox URL:', previewResult.sandboxUrl);
+        
+        const { data, error } = await supabase
           .from('projects')
           .update(updateData)
-          .eq('id', projectId);
+          .eq('id', projectId)
+          .select();
         
         if (error) {
-          console.error('Failed to update project:', error);
+          console.error('❌ Failed to update project:', error);
+          throw new Error(`Failed to update project: ${error.message}`);
         } else {
-          console.log(`Project updated - status: deployed, framework: ${frameworkInfo.framework}, sandbox URL: ${previewResult.sandboxUrl}`);
+          console.log('✅ Project updated successfully:', JSON.stringify(data, null, 2));
+          console.log(`   Status: deployed`);
+          console.log(`   Framework: ${frameworkInfo.framework}`);
+          console.log(`   Repo URL: ${repoUrl}`);
+          console.log(`   Sandbox URL: ${previewResult.sandboxUrl}`);
+          console.log(`   GitHub Repo ID: ${githubRepoId}`);
         }
+        
+        return data;
       });
       
-      // Step 9: Emit completion
+      // Step 9: Emit completion and ensure stream is closed
       await step.run("emit-complete", async () => {
         const filesCount = Object.keys(repoFiles || {}).length;
         
         await streamingService.emit(projectId, {
           type: 'complete',
-          summary: `Repository ${repoFullName} is ready for development!`,
+          summary: `✓ Repository cloned successfully! Preview is ready.`,
           totalFiles: filesCount,
           sandboxUrl: previewResult.sandboxUrl,
         });
         
+        // CRITICAL: Close the stream to stop loading animations on frontend
         streamingService.closeProject(projectId);
+        
+        console.log('✅ Workflow completed successfully!');
+        console.log(`   - Project ID: ${projectId}`);
+        console.log(`   - Status: deployed`);
+        console.log(`   - Sandbox URL: ${previewResult.sandboxUrl}`);
+        console.log(`   - Files processed: ${filesCount}`);
       });
       
       return {
@@ -2519,11 +2544,23 @@ export const cloneAndPreviewRepository = inngest.createFunction(
     } catch (error: any) {
       console.error('Clone and preview workflow error:', error);
       
-      // Update project status to failed
-      await supabase
+      // Update project status to failed and close streaming
+      const { error: failError } = await supabase
         .from('projects')
-        .update({ status: 'failed' })
+        .update({ 
+          status: 'failed',
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', projectId);
+      
+      if (failError) {
+        console.error('❌ Failed to update project status to failed:', failError);
+      } else {
+        console.log('✅ Project status updated to failed');
+      }
+      
+      // CRITICAL: Close the stream even on failure to stop loading animations
+      streamingService.closeProject(projectId);
       
       // Emit error
       await streamingService.emit(projectId, {

@@ -21,7 +21,9 @@ import {
   Check,
   ArrowUp,
   Paperclip,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Eye,
+  Code2
 } from "lucide-react";
 import { SimpleHeader } from "@/components/simple-header";
 import { Highlight, themes } from "prism-react-renderer";
@@ -32,6 +34,7 @@ import { StreamingCodeViewer } from "../../../components/streaming-code-viewer";
 import { GenerationProgressTracker } from "../../../components/generation-progress-tracker";
 import { TextShimmer } from "@/components/ui/text-shimmer";
 import { VersionCard } from "@/components/version-card";
+import { SandboxPreview } from "@/components/sandbox-preview";
 
 interface Message {
   id: string;
@@ -63,7 +66,7 @@ interface Project {
   name: string;
   description?: string;
   framework: 'fastapi' | 'express';
-  status: 'generating' | 'testing' | 'deploying' | 'deployed' | 'failed';
+  status: 'pending' | 'generating' | 'testing' | 'deploying' | 'deployed' | 'failed';
   created_at: string;
   updated_at: string;
   deploy_url?: string;
@@ -72,6 +75,7 @@ interface Project {
   code_url?: string;
   prompt?: string;
   advanced?: boolean;
+  sandbox_url?: string;
 }
 
 interface ProjectPageClientProps {
@@ -571,6 +575,7 @@ export function ProjectPageClient({
   const [isLoading, setIsLoading] = useState(false);
   const [isMobileExplorerOpen, setIsMobileExplorerOpen] = useState(false);
   const [mobileView, setMobileView] = useState<'chat' | 'code'>('chat');
+  const [viewMode, setViewMode] = useState<'code' | 'preview'>('preview'); // Default to preview
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -1319,9 +1324,42 @@ export function ProjectPageClient({
               ${isMobileExplorerOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}
               sm:relative absolute sm:z-auto z-40 h-full bg-muted/30 dark:bg-[#1D1D1D]
             `}>
-              {/* Explorer header - clear and unobstructed */}
-              <div className="h-12 sm:h-10 border-b border-border dark:border-[#333433] px-3 sm:px-3 flex items-center justify-between text-[11px] sm:text-xs uppercase tracking-wider text-muted-foreground font-semibold backdrop-blur-sm bg-muted/30 dark:bg-[#1D1D1D]">
-                <span className="truncate">Explorer</span>
+              {/* Explorer header with animated selector - v0.app style */}
+              <div className="h-12 sm:h-10 border-b border-border dark:border-[#333433] px-3 sm:px-3 flex items-center justify-between backdrop-blur-sm bg-muted/30 dark:bg-[#1D1D1D]">
+                <div className="relative flex items-center gap-0 bg-muted/50 dark:bg-[#0E100F] border border-border/50 dark:border-[#333433] rounded-lg p-0.5">
+                  {/* Animated background indicator */}
+                  <motion.div
+                    className="absolute inset-y-0.5 bg-background dark:bg-[#1D1D1D] rounded-md shadow-sm"
+                    initial={false}
+                    animate={{
+                      left: viewMode === 'preview' ? '2px' : 'calc(50%)',
+                      right: viewMode === 'preview' ? 'calc(50%)' : '2px',
+                    }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                  />
+                  <button
+                    onClick={() => setViewMode('preview')}
+                    className={`relative z-10 px-3 py-1.5 text-xs font-medium transition-colors rounded-md ${
+                      viewMode === 'preview'
+                        ? 'text-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    title="Preview"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setViewMode('code')}
+                    className={`relative z-10 px-3 py-1.5 text-xs font-medium transition-colors rounded-md ${
+                      viewMode === 'code'
+                        ? 'text-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    title="Code view"
+                  >
+                    <Code2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
                 <button
                   onClick={() => setIsMobileExplorerOpen(false)}
                   className="sm:hidden p-1.5 hover:bg-muted rounded text-foreground text-xl leading-none flex-shrink-0"
@@ -1357,7 +1395,17 @@ export function ProjectPageClient({
             {/* Code content area - responsive width */}
             <div className="flex-1 min-w-0 flex flex-col relative bg-muted/30 w-full">
               <div className="h-full w-full overflow-hidden">
-                {streamState.isStreaming && streamState.generatedFiles.length > 0 ? (
+                {viewMode === 'preview' ? (
+                  <SandboxPreview 
+                    sandboxUrl={
+                      ('sandbox_url' in currentProject ? currentProject.sandbox_url : undefined) ||
+                      currentProject.deploy_url || 
+                      ''
+                    }
+                    projectName={currentProject.name}
+                    projectId={projectId}
+                  />
+                ) : streamState.isStreaming && streamState.generatedFiles.length > 0 ? (
                   <StreamingCodeViewer
                     files={streamState.generatedFiles}
                     currentFile={streamState.currentFile}
