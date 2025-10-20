@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Loader2, RefreshCw, ExternalLink, AlertCircle, Monitor, RotateCw } from 'lucide-react';
+import { Loader2, RefreshCw, ExternalLink, AlertCircle, Monitor, RotateCw, Eye, Code2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useSandboxManager } from '@/hooks/use-sandbox-manager';
 
@@ -9,6 +9,9 @@ interface SandboxPreviewProps {
   sandboxUrl: string;
   projectName?: string;
   projectId?: string;
+  hideHeader?: boolean; // If true, don't render the internal header (parent will handle it)
+  path?: string; // Path to render in the sandbox
+  onRefresh?: () => void; // Callback to refresh
 }
 
 /**
@@ -16,11 +19,14 @@ interface SandboxPreviewProps {
  * Similar to v0.app's preview functionality
  * Includes automatic sandbox keepAlive and restart capabilities
  */
-export function SandboxPreview({ sandboxUrl, projectName, projectId }: SandboxPreviewProps) {
+export function SandboxPreview({ sandboxUrl, projectName, projectId, hideHeader = false, path: externalPath, onRefresh }: SandboxPreviewProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
   const [key, setKey] = useState(0); // For forcing iframe refresh
-  const [path, setPath] = useState('/');
+  const [internalPath, setInternalPath] = useState('/');
+
+  // Use external path if provided, otherwise use internal state
+  const path = externalPath !== undefined ? externalPath : internalPath;
 
   // Manage sandbox lifecycle
   const sandbox = useSandboxManager({
@@ -32,6 +38,7 @@ export function SandboxPreview({ sandboxUrl, projectName, projectId }: SandboxPr
     setIsLoading(true);
     setError(false);
     setKey(prev => prev + 1);
+    onRefresh?.();
   };
 
   const handleOpenInNewTab = () => {
@@ -45,7 +52,7 @@ export function SandboxPreview({ sandboxUrl, projectName, projectId }: SandboxPr
     if (!newPath.startsWith('/')) {
       newPath = '/' + newPath;
     }
-    setPath(newPath);
+    setInternalPath(newPath);
   };
 
   const handlePathSubmit = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -106,55 +113,57 @@ export function SandboxPreview({ sandboxUrl, projectName, projectId }: SandboxPr
 
   return (
     <div className="h-full flex flex-col bg-muted/30 dark:bg-[#1D1D1D]">
-      {/* Preview header with URL bar - v0.app style */}
-      <div className="bg-muted/30 dark:bg-[#1D1D1D] border-b border-border dark:border-[#333433] px-3 py-2.5 flex items-center gap-2">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          {/* URL Bar with controls - v0.app style */}
-          <div className="flex items-center gap-1.5 bg-background dark:bg-[#0E100F] border border-border dark:border-[#333433] rounded-lg px-2.5 py-1.5 flex-1 min-w-0">
-            <Monitor className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-            <input
-              type="text"
-              value={path}
-              onChange={handlePathChange}
-              onKeyDown={handlePathSubmit}
-              placeholder="/"
-              className="flex-1 bg-transparent text-xs text-foreground placeholder-muted-foreground outline-none border-none min-w-0"
-              style={{ 
-                border: 'none', 
-                boxShadow: 'none',
-                padding: 0
-              }}
-            />
-            <div className="flex items-center gap-0.5 border-l border-border dark:border-[#333433] pl-1.5 ml-1.5">
-              <button
-                onClick={handleRefresh}
-                className="p-1 rounded hover:bg-muted dark:hover:bg-gray-700 transition-colors"
-                title="Refresh preview"
-                disabled={isLoading}
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-              </button>
-              {!sandbox.isAlive && projectId && (
+      {/* Preview header with URL bar - only shown if hideHeader is false */}
+      {!hideHeader && (
+        <div className="bg-muted/30 dark:bg-[#1D1D1D] border-b border-border dark:border-[#333433] px-3 py-2.5 flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            {/* URL Bar with controls - v0.app style */}
+            <div className="flex items-center gap-1.5 bg-[#f2f2f2] dark:bg-[#0E100F] border border-border dark:border-[#333433] rounded-lg px-2.5 py-1.5 flex-1 min-w-0">
+              <Monitor className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+              <input
+                type="text"
+                value={path}
+                onChange={handlePathChange}
+                onKeyDown={handlePathSubmit}
+                placeholder="/"
+                className="flex-1 bg-transparent text-xs text-foreground placeholder-muted-foreground outline-none border-none min-w-0"
+                style={{ 
+                  border: 'none', 
+                  boxShadow: 'none',
+                  padding: 0
+                }}
+              />
+              <div className="flex items-center gap-0.5 border-l border-border dark:border-[#333433] pl-1.5 ml-1.5">
                 <button
-                  onClick={sandbox.manualRestart}
-                  className="p-1 rounded hover:bg-muted dark:hover:bg-gray-700 transition-colors text-yellow-500"
-                  title="Restart sandbox"
-                  disabled={sandbox.isRestarting}
+                  onClick={handleRefresh}
+                  className="p-1 rounded hover:bg-muted dark:hover:bg-gray-700 transition-colors"
+                  title="Refresh preview"
+                  disabled={isLoading}
                 >
-                  <RotateCw className={`h-3.5 w-3.5 ${sandbox.isRestarting ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
                 </button>
-              )}
-              <button
-                onClick={handleOpenInNewTab}
-                className="p-1 rounded hover:bg-muted dark:hover:bg-gray-700 transition-colors"
-                title="Open in new tab"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-              </button>
+                {!sandbox.isAlive && projectId && (
+                  <button
+                    onClick={sandbox.manualRestart}
+                    className="p-1 rounded hover:bg-muted dark:hover:bg-gray-700 transition-colors text-yellow-500"
+                    title="Restart sandbox"
+                    disabled={sandbox.isRestarting}
+                  >
+                    <RotateCw className={`h-3.5 w-3.5 ${sandbox.isRestarting ? 'animate-spin' : ''}`} />
+                  </button>
+                )}
+                <button
+                  onClick={handleOpenInNewTab}
+                  className="p-1 rounded hover:bg-muted dark:hover:bg-gray-700 transition-colors"
+                  title="Open in new tab"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Preview iframe container */}
       <div className="flex-1 relative bg-white dark:bg-gray-900">

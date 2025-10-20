@@ -78,6 +78,15 @@ export function useGenerationStream(projectId: string | undefined): UseGeneratio
               newState.status = 'initializing';
               break;
 
+            case 'version:created':
+              // Update version tracking when a new version is created
+              if ('versionId' in streamEvent && streamEvent.versionId) {
+                setCurrentVersionId(streamEvent.versionId);
+                setCurrentVersionNumber(streamEvent.versionNumber);
+                console.log('[useGenerationStream] Version created:', streamEvent.versionNumber, streamEvent.versionId);
+              }
+              break;
+
             case 'step:start':
               newState.currentStep = streamEvent.message;
               if (streamEvent.step.toLowerCase().includes('generat')) {

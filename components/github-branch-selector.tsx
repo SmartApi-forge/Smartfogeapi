@@ -42,7 +42,7 @@ export function GitHubBranchSelector({ children, project }: GitHubBranchSelector
   const [newBranchName, setNewBranchName] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [branchDropdownOpen, setBranchDropdownOpen] = useState(false)
-  const mainTriggerRef = useRef<HTMLElement>(null)
+  const mainTriggerRef = useRef<HTMLButtonElement>(null)
 
   // Extract repository info from URL
   const extractRepoInfo = (url: string) => {

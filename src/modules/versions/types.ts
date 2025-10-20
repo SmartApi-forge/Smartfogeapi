@@ -6,7 +6,8 @@ export type CommandType =
   | 'MODIFY_FILE' 
   | 'DELETE_FILE' 
   | 'REFACTOR_CODE' 
-  | 'GENERATE_API';
+  | 'GENERATE_API'
+  | 'CLONE_REPO';
 
 export type VersionStatus = 'generating' | 'complete' | 'failed';
 
@@ -34,7 +35,7 @@ export const createVersionSchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().optional(),
   files: z.record(z.string()),
-  command_type: z.enum(['CREATE_FILE', 'MODIFY_FILE', 'DELETE_FILE', 'REFACTOR_CODE', 'GENERATE_API']).optional(),
+  command_type: z.enum(['CREATE_FILE', 'MODIFY_FILE', 'DELETE_FILE', 'REFACTOR_CODE', 'GENERATE_API', 'CLONE_REPO']).optional(),
   prompt: z.string().min(1),
   parent_version_id: z.string().uuid().optional(),
   status: z.enum(['generating', 'complete', 'failed']).default('generating'),

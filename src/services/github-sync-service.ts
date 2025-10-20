@@ -237,22 +237,40 @@ export class GitHubSyncService {
     accessToken: string,
     name: string,
     isPrivate: boolean = true,
-    description?: string
-  ): Promise<{ success: boolean; repoUrl?: string; repoFullName?: string; error?: string }> {
+    description?: string,
+    org?: string // Optional organization name
+  ): Promise<{ success: boolean; repoUrl?: string; repoFullName?: string; repoId?: number; error?: string }> {
     const octokit = new Octokit({ auth: accessToken });
 
     try {
-      const { data: repo } = await octokit.repos.createForAuthenticatedUser({
-        name,
-        private: isPrivate,
-        description: description || `Created by SmartForge`,
-        auto_init: true, // Initialize with README
-      });
+      let repo;
+      
+      if (org) {
+        // Create repository in organization
+        const { data } = await octokit.repos.createInOrg({
+          org,
+          name,
+          private: isPrivate,
+          description: description || `Created by SmartForge`,
+          auto_init: true, // Initialize with README
+        });
+        repo = data;
+      } else {
+        // Create repository for authenticated user
+        const { data } = await octokit.repos.createForAuthenticatedUser({
+          name,
+          private: isPrivate,
+          description: description || `Created by SmartForge`,
+          auto_init: true, // Initialize with README
+        });
+        repo = data;
+      }
 
       return {
         success: true,
         repoUrl: repo.html_url,
         repoFullName: repo.full_name,
+        repoId: repo.id,
       };
     } catch (error: any) {
       console.error('GitHub create repository error:', error);

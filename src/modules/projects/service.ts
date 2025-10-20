@@ -128,4 +128,46 @@ export class ProjectService {
       })
     }
   }
+
+  /**
+   * Update project fields (for GitHub integration)
+   */
+  static async update(
+    projectId: string, 
+    userId: string,
+    updates: Record<string, any>
+  ): Promise<Project> {
+    try {
+      const { data: project, error } = await supabase
+        .from('projects')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', projectId)
+        .eq('user_id', userId)
+        .select('*')
+        .single()
+
+      if (error || !project) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Project not found or update failed'
+        })
+      }
+
+      return project
+    } catch (error) {
+      console.error('Error updating project:', error)
+      
+      if (error instanceof TRPCError) {
+        throw error
+      }
+      
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to update project'
+      })
+    }
+  }
 }

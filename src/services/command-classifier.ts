@@ -28,6 +28,10 @@ const KEYWORD_PATTERNS: Record<CommandType, RegExp[]> = {
   GENERATE_API: [
     /\b(create|generate|build|make)\s+(an\s+|a\s+)?(api|rest\s*api|graphql|endpoint|backend|server)\b/i,
     /\b(api|rest\s*api)\s+for\b/i,
+  ],
+  CLONE_REPO: [
+    /\b(clone|copy|import|pull)\s+(from\s+)?(github|repo|repository)\b/i,
+    /\bhttps?:\/\/github\.com\//i,
     /\bI\s+need\s+(an\s+|a\s+)?(api|backend)\b/i,
   ],
 };

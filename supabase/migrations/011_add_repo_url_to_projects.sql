@@ -20,3 +20,4 @@ WHERE p.github_repo_id = gr.id
 AND p.repo_url IS NULL
 AND gr.repo_url IS NOT NULL;
 
+

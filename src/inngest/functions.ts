@@ -2425,7 +2425,7 @@ export const cloneAndPreviewRepository = inngest.createFunction(
       });
       
       // Step 7: Save repository files to database
-      await step.run("save-repository-files", async () => {
+      const savedResult = await step.run("save-repository-files", async () => {
         try {
           const { MessageService } = await import('../modules/messages/service');
           
@@ -2436,7 +2436,7 @@ export const cloneAndPreviewRepository = inngest.createFunction(
             : `Sandbox created (${frameworkInfo.framework || 'framework detection failed'})`;
           const messageContent = `Repository cloned successfully! ${previewStatus}`;
           
-          await MessageService.saveResult({
+          const result = await MessageService.saveResult({
             content: messageContent,
             role: 'assistant',
             type: 'result',
@@ -2462,11 +2462,123 @@ export const cloneAndPreviewRepository = inngest.createFunction(
           });
           
           console.log(`Saved ${filesCount} repository files to database with sandbox URL: ${previewResult.sandboxUrl}`);
+          return result;
         } catch (error) {
           console.error('Failed to save repository files:', error);
           // Don't fail the entire workflow if saving fails
+          return null;
         }
       });
+      
+      // Step 7.5: Create initial version for the cloned repository
+      const versionResult = await step.run("create-initial-version", async () => {
+        console.log('🔵 Starting version creation for GitHub repo');
+        console.log('  - Project ID:', projectId);
+        console.log('  - Repo:', repoFullName);
+        console.log('  - Files count:', Object.keys(repoFiles || {}).length);
+        
+        try {
+          const { VersionManager } = await import('../services/version-manager');
+          console.log('✅ VersionManager imported successfully');
+          
+          // Generate version name from repo name
+          const repoName = repoFullName.split('/').pop() || 'Repository';
+          const versionName = repoName
+            .split('-')
+            .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(' ');
+          
+          console.log('📝 Creating version with name:', versionName);
+          
+          // Create Version 1
+          const version = await VersionManager.createVersion({
+            project_id: projectId,
+            version_number: 1,
+            name: versionName,
+            description: `Cloned from GitHub: ${repoFullName}`,
+            files: repoFiles || {},
+            command_type: 'CLONE_REPO',
+            prompt: `Clone and preview GitHub repository: ${repoFullName}`,
+            parent_version_id: undefined, // First version has no parent
+            status: 'complete',
+            metadata: {
+              repo_url: repoUrl,
+              repo_full_name: repoFullName,
+              framework: frameworkInfo.framework || 'unknown',
+              package_manager: frameworkInfo.packageManager || 'unknown',
+              sandbox_url: previewResult.sandboxUrl,
+              sandbox_id: cloneResult.sandboxId,
+              files_count: Object.keys(repoFiles || {}).length,
+              fragment_id: savedResult?.fragment?.id,
+            },
+          });
+          
+          console.log('✅ Created initial version for GitHub repo:', version.id, 'v' + version.version_number);
+          console.log('  - Version ID:', version.id);
+          console.log('  - Version Number:', version.version_number);
+          console.log('  - Files stored:', Object.keys(version.files || {}).length);
+          
+          // Emit to stream so frontend knows version was created
+          await streamingService.emit(projectId, {
+            type: 'version:created',
+            versionId: version.id,
+            versionNumber: version.version_number,
+            versionName: version.name,
+          });
+          
+          return { versionId: version.id, versionNumber: version.version_number };
+        } catch (error: any) {
+          console.error('❌ CRITICAL ERROR creating version for GitHub repo:');
+          console.error('  - Error message:', error?.message);
+          console.error('  - Error stack:', error?.stack);
+          console.error('  - Error details:', JSON.stringify(error, null, 2));
+          
+          // Emit error to stream
+          await streamingService.emit(projectId, {
+            type: 'error',
+            message: `Failed to create version: ${error?.message || 'Unknown error'}`,
+            stage: 'Version Creation',
+          });
+          
+          // Return null but log prominently
+          return { versionId: null, versionNumber: null, error: error?.message };
+        }
+      });
+
+      const versionId = versionResult?.versionId;
+
+      // Step 7.6: Link message and fragments to version
+      if (versionId && savedResult) {
+        await step.run("link-to-version", async () => {
+          try {
+            const resultMessageId = savedResult?.message?.id;
+            
+            // Update all user messages for this project with the version_id
+            await supabase
+              .from('messages')
+              .update({ version_id: versionId })
+              .eq('project_id', projectId)
+              .eq('role', 'user');
+            
+            // Update assistant message/fragment too if we have the ID
+            if (resultMessageId) {
+              await supabase
+                .from('messages')
+                .update({ version_id: versionId })
+                .eq('id', resultMessageId);
+              
+              await supabase
+                .from('fragments')
+                .update({ version_id: versionId })
+                .eq('message_id', resultMessageId);
+            }
+            
+            console.log('Linked messages and fragments to version:', versionId);
+          } catch (error) {
+            console.error('Error linking to version:', error);
+          }
+        });
+      }
       
       // Step 8: Update project with sandbox URL, repo URL, and status
       await step.run("update-project", async () => {

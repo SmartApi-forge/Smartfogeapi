@@ -273,6 +273,30 @@ export const githubRouter = createTRPCRouter({
               status: 'completed',
             }
           );
+
+          // Update project timestamps
+          const { createClient } = await import('@supabase/supabase-js');
+          const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!
+          );
+
+          await supabase
+            .from('projects')
+            .update({
+              last_push_at: new Date().toISOString(),
+              has_local_changes: false,
+            })
+            .eq('id', input.projectId);
+
+          // Update repository sync status
+          await supabase
+            .from('github_repositories')
+            .update({
+              last_sync_at: new Date().toISOString(),
+              sync_status: 'idle',
+            })
+            .eq('id', input.repositoryId);
         }
 
         return result;
@@ -325,6 +349,70 @@ export const githubRouter = createTRPCRouter({
           }
         );
 
+        // Record sync history for pull
+        if (result.success && result.files) {
+          const { createClient } = await import('@supabase/supabase-js');
+          const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!
+          );
+
+          // Save pulled files to database (fragments table)
+          if (repo.project_id) {
+            // First, get the latest version number for this project
+            const { data: latestVersion } = await supabase
+              .from('versions')
+              .select('version_number')
+              .eq('project_id', repo.project_id)
+              .order('version_number', { ascending: false })
+              .limit(1)
+              .single();
+
+            const nextVersionNumber = (latestVersion?.version_number || 0) + 1;
+
+            // Create a new version with the pulled files
+            await supabase
+              .from('versions')
+              .insert({
+                project_id: repo.project_id,
+                version_number: nextVersionNumber,
+                files: result.files,
+                status: 'complete',
+                commit_message: `Pulled from GitHub branch: ${input.branchName || repo.default_branch}`,
+              });
+
+            // Update project timestamps
+            await supabase
+              .from('projects')
+              .update({
+                last_pull_at: new Date().toISOString(),
+              })
+              .eq('id', repo.project_id);
+          }
+
+          // Record sync history
+          await githubSyncService.recordSyncHistory(
+            input.repositoryId,
+            repo.project_id || '',
+            ctx.user.id,
+            'pull',
+            {
+              branchName: input.branchName,
+              filesChanged: Object.keys(result.files).length,
+              status: 'completed',
+            }
+          );
+
+          // Update repository sync status
+          await supabase
+            .from('github_repositories')
+            .update({
+              last_sync_at: new Date().toISOString(),
+              sync_status: 'idle',
+            })
+            .eq('id', input.repositoryId);
+        }
+
         return result;
       } catch (error: any) {
         throw new TRPCError({
@@ -342,6 +430,7 @@ export const githubRouter = createTRPCRouter({
       name: z.string().min(1),
       isPrivate: z.boolean().default(true),
       description: z.string().optional(),
+      owner: z.string().optional(), // Organization or username
     }))
     .mutation(async ({ ctx, input }) => {
       try {
@@ -354,11 +443,15 @@ export const githubRouter = createTRPCRouter({
           });
         }
 
+        // Determine if owner is an organization or personal account
+        const isOrg = input.owner && input.owner !== integration.provider_username;
+
         const result = await githubSyncService.createRepository(
           integration.access_token,
           input.name,
           input.isPrivate,
-          input.description
+          input.description,
+          isOrg ? input.owner : undefined
         );
 
         return result;
@@ -382,7 +475,6 @@ export const githubRouter = createTRPCRouter({
       try {
         const history = await githubSyncService.getSyncHistory(
           input.repositoryId,
-          ctx.user.id,
           input.limit
         );
 
@@ -421,6 +513,278 @@ export const githubRouter = createTRPCRouter({
         );
 
         return branches;
+      } catch (error: any) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message,
+        });
+      }
+    }),
+
+  /**
+   * Create a new branch in a repository
+   */
+  createBranch: protectedProcedure
+    .input(z.object({
+      repoFullName: z.string(),
+      branchName: z.string(),
+      baseBranch: z.string().default('main'),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const integration = await githubOAuth.getUserIntegration(ctx.user.id);
+        
+        if (!integration) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'GitHub not connected',
+          });
+        }
+
+        const result = await githubSyncService.createBranch(
+          integration.access_token,
+          input.repoFullName,
+          input.branchName,
+          input.baseBranch
+        );
+
+        if (!result.success) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: result.error || 'Failed to create branch',
+          });
+        }
+
+        // Find the repository in database to record sync history
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+
+        const { data: repo } = await supabase
+          .from('github_repositories')
+          .select('id, project_id')
+          .eq('repo_full_name', input.repoFullName)
+          .eq('user_id', ctx.user.id)
+          .single();
+
+        if (repo) {
+          await githubSyncService.recordSyncHistory(
+            repo.id,
+            repo.project_id || '',
+            ctx.user.id,
+            'create_branch',
+            {
+              branchName: input.branchName,
+              status: 'completed',
+            }
+          );
+        }
+
+        return result;
+      } catch (error: any) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message,
+        });
+      }
+    }),
+
+  /**
+   * Store created repository in database and link to project
+   */
+  storeRepository: protectedProcedure
+    .input(z.object({
+      projectId: z.string().uuid(),
+      repoFullName: z.string(),
+      repoUrl: z.string(),
+      repoId: z.number(),
+      defaultBranch: z.string().default('main'),
+      isPrivate: z.boolean().default(true),
+      description: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const integration = await githubOAuth.getUserIntegration(ctx.user.id);
+        
+        if (!integration) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'GitHub not connected',
+          });
+        }
+
+        const [owner, repo] = input.repoFullName.split('/');
+
+        // Store in github_repositories table
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+
+        const { data: storedRepo, error: repoError } = await supabase
+          .from('github_repositories')
+          .insert({
+            user_id: ctx.user.id,
+            integration_id: integration.id,
+            project_id: input.projectId,
+            repo_id: input.repoId,
+            repo_full_name: input.repoFullName,
+            repo_name: repo,
+            repo_owner: owner,
+            repo_url: input.repoUrl,
+            default_branch: input.defaultBranch,
+            is_private: input.isPrivate,
+            description: input.description,
+            last_sync_at: new Date().toISOString(),
+            sync_status: 'idle',
+          })
+          .select()
+          .single();
+
+        if (repoError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `Failed to store repository: ${repoError.message}`,
+          });
+        }
+
+        // Update project with GitHub info
+        const { error: projectError } = await supabase
+          .from('projects')
+          .update({
+            github_repo_id: storedRepo.id,
+            github_mode: true,
+            repo_url: input.repoUrl,
+            active_branch: input.defaultBranch,
+          })
+          .eq('id', input.projectId);
+
+        if (projectError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `Failed to update project: ${projectError.message}`,
+          });
+        }
+
+        // Record repository creation in sync history
+        await githubSyncService.recordSyncHistory(
+          storedRepo.id,
+          input.projectId,
+          ctx.user.id,
+          'create_repo',
+          {
+            branchName: input.defaultBranch,
+            status: 'completed',
+          }
+        );
+
+        return {
+          success: true,
+          repository: storedRepo,
+        };
+      } catch (error: any) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message,
+        });
+      }
+    }),
+
+  /**
+   * Update project's active branch
+   */
+  updateActiveBranch: protectedProcedure
+    .input(z.object({
+      projectId: z.string().uuid(),
+      branchName: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+
+        const { error } = await supabase
+          .from('projects')
+          .update({
+            active_branch: input.branchName,
+          })
+          .eq('id', input.projectId)
+          .eq('user_id', ctx.user.id);
+
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `Failed to update active branch: ${error.message}`,
+          });
+        }
+
+        return { success: true };
+      } catch (error: any) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message,
+        });
+      }
+    }),
+
+  /**
+   * Get project's GitHub repository info
+   */
+  getProjectRepository: protectedProcedure
+    .input(z.object({
+      projectId: z.string().uuid(),
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+
+        // Get project with GitHub info
+        const { data: project, error: projectError } = await supabase
+          .from('projects')
+          .select('github_repo_id, repo_url, active_branch, github_mode')
+          .eq('id', input.projectId)
+          .eq('user_id', ctx.user.id)
+          .single();
+
+        if (projectError || !project) {
+          return null;
+        }
+
+        // If no GitHub repo linked, return null
+        if (!project.github_repo_id && !project.repo_url) {
+          return null;
+        }
+
+        // Get full repository details if we have repo_id
+        if (project.github_repo_id) {
+          const { data: repo } = await supabase
+            .from('github_repositories')
+            .select('*')
+            .eq('id', project.github_repo_id)
+            .single();
+
+          return {
+            ...repo,
+            active_branch: project.active_branch,
+          };
+        }
+
+        // Otherwise just return the basic info
+        return {
+          repo_url: project.repo_url,
+          active_branch: project.active_branch || 'main',
+          github_mode: project.github_mode,
+        };
       } catch (error: any) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',

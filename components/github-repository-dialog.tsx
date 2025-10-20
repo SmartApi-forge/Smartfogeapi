@@ -12,10 +12,12 @@ import { Github, X } from "lucide-react";
 
 interface GitHubRepositoryDialogProps {
   children: React.ReactNode;
+  projectId?: string;
 }
 
 export function GitHubRepositoryDialog({
   children,
+  projectId,
 }: GitHubRepositoryDialogProps) {
   const [repositoryName, setRepositoryName] = useState("");
   const [gitScope, setGitScope] = useState("");
@@ -28,10 +30,31 @@ export function GitHubRepositoryDialog({
     { enabled: isOpen }
   );
 
+  // Update project mutation (to mark it as GitHub project)
+  const updateProjectMutation = trpc.projects.update.useMutation();
+
   // Create repository mutation
   const createRepositoryMutation = trpc.github.createRepository.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       toast.success("Repository created successfully!");
+      
+      // If we have a projectId, update the project with GitHub info
+      if (projectId && data.repoFullName && data.repoUrl) {
+        try {
+          await updateProjectMutation.mutateAsync({
+            id: projectId,
+            github_mode: true,
+            github_repo_id: data.repoFullName, // Store repo full name (e.g., "username/repo-name")
+            repo_url: data.repoUrl,
+          });
+          
+          // Reload the page to show the branch selector
+          window.location.reload();
+        } catch (error) {
+          console.error("Failed to update project with GitHub info:", error);
+        }
+      }
+      
       setRepositoryName("");
       setGitScope("");
       setIsOpen(false);
@@ -130,7 +153,7 @@ export function GitHubRepositoryDialog({
       </PopoverTrigger>
       <PopoverContent className="w-80 bg-[#1F2023] border-[#444444] p-3" align="end">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-white text-sm font-medium">Create Repository</h3>
+          <h3 className="text-white text-sm font-medium">Create GitHub Repository</h3>
           <Button
             variant="ghost"
             size="sm"
@@ -140,9 +163,10 @@ export function GitHubRepositoryDialog({
             <X className="h-3 w-3" />
           </Button>
         </div>
+
         <div className="space-y-3">
           <p className="text-gray-400 text-xs leading-relaxed">
-            Seamlessly connect Smart API Forge to your Git repository and track every change
+            Create a new GitHub repository for your project and push your code
           </p>
           
           <div className="space-y-1.5">

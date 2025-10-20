@@ -7,6 +7,12 @@ export type StreamEvent =
       prompt: string;
     }
   | {
+      type: 'version:created';
+      versionId: string;
+      versionNumber: number;
+      versionName: string;
+    }
+  | {
       type: 'version:start';
       versionId: string;
       versionNumber: number;

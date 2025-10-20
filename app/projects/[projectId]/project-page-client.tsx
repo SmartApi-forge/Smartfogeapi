@@ -6,7 +6,10 @@ import {
   Folder, 
   FolderOpen, 
   FileCode, 
-  ChevronRight, 
+  ChevronRight,
+  ChevronLeft,
+  ChevronsRight,
+  ChevronsLeft, 
   MessageSquare, 
   User, 
   Bot,
@@ -23,7 +26,14 @@ import {
   Paperclip,
   SlidersHorizontal,
   Eye,
-  Code2
+  Code2,
+  Monitor,
+  RefreshCw,
+  ExternalLink,
+  RotateCw,
+  MoreVertical,
+  Maximize,
+  X
 } from "lucide-react";
 import { SimpleHeader } from "@/components/simple-header";
 import { Highlight, themes } from "prism-react-renderer";
@@ -35,6 +45,7 @@ import { GenerationProgressTracker } from "../../../components/generation-progre
 import { TextShimmer } from "@/components/ui/text-shimmer";
 import { VersionCard } from "@/components/version-card";
 import { SandboxPreview } from "@/components/sandbox-preview";
+import JSZip from "jszip";
 
 interface Message {
   id: string;
@@ -65,7 +76,7 @@ interface Project {
   id: string;
   name: string;
   description?: string;
-  framework: 'fastapi' | 'express' | 'nextjs' | 'react' | 'vue' | 'angular' | 'unknown' | 'flask' | 'django' | 'python';
+  framework: 'fastapi' | 'express' | 'python' | 'nextjs' | 'react' | 'vue' | 'angular' | 'flask' | 'django' | 'unknown';
   status: 'pending' | 'generating' | 'testing' | 'deploying' | 'deployed' | 'failed';
   created_at: string;
   updated_at: string;
@@ -243,6 +254,57 @@ function getLanguageFromFilename(filename: string): string {
   return languageMap[ext || ''] || 'text';
 }
 
+// Helper function to build proper folder tree from flat file paths
+function buildTreeFromPaths(files: Record<string, any>): TreeNode[] {
+  const root: TreeNode[] = [];
+  
+  Object.entries(files).forEach(([filepath, content]) => {
+    const pathParts = filepath.split('/');
+    let currentLevel = root;
+    
+    for (let i = 0; i < pathParts.length; i++) {
+      const part = pathParts[i];
+      const isFile = i === pathParts.length - 1;
+      
+      let existingNode = currentLevel.find(node => node.name === part);
+      
+      if (!existingNode) {
+        const newNode: TreeNode = {
+          id: pathParts.slice(0, i + 1).join('/'),
+          name: part,
+          type: isFile ? "file" : "folder",
+          children: isFile ? undefined : []
+        };
+        
+        if (isFile) {
+          newNode.content = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+          newNode.language = getLanguageFromFilename(filepath);
+        }
+        
+        currentLevel.push(newNode);
+        existingNode = newNode;
+      }
+      
+      if (!isFile && existingNode.children) {
+        currentLevel = existingNode.children;
+      }
+    }
+  });
+  
+  // Sort recursively: folders first, then files
+  const sortRecursive = (nodes: TreeNode[]) => {
+    sortTreeNodes(nodes);
+    nodes.forEach(node => {
+      if (node.children) {
+        sortRecursive(node.children);
+      }
+    });
+  };
+  
+  sortRecursive(root);
+  return root;
+}
+
 function getFileIcon(name: string) {
   if (name.includes('.')) {
     return <FileCode className="size-3.5 sm:size-4 text-blue-500 dark:text-blue-400" />;
@@ -271,7 +333,7 @@ function TreeItem({
   return (
     <div>
       <div
-        className={`flex items-center gap-1.5 sm:gap-2 px-1.5 sm:px-2 py-2 sm:py-1 text-xs sm:text-sm cursor-pointer hover:bg-muted/50 transition-colors rounded-md ${
+        className={`flex items-center gap-1.5 sm:gap-2 px-1.5 sm:px-2 py-2 sm:py-1 cursor-pointer hover:bg-muted/50 transition-colors rounded-md ${
           isSelected ? 'bg-primary/10 dark:bg-[#333433] text-primary dark:text-foreground' : 'text-foreground'
         }`}
         style={{ paddingLeft: `${depth * 8 + 6}px` }}
@@ -293,7 +355,7 @@ function TreeItem({
         ) : (
           <span className="flex-shrink-0">{getFileIcon(node.name)}</span>
         )}
-        <span className="truncate min-w-0">{node.name}</span>
+        <span className="truncate min-w-0 font-sans text-[14px] font-normal">{node.name}</span>
       </div>
       
       {node.type === "folder" && isExpanded && node.children && (
@@ -319,20 +381,12 @@ function CodeViewer({
   filename, 
   fileTree,
   codeTheme,
-  versions = [],
-  selectedVersionId,
-  onVersionChange,
 }: { 
   filename: string | null;
   fileTree: TreeNode[];
   codeTheme: any;
-  versions?: any[];
-  selectedVersionId?: string | null;
-  onVersionChange?: (versionId: string) => void;
 }) {
   const [copySuccess, setCopySuccess] = useState(false);
-  const [isVersionDropdownOpen, setIsVersionDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const selectedFile = useMemo(() => {
     const findFile = (nodes: TreeNode[], id: string): TreeNode | null => {
@@ -374,20 +428,6 @@ function CodeViewer({
     URL.revokeObjectURL(url);
   };
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsVersionDropdownOpen(false);
-      }
-    };
-
-    if (isVersionDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isVersionDropdownOpen]);
-
   if (!selectedFile || selectedFile.type === 'folder') {
     return (
         <div className="h-full flex items-center justify-center text-muted-foreground bg-muted/30 dark:bg-[#1D1D1D] p-4">
@@ -401,68 +441,21 @@ function CodeViewer({
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* Code viewer header - sticky and always visible with clear filename */}
-      <div className="sticky top-0 z-10 h-12 sm:h-10 border-b border-border dark:border-[#333433] px-2 sm:px-3 flex items-center justify-between gap-3 text-xs text-foreground bg-white/50 dark:bg-[#1D1D1D] backdrop-blur-sm flex-shrink-0 shadow-sm">
-        {/* Filename section - responsive spacing: large on mobile/tablet, compact on desktop */}
+      {/* Code viewer header - sticky and always visible with clear filename - NO bottom border for unified look */}
+      <div className="sticky top-0 z-10 h-12 sm:h-10 px-2 sm:px-3 flex items-center justify-between gap-3 text-xs text-foreground bg-muted/30 dark:bg-[#1D1D1D] backdrop-blur-sm flex-shrink-0">
+        {/* Filename section with FULL PATH - responsive spacing */}
         <div className="flex items-center gap-4 sm:gap-5 lg:gap-2.5 min-w-0 flex-1 overflow-hidden">
           <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6">
             {getFileIcon(selectedFile.name)}
           </div>
           <div className="flex items-center gap-2 min-w-0 flex-1 py-1">
-            <span className="font-semibold truncate text-[12px] sm:text-[13px] text-foreground">{selectedFile.name}</span>
-            <span className="text-muted-foreground flex-shrink-0 hidden md:inline text-[10px] sm:text-[11px] whitespace-nowrap opacity-70">
+            {/* Show full file path instead of just name - use GeistSans */}
+            <span className="font-sans font-medium truncate text-[12px] sm:text-[13px] text-foreground">{filename || selectedFile.name}</span>
+            <span className="font-sans text-muted-foreground flex-shrink-0 hidden md:inline text-[10px] sm:text-[11px] whitespace-nowrap opacity-70">
               • {selectedFile.language || 'text'}
             </span>
           </div>
         </div>
-        
-        {/* Version Dropdown */}
-        {versions.length > 0 && (
-          <div className="relative" ref={dropdownRef}>
-            <button
-              onClick={() => setIsVersionDropdownOpen(!isVersionDropdownOpen)}
-              className="flex items-center gap-1.5 px-2 py-1.5 sm:py-1 rounded text-xs hover:bg-muted dark:hover:bg-[#262726] transition-colors border border-border dark:border-gray-600"
-              title="Switch version"
-            >
-              <span className="font-medium text-[11px]">
-                v{versions.find((v: any) => v.id === selectedVersionId)?.version_number || versions[versions.length - 1]?.version_number || 1}
-              </span>
-              <ChevronRight className={`size-3 transition-transform ${isVersionDropdownOpen ? 'rotate-90' : ''}`} />
-            </button>
-            
-            {isVersionDropdownOpen && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="absolute right-0 mt-1 w-48 bg-background dark:bg-[#1D1D1D] border border-border dark:border-gray-600 rounded-md shadow-lg z-50 max-h-64 overflow-y-auto"
-              >
-                {versions
-                  .sort((a: any, b: any) => b.version_number - a.version_number)
-                  .map((version: any) => (
-                    <button
-                      key={version.id}
-                      onClick={() => {
-                        onVersionChange?.(version.id);
-                        setIsVersionDropdownOpen(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 text-xs hover:bg-muted dark:hover:bg-gray-700 transition-colors flex items-center justify-between ${
-                        selectedVersionId === version.id ? 'bg-primary/10 text-primary' : ''
-                      }`}
-                    >
-                      <div className="flex flex-col">
-                        <span className="font-medium">v{version.version_number}</span>
-                        <span className="text-muted-foreground truncate">{version.name}</span>
-                      </div>
-                      {selectedVersionId === version.id && (
-                        <Check className="size-3 text-primary" />
-                      )}
-                    </button>
-                  ))}
-              </motion.div>
-            )}
-          </div>
-        )}
         
         {/* Action buttons - ALWAYS visible on ALL screen sizes */}
         <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
@@ -515,14 +508,14 @@ function CodeViewer({
           >
             {({ className, style, tokens, getLineProps, getTokenProps }) => (
               <pre 
-                className={`${className} text-sm leading-5 p-2 sm:p-3 overflow-x-visible md:overflow-x-auto`} 
+                className={`${className} font-mono p-2 sm:p-3 overflow-x-visible md:overflow-x-auto`} 
                 style={{
                   ...style,
                   margin: 0,
                   background: 'transparent',
-                  fontFamily: 'Monaco, Menlo, "Ubuntu Mono", "Courier New", monospace',
-                  fontSize: 'clamp(11px, 2.5vw, 14px)',
-                  lineHeight: 'clamp(1.4, 1.6, 1.6)',
+                  fontSize: '13px',
+                  lineHeight: '20px',
+                  fontWeight: '400',
                   maxWidth: '100%',
                 }}
               >
@@ -534,8 +527,8 @@ function CodeViewer({
                     style={{ minHeight: '1.25rem' }}
                   >
                     <span 
-                      className="inline-block w-7 sm:w-10 text-right mr-1.5 sm:mr-3 text-muted-foreground/50 select-none flex-shrink-0 text-xs leading-5"
-                      style={{ fontSize: 'clamp(10px, 2vw, 12px)' }}
+                      className="inline-block w-7 sm:w-10 text-right mr-1.5 sm:mr-3 text-muted-foreground/50 select-none flex-shrink-0 font-mono"
+                      style={{ fontSize: '13px', lineHeight: '20px' }}
                     >
                       {i + 1}
                     </span>
@@ -575,9 +568,42 @@ export function ProjectPageClient({
   const [isLoading, setIsLoading] = useState(false);
   const [isMobileExplorerOpen, setIsMobileExplorerOpen] = useState(false);
   const [mobileView, setMobileView] = useState<'chat' | 'code'>('chat');
-  const [viewMode, setViewMode] = useState<'code' | 'preview'>('preview'); // Default to preview
+  const [isChatPanelCollapsed, setIsChatPanelCollapsed] = useState(false);
+  
+  // For cloned GitHub projects (repo_url or github_mode), default to preview
+  // For generated projects (text prompts), default to code view
+  const isClonedProject = ('repo_url' in project && project.repo_url) || ('github_mode' in project && project.github_mode);
+  const [viewMode, setViewMode] = useState<'code' | 'preview'>(() => {
+    // Use initializer function to ensure it only runs once
+    return isClonedProject ? 'preview' : 'code';
+  });
+  
+  const [previewPath, setPreviewPath] = useState('/');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isVersionDropdownOpen, setIsVersionDropdownOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const versionDropdownRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+      if (versionDropdownRef.current && !versionDropdownRef.current.contains(event.target as Node)) {
+        setIsVersionDropdownOpen(false);
+      }
+    };
+
+    if (isMenuOpen || isVersionDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isMenuOpen, isVersionDropdownOpen]);
 
   // Use streaming hook for real-time updates
   const streamState = useGenerationStream(projectId);
@@ -645,18 +671,25 @@ export function ProjectPageClient({
     }
   );
 
-  // Refetch versions when streaming completes to get the newly created version
+  // Refetch versions and messages when streaming completes to get the newly created version
   const wasStreaming = useRef(false);
   useEffect(() => {
     if (wasStreaming.current && !streamState.isStreaming && streamState.status === 'complete') {
-      console.log('Streaming completed, refetching versions...');
+      console.log('Streaming completed, refetching versions and messages...');
       // Refetch immediately, then again after 500ms and 1500ms to catch delayed DB writes
       refetchVersions();
-      setTimeout(() => refetchVersions(), 500);
-      setTimeout(() => refetchVersions(), 1500);
+      refetch(); // Refetch messages to get updated version_id links
+      setTimeout(() => {
+        refetchVersions();
+        refetch();
+      }, 500);
+      setTimeout(() => {
+        refetchVersions();
+        refetch();
+      }, 1500);
     }
     wasStreaming.current = streamState.isStreaming;
-  }, [streamState.isStreaming, streamState.status, refetchVersions]);
+  }, [streamState.isStreaming, streamState.status, refetchVersions, refetch]);
 
   // State for selected version - MUST be declared before useMemos that use it
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
@@ -975,32 +1008,44 @@ export function ProjectPageClient({
     return combined;
   }, [sortedMessages, streamingMessages, persistedEventMessages, versions, streamState.isStreaming, streamState.events.length]);
 
+  // Extract project files for GitHub push
+  const projectFiles = useMemo(() => {
+    // Priority 1: Use streaming files
+    if (streamState.isStreaming && streamState.generatedFiles.length > 0) {
+      const filesObj: Record<string, any> = {};
+      streamState.generatedFiles.forEach(file => {
+        filesObj[file.filename] = file.content;
+      });
+      return filesObj;
+    }
+    
+    // Priority 2: Load from selected version
+    if (selectedVersionId && versions.length > 0) {
+      const selectedVersion = versions.find(v => v.id === selectedVersionId);
+      if (selectedVersion?.files) {
+        return selectedVersion.files;
+      }
+    }
+    
+    return {};
+  }, [selectedVersionId, versions, streamState.generatedFiles, streamState.isStreaming]);
+
   // Build file tree from selected version or streaming files
   const fileTree = useMemo(() => {
     // Priority 1: Use streaming files only while currently generating
     if (streamState.isStreaming && streamState.generatedFiles.length > 0) {
-      const streamingNodes: TreeNode[] = streamState.generatedFiles.map(file => ({
-        id: file.filename,
-        name: file.filename,
-        type: 'file' as const,
-        content: file.content,
-        language: getLanguageFromFilename(file.filename),
-      }));
-      return streamingNodes;
+      const streamingFilesObj: Record<string, any> = {};
+      streamState.generatedFiles.forEach(file => {
+        streamingFilesObj[file.filename] = file.content;
+      });
+      return buildTreeFromPaths(streamingFilesObj);
     }
     
     // Priority 2: Load from selected version if available
     if (selectedVersionId && versions.length > 0) {
       const selectedVersion = versions.find(v => v.id === selectedVersionId);
       if (selectedVersion?.files) {
-        const versionNodes: TreeNode[] = Object.entries(selectedVersion.files).map(([filename, content]) => ({
-          id: filename,
-          name: filename,
-          type: 'file' as const,
-          content: typeof content === 'string' ? content : JSON.stringify(content, null, 2),
-          language: getLanguageFromFilename(filename),
-        }));
-        return versionNodes;
+        return buildTreeFromPaths(selectedVersion.files);
       }
     }
     
@@ -1121,12 +1166,99 @@ export function ProjectPageClient({
     }
   };
 
+  // Download all files as ZIP
+  const handleDownloadZip = async () => {
+    try {
+      console.log('Starting ZIP download...');
+      console.log('Current project:', currentProject);
+      console.log('Selected version ID:', selectedVersionId);
+      console.log('Versions:', versions);
+      console.log('Is streaming:', streamState.isStreaming);
+      console.log('Generated files:', streamState.generatedFiles);
+      
+      const zip = new JSZip();
+      const projectName = currentProject?.name || 'project';
+      
+      // Get files from selected version or streaming files
+      let filesToZip: Record<string, any> = {};
+      
+      if (streamState.isStreaming && streamState.generatedFiles.length > 0) {
+        console.log('Using streaming files');
+        // Use streaming files if currently generating
+        streamState.generatedFiles.forEach(file => {
+          filesToZip[file.filename] = file.content;
+        });
+      } else if (selectedVersionId) {
+        console.log('Using selected version files');
+        // Use selected version files
+        const selectedVersion = versions.find(v => v.id === selectedVersionId);
+        console.log('Selected version:', selectedVersion);
+        if (selectedVersion?.files) {
+          filesToZip = selectedVersion.files;
+        }
+      } else if (versions.length > 0) {
+        console.log('No selected version, trying first completed version');
+        // Try to get the first completed version
+        const completedVersion = versions.find(v => v.status === 'complete');
+        if (completedVersion?.files) {
+          filesToZip = completedVersion.files;
+        }
+      } else {
+        // FALLBACK: Try to get files from message fragments if no versions exist
+        console.log('No versions found, falling back to message fragments');
+        const latestMessageWithFragments = messages
+          .filter(m => m.fragments && m.fragments.length > 0)
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+        
+        if (latestMessageWithFragments?.fragments?.[0]?.files) {
+          console.log('Found files in message fragment:', latestMessageWithFragments.fragments[0].id);
+          filesToZip = latestMessageWithFragments.fragments[0].files;
+        }
+      }
+      
+      console.log('Files to zip:', Object.keys(filesToZip));
+      
+      if (Object.keys(filesToZip).length === 0) {
+        console.error('No files to download - filesToZip is empty');
+        alert('No files available to download. Please wait for code generation to complete.');
+        return;
+      }
+      
+      // Add all files to the ZIP
+      Object.entries(filesToZip).forEach(([filename, content]) => {
+        console.log(`Adding file to ZIP: ${filename}`);
+        const fileContent = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+        zip.file(filename, fileContent);
+      });
+      
+      console.log('Generating ZIP blob...');
+      // Generate ZIP and trigger download
+      const blob = await zip.generateAsync({ type: 'blob' });
+      console.log('ZIP blob generated, size:', blob.size);
+      
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${projectName}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      console.log(`✅ Successfully downloaded ${Object.keys(filesToZip).length} files as ${projectName}.zip`);
+    } catch (error) {
+      console.error('❌ Error downloading ZIP:', error);
+      alert('Error creating ZIP file. Please check the console for details.');
+    }
+  };
+
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
       <SimpleHeader 
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         project={currentProject}
+        projectFiles={projectFiles}
       />
 
       {/* Mobile view toggle buttons */}
@@ -1159,14 +1291,40 @@ export function ProjectPageClient({
         </button>
       </div>
 
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Messages section - narrower to give more space to code viewer */}
-        <section className={`w-full sm:w-64 md:w-72 lg:w-80 xl:w-96 flex flex-col h-full overflow-hidden bg-white dark:bg-[#0E100F] sm:min-w-[256px] sm:max-w-[400px] ${
-          mobileView === 'chat' ? 'flex' : 'hidden sm:flex'
-        }`}>
+      <div className="flex flex-1 min-h-0 overflow-hidden relative">
+        {/* Messages section - collapsible with smooth animation */}
+        <motion.section 
+          initial={false}
+          animate={{ 
+            width: isChatPanelCollapsed ? 0 : 'auto',
+            minWidth: isChatPanelCollapsed ? 0 : '256px',
+            maxWidth: isChatPanelCollapsed ? 0 : '400px',
+            opacity: isChatPanelCollapsed ? 0 : 1
+          }}
+          transition={{ 
+            duration: 0.3,
+            ease: [0.4, 0, 0.2, 1], // Custom easing curve for smoother motion
+            width: { duration: 0.3 },
+            minWidth: { duration: 0.3 },
+            maxWidth: { duration: 0.3 },
+            opacity: { duration: 0.2, delay: isChatPanelCollapsed ? 0 : 0.1 }
+          }}
+          className={`flex flex-col h-full bg-white dark:bg-[#0E100F] ${
+            isChatPanelCollapsed 
+              ? 'overflow-hidden' 
+              : 'w-full sm:w-64 md:w-72 lg:w-80 xl:w-96 overflow-hidden'
+          } ${mobileView === 'chat' ? 'flex' : 'hidden sm:flex'}`}
+        >
           
-          {/* Messages Area - compact for more code space */}
-          <div className="flex-1 overflow-y-auto px-2 sm:px-3 pt-3 sm:pt-4 pb-2 sm:pb-3 space-y-2 sm:space-y-3 min-h-0 scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-white dark:bg-[#0E100F] relative scroll-fade">
+          {/* Messages Area - compact spacing for cleaner look */}
+          <div className="flex-1 overflow-y-auto px-1 sm:px-2 pt-3 sm:pt-4 pb-2 sm:pb-2 space-y-1.5 min-h-0 scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-white dark:bg-[#0E100F] relative" style={{
+            maskImage: 'linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%)',
+            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%)'
+          }}>
+            {/* Fade gradient overlays */}
+            <div className="absolute top-0 left-0 right-0 h-12 pointer-events-none z-10 bg-gradient-to-b from-white dark:from-[#0E100F] to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 h-12 pointer-events-none z-10 bg-gradient-to-t from-white dark:from-[#0E100F] to-transparent" />
+            
             <AnimatePresence>
               {allMessages.map((message, index) => {
                 const isStreamingMsg = 'isStreaming' in message && message.isStreaming;
@@ -1195,42 +1353,34 @@ export function ProjectPageClient({
                         />
                       </div>
                     ) : message.role === "user" ? (
-                      // User message - compact design
-                      <div className="flex justify-end mb-1">
+                      // User message - compact spacing
+                      <div className="flex justify-end mb-1.5">
                         <div className="rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 bg-muted/40 dark:bg-[#262626] border border-border/30 dark:border-[#262626] max-w-[90%]">
-                          <div className="whitespace-pre-wrap break-words leading-relaxed text-[12px] sm:text-[13px] text-foreground font-medium">
+                          <div className="whitespace-pre-wrap break-words leading-[1.5] text-[14px] sm:text-[15px] text-foreground font-medium">
                             {message.content}
                           </div>
                         </div>
                       </div>
                     ) : (
-                      // AI message - no card, compact spacing
-                      <div className="flex gap-1.5 sm:gap-2 items-start mb-2 sm:mb-3 pr-2 sm:pr-4">
-                        <div className="flex items-start gap-2 flex-1">
-                          {/* Show icons for streaming and persistent messages */}
-                          {(isStreamingMsg || isPersistentMsg) && streamIcon === 'generating' && (
-                            <Loader2 className="size-3.5 animate-spin text-primary mt-0.5 flex-shrink-0" />
+                      // AI message - clean modern UI like ChatGPT/Claude with compact spacing
+                      <div className="flex gap-2 sm:gap-3 items-start mb-1.5 pr-2 sm:pr-4">
+                        {/* Only show spinner when actively generating, no checkmarks */}
+                        {isStreamingMsg && (streamIcon === 'generating' || streamIcon === 'processing') && (
+                          <Loader2 className="size-4 animate-spin text-primary mt-1 flex-shrink-0" />
+                        )}
+                        <div className="whitespace-pre-wrap break-words leading-[1.5] text-[14px] sm:text-[15px] flex-1">
+                          {isStreamingMsg && (streamIcon === 'generating' || streamIcon === 'processing') ? (
+                            <TextShimmer 
+                              duration={1.5} 
+                              className="text-[14px] sm:text-[15px] font-normal text-foreground"
+                            >
+                              {message.content}
+                            </TextShimmer>
+                          ) : (
+                            <span className="text-foreground dark:text-gray-200">
+                              {message.content}
+                            </span>
                           )}
-                          {(isStreamingMsg || isPersistentMsg) && streamIcon === 'complete' && (
-                            <CheckCircle className="size-3.5 text-emerald-500 mt-0.5 flex-shrink-0" />
-                          )}
-                          {(isStreamingMsg || isPersistentMsg) && streamIcon === 'processing' && (
-                            <Loader2 className="size-3.5 animate-spin text-amber-500 mt-0.5 flex-shrink-0" />
-                          )}
-                          <div className="whitespace-pre-wrap break-words leading-relaxed text-[13px] flex-1">
-                            {isStreamingMsg && (streamIcon === 'generating' || streamIcon === 'processing') ? (
-                              <TextShimmer 
-                                duration={1.5} 
-                                className="text-[13px] font-normal"
-                              >
-                                {message.content}
-                              </TextShimmer>
-                            ) : (
-                              <span className="text-muted-foreground dark:text-gray-400">
-                                {message.content}
-                              </span>
-                            )}
-                          </div>
                         </div>
                       </div>
                     )}
@@ -1253,7 +1403,7 @@ export function ProjectPageClient({
           </div>
 
           {/* Input Box - Compact design for more code space */}
-          <div className="px-2 sm:px-3 pb-2 sm:pb-3 bg-white dark:bg-[#0E100F] flex flex-col justify-end">
+          <div className="px-1 sm:px-2 pb-2 sm:pb-2 bg-white dark:bg-[#0E100F] flex flex-col justify-end">
             <div className="rounded-xl border border-border/50 dark:border-[#444444] bg-background/50 dark:bg-[#1F2023] p-2 sm:p-3 shadow-lg flex flex-col">
               <textarea
                 value={input}
@@ -1315,46 +1465,278 @@ export function ProjectPageClient({
               </div>
             </div>
           </div>
-        </section>
+        </motion.section>
+
 
         {/* Code viewer section - conditionally shown on mobile based on mobileView */}
-        <section className={`flex-1 p-2 sm:p-3 min-h-0 relative bg-white dark:bg-[#0E100F] sm:min-w-0 ${
+        <section className={`flex-1 p-1 sm:p-2 min-h-0 relative bg-white dark:bg-[#0E100F] sm:min-w-0 flex flex-col ${
           mobileView === 'code' ? 'flex' : 'hidden sm:flex'
         }`}>
           {/* Folder toggle button - only show when explorer is closed */}
           {!isMobileExplorerOpen && (
             <button
               onClick={() => setIsMobileExplorerOpen(true)}
-              className="sm:hidden absolute top-4 left-4 z-50 p-2 rounded-md bg-card border border-border text-foreground hover:bg-muted transition-colors shadow-lg"
+              className="sm:hidden absolute top-16 left-4 z-50 p-2 rounded-md bg-card border border-border text-foreground hover:bg-muted transition-colors shadow-lg"
               aria-label="Open file explorer"
             >
               <Folder className="size-4" />
             </button>
           )}
 
-          <div className="h-full w-full rounded-lg border border-border bg-muted/30 dark:bg-[#1D1D1D] dark:border-[#1D1D1D] shadow-xl overflow-hidden flex backdrop-blur-sm">
-            {/* File explorer sidebar - responsive width - shrinks on smaller screens - hidden in preview mode */}
+          {/* Unified header bar with view toggle - ALWAYS full width at top */}
+          <div className="bg-muted/30 dark:bg-[#1D1D1D] border border-border dark:border-[#333433] rounded-t-lg px-3 py-2.5 flex items-center gap-2 flex-shrink-0">
+                {/* View Mode Toggle - positioned like v0 */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {/* Collapse/Expand Chevron Button - double chevrons */}
+                  <motion.button
+                    onClick={() => setIsChatPanelCollapsed(!isChatPanelCollapsed)}
+                    className="hidden sm:flex p-1 text-muted-foreground hover:text-gray-400 dark:hover:text-gray-500 transition-colors"
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    title={isChatPanelCollapsed ? "Expand chat panel" : "Collapse chat panel"}
+                  >
+                    {isChatPanelCollapsed ? (
+                      <ChevronsRight className="h-4 w-4" />
+                    ) : (
+                      <ChevronsLeft className="h-4 w-4" />
+                    )}
+                  </motion.button>
+                  
+                  <div className="relative flex items-center gap-0 bg-background dark:bg-[#0E100F] border border-border/50 dark:border-[#333433] rounded-lg p-0.5">
+                    {/* Animated background indicator with smooth selection animation */}
+                    <motion.div
+                      className="absolute inset-y-0.5 bg-muted/50 dark:bg-[#1D1D1D] rounded-md shadow-sm"
+                      initial={false}
+                      animate={{
+                        left: viewMode === 'preview' ? '2px' : 'calc(50%)',
+                        right: viewMode === 'preview' ? 'calc(50%)' : '2px',
+                      }}
+                      transition={{ 
+                        type: 'spring', 
+                        stiffness: 400, 
+                        damping: 35,
+                        mass: 0.8
+                      }}
+                    />
+                    <motion.button
+                      onClick={() => setViewMode('preview')}
+                      className={`relative z-10 px-2.5 py-1.5 text-xs font-medium transition-all duration-200 rounded-md ${
+                        viewMode === 'preview'
+                          ? 'text-foreground'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                      title="Preview"
+                      whileTap={{ scale: 0.95 }}
+                      animate={{ 
+                        scale: viewMode === 'preview' ? 1 : 1,
+                      }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                    </motion.button>
+                    <motion.button
+                      onClick={() => setViewMode('code')}
+                      className={`relative z-10 px-2.5 py-1.5 text-xs font-medium transition-all duration-200 rounded-md ${
+                        viewMode === 'code'
+                          ? 'text-foreground'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                      title="Code view"
+                      whileTap={{ scale: 0.95 }}
+                      animate={{ 
+                        scale: viewMode === 'code' ? 1 : 1,
+                      }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <Code2 className="h-3.5 w-3.5" />
+                    </motion.button>
+                  </div>
+                </div>
+                
+            {/* Path bar and menu container - shown in both modes */}
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              {/* Path bar - shown only in preview mode */}
+              {viewMode === 'preview' && currentProject && (
+                <>
+                  {/* URL Bar with controls - v0.app style - adjusted height */}
+                  <div className="flex items-center gap-1.5 bg-background dark:bg-[#0E100F] border border-border dark:border-[#333433] rounded-lg px-2.5 py-[5px] flex-1 min-w-0">
+                    <Monitor className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                    <input
+                      type="text"
+                      value={previewPath}
+                      onChange={(e) => {
+                        let newPath = e.target.value;
+                        if (!newPath.startsWith('/')) {
+                          newPath = '/' + newPath;
+                        }
+                        setPreviewPath(newPath);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          // Trigger refresh by updating sandbox key
+                        }
+                      }}
+                      placeholder="/"
+                      className="flex-1 bg-transparent text-xs text-foreground placeholder-muted-foreground outline-none border-none min-w-0"
+                      style={{ 
+                        border: 'none', 
+                        boxShadow: 'none',
+                        padding: 0
+                      }}
+                    />
+                    <div className="flex items-center gap-0.5 border-l border-border dark:border-[#333433] pl-1.5 ml-1.5">
+                      <button
+                        onClick={() => {
+                          setRefreshKey(prev => prev + 1);
+                        }}
+                        className="p-1 rounded hover:bg-muted dark:hover:bg-gray-700 transition-colors"
+                        title="Refresh preview"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          const sandboxUrl = ('sandbox_url' in currentProject ? currentProject.sandbox_url : undefined) ||
+                            currentProject.deploy_url || '';
+                          const fullUrl = sandboxUrl + (previewPath !== '/' ? previewPath : '');
+                          window.open(fullUrl, '_blank', 'noopener,noreferrer');
+                        }}
+                        className="p-1 rounded hover:bg-muted dark:hover:bg-gray-700 transition-colors"
+                        title="Open in new tab"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Spacer in code mode to push menu to the right */}
+              {viewMode === 'code' && <div className="flex-1" />}
+
+              {/* Version Dropdown - shown in both modes */}
+              {versions.length > 0 && (
+                <div className="relative flex-shrink-0" ref={versionDropdownRef}>
+                  <button
+                    onClick={() => setIsVersionDropdownOpen(!isVersionDropdownOpen)}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-background dark:bg-[#0E100F] border border-border dark:border-[#333433] hover:bg-muted dark:hover:bg-gray-700 transition-colors"
+                    title="Switch version"
+                  >
+                    <span className="font-medium text-foreground">
+                      v{versions.find(v => v.id === selectedVersionId)?.version_number || versions[versions.length - 1]?.version_number || 1}
+                    </span>
+                    <ChevronRight className={`h-3 w-3 transition-transform ${isVersionDropdownOpen ? 'rotate-90' : ''}`} />
+                  </button>
+                  
+                  <AnimatePresence>
+                    {isVersionDropdownOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute right-0 mt-2 w-56 bg-card dark:bg-[#1D1D1D] border border-border dark:border-[#333433] rounded-lg shadow-lg overflow-hidden z-50 max-h-64 overflow-y-auto"
+                      >
+                        {versions.map((version) => (
+                          <button
+                            key={version.id}
+                            onClick={() => {
+                              setSelectedVersionId(version.id);
+                              setIsVersionDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-2.5 text-xs hover:bg-muted dark:hover:bg-gray-700 transition-colors flex items-center justify-between ${
+                              selectedVersionId === version.id ? 'bg-primary/10 text-primary' : ''
+                            }`}
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-medium">v{version.version_number} - {version.name}</span>
+                              <span className="text-muted-foreground text-[10px] truncate">
+                                {version.status === 'complete' ? '✓ Complete' : version.status === 'generating' ? '⏳ Generating...' : '❌ Failed'}
+                              </span>
+                            </div>
+                            {selectedVersionId === version.id && (
+                              <Check className="h-3 w-3 text-primary flex-shrink-0" />
+                            )}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
+
+              {/* Three-dot menu - shown in both modes, different options per mode */}
+              <div className="relative flex-shrink-0" ref={menuRef}>
+                <button
+                  onClick={() => setIsMenuOpen(!isMenuOpen)}
+                  className="p-1.5 rounded-lg bg-background dark:bg-[#0E100F] border border-border dark:border-[#333433] hover:bg-muted dark:hover:bg-gray-700 transition-colors"
+                  title="More options"
+                >
+                  <MoreVertical className="h-3.5 w-3.5" />
+                </button>
+
+                {/* Dropdown menu */}
+                <AnimatePresence>
+                  {isMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 mt-2 w-48 bg-card dark:bg-[#1D1D1D] border border-border dark:border-[#333433] rounded-lg shadow-lg overflow-hidden z-50"
+                    >
+                      {/* Show Fullscreen option only in preview mode */}
+                      {viewMode === 'preview' && (
+                        <button
+                          onClick={() => {
+                            setIsFullscreen(true);
+                            setIsMenuOpen(false);
+                          }}
+                          className="w-full px-4 py-2.5 text-left text-sm font-sans hover:bg-muted dark:hover:bg-gray-800 transition-colors flex items-center gap-2"
+                        >
+                          <Maximize className="h-4 w-4" />
+                          <span>Fullscreen</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={async () => {
+                          console.log('Download ZIP button clicked');
+                          await handleDownloadZip();
+                          setIsMenuOpen(false);
+                        }}
+                        className={`w-full px-4 py-2.5 text-left text-sm font-sans hover:bg-muted dark:hover:bg-gray-800 transition-colors flex items-center gap-2 ${
+                          viewMode === 'preview' ? 'border-t border-border dark:border-[#333433]' : ''
+                        }`}
+                      >
+                        <Download className="h-4 w-4" />
+                        <span>Download ZIP</span>
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          </div>
+
+          {/* Container for file explorer and code/preview area */}
+          <div className="flex-1 min-h-0 overflow-hidden flex border-x border-b border-border dark:border-[#333433] rounded-b-lg bg-muted/30 dark:bg-[#1D1D1D] shadow-xl backdrop-blur-sm" key={refreshKey}>
+            {/* File explorer sidebar - NO header, just files - hidden in preview mode */}
             <aside className={`
               w-56 sm:w-36 md:w-40 lg:w-44 xl:w-48 2xl:w-52 border-r border-border dark:border-[#333433] flex-shrink-0 transition-all duration-300
               ${viewMode === 'preview' ? 'hidden' : ''}
               ${isMobileExplorerOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}
               sm:relative absolute sm:z-auto z-40 h-full bg-muted/30 dark:bg-[#1D1D1D]
             `}>
-              {/* Explorer header - simplified without view mode toggle */}
-              <div className="h-12 sm:h-10 border-b border-border dark:border-[#333433] px-3 sm:px-3 flex items-center justify-between backdrop-blur-sm bg-muted/30 dark:bg-[#1D1D1D]">
-                <span className="text-sm font-medium text-muted-foreground">Files</span>
+              {/* File tree container - NO header, starts immediately */}
+              <div className="p-1.5 sm:p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent bg-muted/30 dark:bg-[#1D1D1D] h-full">
+                {/* Close button for mobile - positioned at top right */}
                 <button
                   onClick={() => setIsMobileExplorerOpen(false)}
-                  className="sm:hidden p-1.5 hover:bg-muted rounded text-foreground text-xl leading-none flex-shrink-0"
+                  className="sm:hidden absolute top-2 right-2 z-50 p-1.5 hover:bg-muted rounded text-foreground text-xl leading-none flex-shrink-0"
                   aria-label="Close file explorer"
                 >
                   ×
                 </button>
-              </div>
-              {/* File tree container - responsive height and padding */}
-              <div 
-                className="p-1.5 sm:p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent bg-muted/30 dark:bg-[#1D1D1D] h-[calc(100%-3rem)] sm:h-[calc(100%-2.5rem)] max-h-[calc(100vh-8rem)]"
-              >
                 {fileTree.map((node) => (
                   <TreeItem
                     key={node.id}
@@ -1375,40 +1757,59 @@ export function ProjectPageClient({
               />
             )}
 
-            {/* Code content area - responsive width */}
-            <div className="flex-1 min-w-0 flex flex-col relative bg-muted/30 w-full">
-              <div className="h-full w-full overflow-hidden">
+            {/* Code/Preview content area with smooth animations */}
+            <div className="flex-1 min-w-0 overflow-hidden bg-muted/30 dark:bg-[#1D1D1D] relative">
+              <AnimatePresence mode="wait">
                 {viewMode === 'preview' ? (
-                  <SandboxPreview 
-                    sandboxUrl={
-                      ('sandbox_url' in currentProject ? currentProject.sandbox_url : undefined) ||
-                      currentProject.deploy_url || 
-                      ''
-                    }
-                    projectName={currentProject.name}
-                    projectId={projectId}
-                  />
-                ) : streamState.isStreaming && streamState.generatedFiles.length > 0 ? (
-                  <StreamingCodeViewer
-                    files={streamState.generatedFiles}
-                    currentFile={streamState.currentFile}
-                    isStreaming={streamState.isStreaming}
-                    selectedFile={selected || undefined}
-                    versions={versions}
-                    selectedVersionId={selectedVersionId}
-                    onVersionChange={setSelectedVersionId}
-                  />
+                  <motion.div
+                    key="preview"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.25, ease: "easeInOut" }}
+                    className="absolute inset-0"
+                  >
+                    <SandboxPreview 
+                      sandboxUrl={
+                        ('sandbox_url' in currentProject ? currentProject.sandbox_url : undefined) ||
+                        currentProject.deploy_url || 
+                        ''
+                      }
+                      projectName={currentProject.name}
+                      projectId={projectId}
+                      hideHeader={true}
+                      path={previewPath}
+                    />
+                  </motion.div>
                 ) : (
-                  <CodeViewer 
-                    filename={selected} 
-                    fileTree={fileTree} 
-                    codeTheme={codeTheme}
-                    versions={versions}
-                    selectedVersionId={selectedVersionId}
-                    onVersionChange={setSelectedVersionId}
-                  />
+                  <motion.div
+                    key="code"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.25, ease: "easeInOut" }}
+                    className="absolute inset-0"
+                  >
+                    {streamState.isStreaming && streamState.generatedFiles.length > 0 ? (
+                      <StreamingCodeViewer
+                        files={streamState.generatedFiles}
+                        currentFile={streamState.currentFile}
+                        isStreaming={streamState.isStreaming}
+                        selectedFile={selected || undefined}
+                        versions={versions}
+                        selectedVersionId={selectedVersionId}
+                        onVersionChange={setSelectedVersionId}
+                      />
+                    ) : (
+                      <CodeViewer 
+                        filename={selected} 
+                        fileTree={fileTree} 
+                        codeTheme={codeTheme}
+                      />
+                    )}
+                  </motion.div>
                 )}
-              </div>
+              </AnimatePresence>
             </div>
           </div>
         </section>
@@ -1537,6 +1938,98 @@ export function ProjectPageClient({
           background: linear-gradient(to top, #0E100F 0%, transparent 100%);
         }
       `}</style>
+
+      {/* Fullscreen Modal */}
+      <AnimatePresence>
+        {isFullscreen && currentProject && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-background dark:bg-[#0E100F] z-[100] flex flex-col"
+          >
+            {/* Fullscreen header with path bar */}
+            <div className="bg-muted/30 dark:bg-[#1D1D1D] border-b border-border dark:border-[#333433] px-4 py-2.5 flex items-center gap-3">
+              {/* Close button */}
+              <button
+                onClick={() => setIsFullscreen(false)}
+                className="p-1.5 rounded-lg bg-background dark:bg-[#0E100F] border border-border dark:border-[#333433] hover:bg-muted dark:hover:bg-gray-700 transition-colors"
+                title="Exit fullscreen"
+              >
+                <X className="h-4 w-4" />
+              </button>
+
+              {/* Path bar */}
+              <div className="flex items-center gap-1.5 bg-background dark:bg-[#0E100F] border border-border dark:border-[#333433] rounded-lg px-2.5 py-[5px] flex-1 min-w-0">
+                <Monitor className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                <input
+                  type="text"
+                  value={previewPath}
+                  onChange={(e) => {
+                    let newPath = e.target.value;
+                    if (!newPath.startsWith('/')) {
+                      newPath = '/' + newPath;
+                    }
+                    setPreviewPath(newPath);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      setRefreshKey(prev => prev + 1);
+                    }
+                  }}
+                  placeholder="/"
+                  className="flex-1 bg-transparent text-xs text-foreground placeholder-muted-foreground outline-none border-none min-w-0"
+                  style={{ 
+                    border: 'none', 
+                    boxShadow: 'none',
+                    padding: 0
+                  }}
+                />
+                <div className="flex items-center gap-0.5 border-l border-border dark:border-[#333433] pl-1.5 ml-1.5">
+                  <button
+                    onClick={() => {
+                      setRefreshKey(prev => prev + 1);
+                    }}
+                    className="p-1 rounded hover:bg-muted dark:hover:bg-gray-700 transition-colors"
+                    title="Refresh preview"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      const sandboxUrl = ('sandbox_url' in currentProject ? currentProject.sandbox_url : undefined) ||
+                        currentProject.deploy_url || '';
+                      const fullUrl = sandboxUrl + (previewPath !== '/' ? previewPath : '');
+                      window.open(fullUrl, '_blank', 'noopener,noreferrer');
+                    }}
+                    className="p-1 rounded hover:bg-muted dark:hover:bg-gray-700 transition-colors"
+                    title="Open in new tab"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Fullscreen preview content */}
+            <div className="flex-1 overflow-hidden">
+              <SandboxPreview 
+                sandboxUrl={
+                  ('sandbox_url' in currentProject ? currentProject.sandbox_url : undefined) ||
+                  currentProject.deploy_url || 
+                  ''
+                }
+                projectId={projectId}
+                hideHeader={true}
+                path={previewPath}
+                onRefresh={() => setRefreshKey(prev => prev + 1)}
+                key={`fullscreen-${refreshKey}`}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

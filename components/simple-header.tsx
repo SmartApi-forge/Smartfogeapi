@@ -1,12 +1,12 @@
 "use client"
 import Link from "next/link"
-import { useState } from "react"
+import Image from "next/image"
 import { Logo } from "@/components/logo"
-import { Button } from "@/components/ui/button"
-import { Share, Github, Settings, Eye, Code2 } from "lucide-react"
-import { motion } from "framer-motion"
-import { GitHubRepositoryDialog } from "@/components/github-repository-dialog"
-import { GitHubBranchSelector } from "@/components/github-branch-selector"
+import { Share, Settings } from "lucide-react"
+import { GitHubSetupDialog } from "@/components/github-setup-dialog"
+import { GitHubBranchSelectorV0 } from "@/components/github-branch-selector-v0"
+import { useTheme } from "next-themes"
+import { useState, useEffect } from "react"
 
 interface Project {
   id: string
@@ -23,22 +23,30 @@ interface SimpleHeaderProps {
   viewMode?: 'preview' | 'code'
   onViewModeChange?: (mode: 'preview' | 'code') => void
   project?: Project
+  projectFiles?: Record<string, any>
 }
 
-export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project }: SimpleHeaderProps) {
-
+export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, projectFiles = {} }: SimpleHeaderProps) {
+  const { resolvedTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  
+  // Prevent hydration mismatch by waiting for client-side mount
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+  
+  // Default to dark during SSR to prevent white flash, then use actual theme
+  const isDark = !mounted ? true : resolvedTheme === 'dark'
+  
   // Only show GitHub dialog for manual projects (not GitHub cloned projects)
   const shouldShowGitHubDialog = !project?.github_mode && !project?.github_repo_id && !project?.repo_url
   
   // Show GitHub branch selector for GitHub cloned projects
   const shouldShowGitHubBranchSelector = project?.github_mode || project?.github_repo_id || project?.repo_url
-
-
-
   return (
     <>
       <header className="sticky top-0 z-40 w-full bg-white dark:bg-[#0E100F] backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-[#0E100F]/60 border-b border-border/50">
-      <div className="container flex h-12 sm:h-14 md:h-16 items-center justify-between px-3 sm:px-4 md:px-6">
+      <div className="container flex h-[50px] items-center justify-between px-4">
         {/* Left side - Logo */}
         <div className="flex items-center space-x-2 sm:space-x-4">
           <Link href="/" className="flex items-center space-x-2">
@@ -46,103 +54,73 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project }
           </Link>
         </div>
 
-        {/* Center - View Mode Toggle (Always visible) */}
+        {/* Center - Empty (view toggle moved to sandbox preview) */}
         <div className="flex items-center">
-          <div className="relative flex items-center gap-0 bg-muted/50 dark:bg-[#0E100F] border border-border/50 dark:border-[#333433] rounded-lg p-0.5">
-            {/* Animated background indicator */}
-            <motion.div
-              className="absolute inset-y-0.5 bg-background dark:bg-[#1D1D1D] rounded-md shadow-sm"
-              initial={false}
-              animate={{
-                left: viewMode === 'preview' ? '2px' : 'calc(50%)',
-                right: viewMode === 'preview' ? 'calc(50%)' : '2px',
-              }}
-              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            />
-            <button
-              onClick={() => onViewModeChange?.('preview')}
-              className={`relative z-10 px-3 py-1.5 text-xs font-medium transition-colors rounded-md ${
-                viewMode === 'preview'
-                  ? 'text-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-              title="Preview"
-            >
-              <Eye className="h-3.5 w-3.5" />
-            </button>
-            <button
-              onClick={() => onViewModeChange?.('code')}
-              className={`relative z-10 px-3 py-1.5 text-xs font-medium transition-colors rounded-md ${
-                viewMode === 'code'
-                  ? 'text-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-              title="Code view"
-            >
-              <Code2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
+          {/* View toggle is now positioned in the sandbox preview component */}
         </div>
 
         {/* Right side - Action buttons - Responsive with subtle hover */}
-        <div className="flex items-center space-x-1 sm:space-x-2">
+        <div className="flex items-center space-x-1 sm:space-x-2" style={{ opacity: mounted ? 1 : 0.99 }}>
           {/* Settings button */}
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="text-white hover:text-white !bg-[#1A1A1A] hover:!bg-[#2A2A2A] transition-colors h-7 sm:h-8 px-1.5 border border-gray-300 dark:border-gray-600 rounded-md"
-            style={{ backgroundColor: '#1A1A1A' }}
+          <button 
+            className={`transition-all duration-300 h-8 w-8 p-0 rounded-md flex items-center justify-center ${isDark ? 'bg-[#1A1A1A] hover:bg-[#262626] border border-gray-600' : 'bg-[#fafafa] hover:bg-[#f2f2f2] border border-gray-300'}`}
           >
-            <Settings className="h-3.5 w-3.5" />
-          </Button>
+            <Settings className={`h-[18px] w-[18px] transition-colors duration-300 ${isDark ? 'text-white' : 'text-gray-900'} pointer-events-none`} />
+          </button>
           
           {/* GitHub button - Icon only - Conditionally rendered */}
-          {shouldShowGitHubDialog && (
-            <GitHubRepositoryDialog>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="text-white hover:text-white !bg-[#1A1A1A] hover:!bg-[#2A2A2A] transition-colors h-7 sm:h-8 px-1.5 border border-gray-300 dark:border-gray-600 rounded-md"
-                style={{ backgroundColor: '#1A1A1A' }}
+          {shouldShowGitHubDialog && project?.id && (
+            <GitHubSetupDialog 
+              projectId={project.id}
+              projectFiles={projectFiles}
+            >
+              <button 
+                className={`transition-all duration-300 h-8 w-8 p-0 rounded-md flex items-center justify-center ${isDark ? 'bg-[#1A1A1A] hover:bg-[#262626] border border-gray-600' : 'bg-[#fafafa] hover:bg-[#f2f2f2] border border-gray-300'}`}
               >
-                <Github className="h-3.5 w-3.5" />
-              </Button>
-            </GitHubRepositoryDialog>
+                <Image 
+                  src={isDark ? "/github-dark.svg" : "/github-light.svg"}
+                  alt="GitHub"
+                  width={18}
+                  height={18}
+                  className="opacity-100 pointer-events-none transition-opacity duration-300"
+                  priority
+                />
+              </button>
+            </GitHubSetupDialog>
           )}
           
           {/* GitHub Branch Selector - For GitHub cloned projects */}
           {shouldShowGitHubBranchSelector && project && (
-            <GitHubBranchSelector project={project}>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="text-white hover:text-white !bg-[#1A1A1A] hover:!bg-[#2A2A2A] transition-colors h-7 sm:h-8 px-1.5 border border-gray-300 dark:border-gray-600 rounded-md"
-                style={{ backgroundColor: '#1A1A1A' }}
+            <GitHubBranchSelectorV0 project={project}>
+              <button 
+                className={`transition-all duration-300 h-8 w-8 p-0 rounded-md flex items-center justify-center ${isDark ? 'bg-[#1A1A1A] hover:bg-[#262626] border border-gray-600' : 'bg-[#fafafa] hover:bg-[#f2f2f2] border border-gray-300'}`}
               >
-                <Github className="h-3.5 w-3.5" />
-              </Button>
-            </GitHubBranchSelector>
+                <Image 
+                  src={isDark ? "/github-dark.svg" : "/github-light.svg"}
+                  alt="GitHub"
+                  width={18}
+                  height={18}
+                  className="opacity-100 pointer-events-none transition-opacity duration-300"
+                  priority
+                />
+              </button>
+            </GitHubBranchSelectorV0>
           )}
           
           {/* Share button */}
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="text-white hover:text-white !bg-[#1A1A1A] hover:!bg-[#2A2A2A] transition-colors h-7 sm:h-8 px-1.5 sm:px-2 border border-gray-300 dark:border-gray-600 rounded-md"
-            style={{ backgroundColor: '#1A1A1A' }}
+          <button 
+            className={`transition-all duration-300 h-8 px-2 rounded-md flex items-center justify-center ${isDark ? 'bg-[#1A1A1A] hover:bg-[#262626] border border-gray-600' : 'bg-[#fafafa] hover:bg-[#f2f2f2] border border-gray-300'}`}
           >
-            <Share className="h-3.5 w-3.5 sm:mr-1.5" />
-            <span className="hidden sm:inline text-xs">Share</span>
-          </Button>
+            <Share className={`h-[18px] w-[18px] mr-1.5 transition-colors duration-300 ${isDark ? 'text-white' : 'text-gray-900'} pointer-events-none`} />
+            <span className={`text-xs transition-colors duration-300 ${isDark ? 'text-white' : 'text-gray-900'}`}>Share</span>
+          </button>
           
-          {/* Publish button - White background */}
-          <Button 
-            variant="secondary" 
-            size="sm" 
-            className="bg-white hover:bg-gray-50 text-black border border-gray-200 transition-colors h-7 sm:h-8 px-2 sm:px-3"
+          {/* Publish button - Theme-aware */}
+          <button 
+            className={`transition-all duration-300 h-8 px-3 rounded-md flex items-center justify-center ${isDark ? 'bg-white hover:bg-gray-200 text-black' : 'bg-black hover:bg-gray-900 text-white'}`}
           >
-            <span className="text-xs">Publish</span>
-          </Button>
+            <span className="text-xs font-medium transition-colors duration-300">Publish</span>
+          </button>
         </div>
       </div>
       </header>

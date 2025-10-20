@@ -163,10 +163,10 @@ export function StreamingCodeViewer({
 
   return (
     <div className="h-full flex flex-col">
-      {/* File header */}
-      <div className="bg-muted/30 dark:bg-[#1D1D1D] border-b border-border dark:border-[#333433] px-4 py-2 flex items-center justify-between">
+      {/* File header - NO bottom border for unified look */}
+      <div className="bg-muted/30 dark:bg-[#1D1D1D] px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">{fileToDisplay.filename}</span>
+          <span className="font-sans text-sm font-medium">{fileToDisplay.filename}</span>
           {!fileToDisplay.isComplete && isStreaming && (
             <motion.div
               animate={{ opacity: [0.5, 1, 0.5] }}
@@ -274,13 +274,14 @@ export function StreamingCodeViewer({
         >
           {({ className, style, tokens, getLineProps, getTokenProps }) => (
             <pre
-              className={`${className} text-sm leading-5 p-3 min-h-full`}
+              className={`${className} font-mono p-3 min-h-full`}
               style={{
                 ...style,
                 margin: 0,
                 background: 'transparent',
-                fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-                fontSize: '14px',
+                fontSize: '13px',
+                lineHeight: '20px',
+                fontWeight: '400',
               }}
             >
               {tokens.map((line, i) => (
@@ -289,7 +290,7 @@ export function StreamingCodeViewer({
                   {...getLineProps({ line })}
                   className="flex hover:bg-muted/20 dark:hover:bg-gray-800/30 transition-colors"
                 >
-                  <span className="inline-block w-10 text-right mr-3 text-gray-500 select-none flex-shrink-0 text-xs leading-5">
+                  <span className="inline-block w-10 text-right mr-3 text-gray-500 select-none flex-shrink-0 font-mono" style={{ fontSize: '13px', lineHeight: '20px' }}>
                     {i + 1}
                   </span>
                   <span className="flex-1 min-w-0">

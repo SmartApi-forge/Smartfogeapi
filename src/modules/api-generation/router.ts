@@ -178,7 +178,7 @@ export const apiGenerationRouter = createTRPCRouter({
       projectId: z.string().uuid(),
       messageId: z.string().uuid(),
       prompt: z.string().min(1),
-      commandType: z.enum(['CREATE_FILE', 'MODIFY_FILE', 'DELETE_FILE', 'REFACTOR_CODE', 'GENERATE_API']),
+      commandType: z.enum(['CREATE_FILE', 'MODIFY_FILE', 'DELETE_FILE', 'REFACTOR_CODE', 'GENERATE_API', 'CLONE_REPO']),
       shouldCreateNewVersion: z.boolean(),
       parentVersionId: z.string().uuid().optional(),
       conversationHistory: z.array(z.object({
