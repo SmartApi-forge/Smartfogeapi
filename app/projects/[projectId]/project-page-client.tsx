@@ -569,6 +569,13 @@ export function ProjectPageClient({
   const [isMobileExplorerOpen, setIsMobileExplorerOpen] = useState(false);
   const [mobileView, setMobileView] = useState<'chat' | 'code'>('chat');
   const [isChatPanelCollapsed, setIsChatPanelCollapsed] = useState(false);
+  const [isMobileScreen, setIsMobileScreen] = useState(() => {
+    // Check if we're on the client side and detect mobile on initial render
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 640; // sm breakpoint
+    }
+    return false;
+  });
   
   // For cloned GitHub projects (repo_url or github_mode), default to preview
   // For generated projects (text prompts), default to code view
@@ -587,6 +594,17 @@ export function ProjectPageClient({
   const versionDropdownRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobileScreen(window.innerWidth < 640); // sm breakpoint
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -1295,7 +1313,8 @@ export function ProjectPageClient({
         {/* Messages section - collapsible with smooth animation */}
         <motion.section 
           initial={false}
-          animate={{ 
+          animate={isMobileScreen ? {} : { 
+            // Only apply motion animations on desktop
             width: isChatPanelCollapsed ? 0 : 'auto',
             minWidth: isChatPanelCollapsed ? 0 : '256px',
             maxWidth: isChatPanelCollapsed ? 0 : '400px',
@@ -1309,11 +1328,17 @@ export function ProjectPageClient({
             maxWidth: { duration: 0.3 },
             opacity: { duration: 0.2, delay: isChatPanelCollapsed ? 0 : 0.1 }
           }}
-          className={`flex flex-col h-full bg-white dark:bg-[#0E100F] ${
+          style={isMobileScreen ? {
+            // Force remove any max-width on mobile
+            maxWidth: 'none',
+            minWidth: 'auto',
+            width: '100%'
+          } : undefined}
+          className={`flex-col h-full bg-white dark:bg-[#0E100F] ${
             isChatPanelCollapsed 
               ? 'overflow-hidden' 
               : 'w-full sm:w-64 md:w-72 lg:w-80 xl:w-96 overflow-hidden'
-          } ${mobileView === 'chat' ? 'flex' : 'hidden sm:flex'}`}
+          } ${mobileView === 'chat' ? 'flex flex-1 sm:flex-none' : 'hidden sm:flex'}`}
         >
           
           {/* Messages Area - compact spacing for cleaner look */}
@@ -1469,14 +1494,14 @@ export function ProjectPageClient({
 
 
         {/* Code viewer section - conditionally shown on mobile based on mobileView */}
-        <section className={`flex-1 p-1 sm:p-2 min-h-0 relative bg-white dark:bg-[#0E100F] sm:min-w-0 flex flex-col ${
-          mobileView === 'code' ? 'flex' : 'hidden sm:flex'
+        <section className={`p-1 sm:p-2 min-h-0 relative bg-white dark:bg-[#0E100F] sm:min-w-0 flex-col ${
+          mobileView === 'code' ? 'flex flex-1' : 'hidden sm:flex sm:flex-1'
         }`}>
-          {/* Folder toggle button - only show when explorer is closed */}
-          {!isMobileExplorerOpen && (
+          {/* Folder toggle button - only show when explorer is closed AND in code mode */}
+          {!isMobileExplorerOpen && viewMode === 'code' && (
             <button
               onClick={() => setIsMobileExplorerOpen(true)}
-              className="sm:hidden absolute top-16 left-4 z-50 p-2 rounded-md bg-card border border-border text-foreground hover:bg-muted transition-colors shadow-lg"
+              className="sm:hidden absolute top-16 left-4 z-50 p-2 rounded-md bg-white dark:bg-[#1D1D1D] border border-border dark:border-[#333433] text-foreground hover:bg-muted transition-colors shadow-lg"
               aria-label="Open file explorer"
             >
               <Folder className="size-4" />
@@ -1484,7 +1509,7 @@ export function ProjectPageClient({
           )}
 
           {/* Unified header bar with view toggle - ALWAYS full width at top */}
-          <div className="bg-muted/30 dark:bg-[#1D1D1D] border border-border dark:border-[#333433] rounded-t-lg px-3 py-2.5 flex items-center gap-2 flex-shrink-0">
+          <div className="bg-muted/30 dark:bg-[#1D1D1D] border border-border dark:border-[#333433] rounded-t-lg px-2 sm:px-3 py-2 sm:py-2.5 flex flex-wrap items-center gap-1 sm:gap-2 flex-shrink-0">
                 {/* View Mode Toggle - positioned like v0 */}
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {/* Collapse/Expand Chevron Button - double chevrons */}
@@ -1554,13 +1579,13 @@ export function ProjectPageClient({
                 </div>
                 
             {/* Path bar and menu container - shown in both modes */}
-            <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className="flex items-center gap-1 sm:gap-2 flex-1 min-w-0">
               {/* Path bar - shown only in preview mode */}
               {viewMode === 'preview' && currentProject && (
                 <>
                   {/* URL Bar with controls - v0.app style - adjusted height */}
-                  <div className="flex items-center gap-1.5 bg-background dark:bg-[#0E100F] border border-border dark:border-[#333433] rounded-lg px-2.5 py-[5px] flex-1 min-w-0">
-                    <Monitor className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                  <div className="flex items-center gap-1 sm:gap-1.5 bg-background dark:bg-[#0E100F] border border-border dark:border-[#333433] rounded-lg px-1.5 sm:px-2.5 py-[5px] flex-1 min-w-0 max-w-[200px] sm:max-w-none">
+                    <Monitor className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0 hidden xs:block" />
                     <input
                       type="text"
                       value={previewPath}
@@ -1584,15 +1609,15 @@ export function ProjectPageClient({
                         padding: 0
                       }}
                     />
-                    <div className="flex items-center gap-0.5 border-l border-border dark:border-[#333433] pl-1.5 ml-1.5">
+                    <div className="flex items-center gap-0.5 border-l border-border dark:border-[#333433] pl-1 sm:pl-1.5 ml-1 sm:ml-1.5">
                       <button
                         onClick={() => {
                           setRefreshKey(prev => prev + 1);
                         }}
-                        className="p-1 rounded hover:bg-muted dark:hover:bg-gray-700 transition-colors"
+                        className="p-0.5 sm:p-1 rounded hover:bg-muted dark:hover:bg-gray-700 transition-colors"
                         title="Refresh preview"
                       >
-                        <RefreshCw className="h-3.5 w-3.5" />
+                        <RefreshCw className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                       </button>
                       <button
                         onClick={() => {
@@ -1601,10 +1626,10 @@ export function ProjectPageClient({
                           const fullUrl = sandboxUrl + (previewPath !== '/' ? previewPath : '');
                           window.open(fullUrl, '_blank', 'noopener,noreferrer');
                         }}
-                        className="p-1 rounded hover:bg-muted dark:hover:bg-gray-700 transition-colors"
+                        className="p-0.5 sm:p-1 rounded hover:bg-muted dark:hover:bg-gray-700 transition-colors"
                         title="Open in new tab"
                       >
-                        <ExternalLink className="h-3.5 w-3.5" />
+                        <ExternalLink className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                       </button>
                     </div>
                   </div>
@@ -1619,12 +1644,13 @@ export function ProjectPageClient({
                 <div className="relative flex-shrink-0" ref={versionDropdownRef}>
                   <button
                     onClick={() => setIsVersionDropdownOpen(!isVersionDropdownOpen)}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-background dark:bg-[#0E100F] border border-border dark:border-[#333433] hover:bg-muted dark:hover:bg-gray-700 transition-colors"
+                    className="flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-xs font-medium bg-background dark:bg-[#0E100F] border border-border dark:border-[#333433] hover:bg-muted dark:hover:bg-gray-700 transition-colors"
                     title="Switch version"
                   >
-                    <span className="font-medium text-foreground">
+                    <span className="font-medium text-foreground hidden xs:inline">
                       v{versions.find(v => v.id === selectedVersionId)?.version_number || versions[versions.length - 1]?.version_number || 1}
                     </span>
+                    <span className="font-medium text-foreground xs:hidden">v{versions.find(v => v.id === selectedVersionId)?.version_number || versions[versions.length - 1]?.version_number || 1}</span>
                     <ChevronRight className={`h-3 w-3 transition-transform ${isVersionDropdownOpen ? 'rotate-90' : ''}`} />
                   </button>
                   
@@ -1635,7 +1661,7 @@ export function ProjectPageClient({
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
                         transition={{ duration: 0.15 }}
-                        className="absolute right-0 mt-2 w-56 bg-card dark:bg-[#1D1D1D] border border-border dark:border-[#333433] rounded-lg shadow-lg overflow-hidden z-50 max-h-64 overflow-y-auto"
+                        className="fixed sm:absolute right-2 sm:right-0 mt-2 w-56 bg-card dark:bg-[#1D1D1D] border border-border dark:border-[#333433] rounded-lg shadow-lg overflow-hidden z-[100] max-h-64 overflow-y-auto"
                       >
                         {versions.map((version) => (
                           <button
@@ -1683,7 +1709,7 @@ export function ProjectPageClient({
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.15 }}
-                      className="absolute right-0 mt-2 w-48 bg-card dark:bg-[#1D1D1D] border border-border dark:border-[#333433] rounded-lg shadow-lg overflow-hidden z-50"
+                      className="fixed sm:absolute right-2 sm:right-0 mt-2 w-48 bg-card dark:bg-[#1D1D1D] border border-border dark:border-[#333433] rounded-lg shadow-lg overflow-hidden z-[100]"
                     >
                       {/* Show Fullscreen option only in preview mode */}
                       {viewMode === 'preview' && (
@@ -1725,10 +1751,10 @@ export function ProjectPageClient({
               w-56 sm:w-36 md:w-40 lg:w-44 xl:w-48 2xl:w-52 border-r border-border dark:border-[#333433] flex-shrink-0 transition-all duration-300
               ${viewMode === 'preview' ? 'hidden' : ''}
               ${isMobileExplorerOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}
-              sm:relative absolute sm:z-auto z-40 h-full bg-muted/30 dark:bg-[#1D1D1D]
+              sm:relative absolute sm:z-auto z-40 h-full bg-white dark:bg-[#1D1D1D]
             `}>
               {/* File tree container - NO header, starts immediately */}
-              <div className="p-1.5 sm:p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent bg-muted/30 dark:bg-[#1D1D1D] h-full">
+              <div className="p-1.5 sm:p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent bg-white dark:bg-[#1D1D1D] h-full">
                 {/* Close button for mobile - positioned at top right */}
                 <button
                   onClick={() => setIsMobileExplorerOpen(false)}
