@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, FileCode, Edit, Sparkles, Trash2 } from 'lucide-react';
+import { ChevronRight, Edit, Sparkles, Trash2, FileCode2 } from 'lucide-react';
 import type { Version } from '../src/modules/versions/types';
+import { FileTypeIcon } from './file-type-icon';
 
 interface VersionCardProps {
   version: Version;
@@ -48,9 +49,9 @@ export function VersionCard({ version, isActive, onClick, previousVersion }: Ver
       case 'DELETE_FILE':
         return <Trash2 className="size-4 text-red-500" />;
       case 'REFACTOR_CODE':
-        return <FileCode className="size-4 text-purple-500" />;
+        return <FileCode2 className="size-4 text-purple-500" />;
       default:
-        return <FileCode className="size-4 text-green-500" />;
+        return <FileCode2 className="size-4 text-green-500" />;
     }
   };
 
@@ -61,59 +62,38 @@ export function VersionCard({ version, isActive, onClick, previousVersion }: Ver
       exit={{ opacity: 0, y: -20 }}
       className={`rounded-lg border transition-all duration-200 ${
         isActive
-          ? 'border-primary bg-primary/5 shadow-md'
-          : 'border-border bg-card hover:border-primary/50 hover:shadow-sm'
+          ? 'border-primary bg-white dark:bg-primary/5 shadow-md'
+          : 'border-border bg-white dark:bg-card hover:border-primary/50 hover:shadow-sm'
       }`}
     >
-      {/* Card Header */}
+      {/* Card Header - Minimal design */}
       <div
-        className="px-3 py-2.5 cursor-pointer"
-        onClick={onClick}
+        className="px-3 py-2.5 cursor-pointer flex items-center justify-between"
+        onClick={() => setIsExpanded(!isExpanded)}
       >
-        <div className="flex items-start gap-2">
-          <div className="flex-shrink-0 mt-0.5">
-            {getVersionIcon()}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-foreground truncate">
-                {version.name}
-              </h3>
-              <span className="text-xs text-muted-foreground">
-                v{version.version_number}
-              </span>
-            </div>
-            {version.description && (
-              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                {version.description}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* File Count & Expand Button */}
-        <div className="flex items-center justify-between mt-2">
-          <span className="text-xs text-muted-foreground">
-            {fileCount} {fileCount === 1 ? 'file' : 'files'}
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <ChevronRight
+            className={`size-4 flex-shrink-0 text-muted-foreground transition-transform ${
+              isExpanded ? 'rotate-90' : ''
+            }`}
+          />
+          <h3 className="text-sm font-medium text-foreground truncate">
+            {version.name}
+          </h3>
+          <span className="text-xs text-muted-foreground flex-shrink-0">
+            v{version.version_number}
           </span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsExpanded(!isExpanded);
-            }}
-            className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
-          >
-            <ChevronRight
-              className={`size-3.5 transition-transform ${
-                isExpanded ? 'rotate-90' : ''
-              }`}
-            />
-            {isExpanded ? 'Hide' : 'Show'} files
-          </button>
         </div>
+        <button className="p-1 hover:bg-muted rounded transition-colors">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-muted-foreground">
+            <circle cx="8" cy="3" r="1" fill="currentColor"/>
+            <circle cx="8" cy="8" r="1" fill="currentColor"/>
+            <circle cx="8" cy="13" r="1" fill="currentColor"/>
+          </svg>
+        </button>
       </div>
 
-      {/* Expandable File List */}
+      {/* Expandable File List - Clean minimal design */}
       <AnimatePresence>
         {isExpanded && (
           <motion.div
@@ -123,67 +103,32 @@ export function VersionCard({ version, isActive, onClick, previousVersion }: Ver
             transition={{ duration: 0.2 }}
             className="overflow-hidden border-t border-border"
           >
-            <div className="px-3 py-2 space-y-1.5 bg-muted/30">
-              {/* New Files */}
-              {filesGrouped.new.length > 0 && (
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">
-                    New ({filesGrouped.new.length})
-                  </p>
-                  {filesGrouped.new.map((filename) => (
-                    <div
-                      key={filename}
-                      className="flex items-center gap-1.5 text-xs py-1"
-                    >
-                      <Sparkles className="size-3 text-blue-500 flex-shrink-0" />
-                      <span className="truncate text-foreground">{filename}</span>
+            <div className="px-3 py-2 space-y-0.5">
+              {files.map((filename) => {
+                const status = getFileStatus(filename);
+                
+                // Extract just filename (last part) and full path
+                const parts = filename.split('/');
+                const name = parts[parts.length - 1]; // Just the filename
+                const fullPath = filename; // Complete path
+                
+                return (
+                  <div
+                    key={filename}
+                    className="flex items-center gap-2 py-1 hover:bg-muted/50 rounded px-2 -mx-2 transition-colors"
+                  >
+                    <FileTypeIcon 
+                      filename={filename} 
+                      size={16}
+                      className="text-gray-900 dark:text-gray-100" 
+                    />
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="text-sm text-foreground truncate">{name}</span>
+                      <span className="text-xs text-muted-foreground truncate">{fullPath}</span>
                     </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Modified Files */}
-              {filesGrouped.modified.length > 0 && (
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">
-                    Modified ({filesGrouped.modified.length})
-                  </p>
-                  {filesGrouped.modified.map((filename) => (
-                    <div
-                      key={filename}
-                      className="flex items-center gap-1.5 text-xs py-1"
-                    >
-                      <Edit className="size-3 text-amber-500 flex-shrink-0" />
-                      <span className="truncate text-foreground">{filename}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Unchanged Files - collapsed by default */}
-              {filesGrouped.unchanged.length > 0 && (
-                <details className="mt-1">
-                  <summary className="text-xs font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
-                    Unchanged ({filesGrouped.unchanged.length})
-                  </summary>
-                  <div className="mt-1 ml-2 space-y-0.5">
-                    {filesGrouped.unchanged.slice(0, 5).map((filename) => (
-                      <div
-                        key={filename}
-                        className="flex items-center gap-1.5 text-xs py-0.5"
-                      >
-                        <FileCode className="size-3 text-muted-foreground flex-shrink-0" />
-                        <span className="truncate text-muted-foreground">{filename}</span>
-                      </div>
-                    ))}
-                    {filesGrouped.unchanged.length > 5 && (
-                      <p className="text-xs text-muted-foreground pl-4">
-                        +{filesGrouped.unchanged.length - 5} more...
-                      </p>
-                    )}
                   </div>
-                </details>
-              )}
+                );
+              })}
             </div>
           </motion.div>
         )}

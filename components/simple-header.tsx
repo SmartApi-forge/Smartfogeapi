@@ -45,7 +45,7 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
   const shouldShowGitHubBranchSelector = project?.github_mode || project?.github_repo_id || project?.repo_url
   return (
     <>
-      <header className="sticky top-0 z-40 w-full bg-white dark:bg-[#0E100F] backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-[#0E100F]/60 border-b border-border/50">
+      <header className="sticky top-0 z-40 w-full bg-[#FAFAFA] dark:bg-[#0E100F] backdrop-blur supports-[backdrop-filter]:bg-[#FAFAFA]/60 dark:supports-[backdrop-filter]:bg-[#0E100F]/60 border-b border-border/50">
       <div className="container flex h-[50px] items-center justify-between px-4">
         {/* Left side - Logo */}
         <div className="flex items-center space-x-2 sm:space-x-4">

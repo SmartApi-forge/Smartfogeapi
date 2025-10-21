@@ -120,17 +120,288 @@ text-gray-900 dark:text-white
 
 ---
 
+### **6. File Explorer & Code Viewer Colors** ✅
+**Issue**: File explorer and code viewer had inconsistent background colors
+
+**Solution**: Applied specific color scheme for light mode
+```tsx
+// Selected File Background:
+BEFORE: bg-primary/10 (blue tint)
+AFTER: bg-[#E6E6E6] (neutral gray)
+
+// File Explorer Sidebar:
+BEFORE: bg-white
+AFTER: bg-[#FAFAFA] (light gray)
+
+// Code Viewer Area:
+BEFORE: bg-muted/30 (washed out)
+AFTER: bg-white (pure white)
+```
+
+**Changes Applied**:
+- ✅ Selected file highlight: `#E6E6E6` (neutral gray, no blue)
+- ✅ File sidebar background: `#FAFAFA` (subtle light gray)
+- ✅ Code viewer background: `#FFFFFF` (pure white)
+- ✅ Code viewer header: `#FFFFFF` (pure white)
+- ✅ Empty state background: `#FFFFFF` (pure white)
+
+**Result**:
+- ✅ Clean, consistent color hierarchy
+- ✅ No distracting blue highlights
+- ✅ Better visual separation between sidebar and code
+- ✅ Professional, minimal design
+
+---
+
+### **7. Navbar & Chat Interface Background** ✅
+**Issue**: Inconsistent background colors across the interface
+
+**Solution**: Applied `#FAFAFA` background to navbar and chat interface
+```tsx
+// Navbar:
+BEFORE: bg-white
+AFTER: bg-[#FAFAFA]
+
+// Chat Interface:
+BEFORE: bg-white
+AFTER: bg-[#FAFAFA]
+
+// Input Box:
+BEFORE: bg-[#fafafa] (same as background)
+AFTER: bg-white (stands out from background)
+```
+
+**Result**:
+- ✅ Consistent light gray background throughout
+- ✅ Input box stands out with white background
+- ✅ Professional, cohesive design
+
+---
+
+### **8. Version Card Redesign** ✅
+**Issue**: Version card was too cluttered with description and complex file grouping
+
+**Solution**: Redesigned to be minimal and clean (matching attached reference)
+```tsx
+// Card Layout:
+- ✅ Show only title and version number in collapsed state
+- ✅ Chevron icon for expand/collapse
+- ✅ Three-dot menu icon
+- ✅ Description moved out as separate message below card
+
+// File List (when expanded):
+- ✅ Clean, minimal file list
+- ✅ Each file shows icon, filename, and full path
+- ✅ Color-coded icons (blue=new, amber=modified, gray=unchanged)
+- ✅ Hover effect on each file item
+```
+
+**Changes Applied**:
+- ✅ Removed description from card header
+- ✅ Description shows as separate text below version card
+- ✅ Simplified file list (no grouping, just clean list)
+- ✅ Each file shows name and path (like "features.tsx" + "components/features.tsx")
+- ✅ Added three-dot menu icon
+- ✅ Chevron moves to the left for better UX
+
+**Result**:
+- ✅ Clean, uncluttered version card
+- ✅ Easy to scan file list
+- ✅ Better visual hierarchy
+- ✅ Matches modern UI patterns
+
+---
+
+### **9. Language-Specific File Type Icons** ✅
+**Issue**: Generic black icons didn't show file types, path navigation hidden
+
+**Solution**: Added language-specific file type icons from `react-icons` library
+```tsx
+// Version Card Icon Mapping (Language-Specific):
+- JSON files → SiJson (yellow #f7d422)
+- TypeScript (.ts) → SiTypescript (blue #3178c6)
+- React/TSX (.tsx, .jsx) → SiReact (cyan #61dafb)
+- JavaScript (.js) → SiJavascript (yellow #f7df1e)
+- CSS/SCSS → SiCss3 (blue #1572b6)
+- HTML → SiHtml5 (orange #e34f26)
+- Python → SiPython (blue #3776ab)
+- Markdown → SiMarkdown (gray)
+- Default → File icon (gray)
+
+// File Explorer:
+- All files → Generic File icon (gray-500)
+- Folders → Folder icon (yellow-500)
+
+// Version Card Optimizations:
+- Background: #FFFFFF (white in light mode)
+- Spacing: space-y-0.5 (tight, compact list)
+- Padding: py-1
+- Display: Filename and path on SAME line (horizontal)
+- Icons: BLACK color for all file types
+
+// Path Navigation:
+- Computer (Monitor) icon before "/"
+- Visible black color (gray-900)
+```
+
+**Changes Applied**:
+- ✅ Fixed file display: filename and path on SAME LINE (horizontal)
+- ✅ Changed ALL version card icons to BLACK (gray-900/gray-100)
+- ✅ Version card background changed to `bg-white` in light mode
+- ✅ Reduced spacing from `space-y-2` to `space-y-0.5` for tighter file list
+- ✅ Reduced padding from `py-1.5` to `py-1`
+- ✅ File explorer simplified to use only generic File icon
+- ✅ Enabled path navigation header (changed hideHeader from true to false)
+- ✅ Made Monitor icon more prominent (h-4 w-4, black color)
+- ✅ Added "/" separator after Monitor icon
+
+**Result**:
+- ✅ Clean white background in light mode
+- ✅ Compact, space-efficient file list
+- ✅ Filename and path displayed horizontally (same line)
+- ✅ All icons are BLACK (professional, clean look)
+- ✅ Simple file explorer with generic icons
+- ✅ Computer icon clearly visible in path navigation
+
+---
+
+### **10. File Explorer Folder Icons** ✅
+**Issue**: Generic Folder icon used for all folders
+
+**Solution**: Use FolderClosed for collapsed folders, FolderOpen for expanded folders
+```tsx
+// Folder Icons:
+- Collapsed folders → FolderClosed icon (yellow-500)
+- Expanded folders → FolderOpen icon (yellow-500)
+```
+
+**Changes Applied**:
+- ✅ Imported `FolderClosed` from lucide-react
+- ✅ Updated TreeItem to use `FolderClosed` for collapsed folders
+- ✅ Kept `FolderOpen` for expanded folders
+- ✅ Updated `getFileIcon()` to use `FolderClosed` instead of generic `Folder`
+
+**Result**:
+- ✅ Visual feedback for folder state (open/closed)
+- ✅ Better UX matching VS Code and other IDEs
+- ✅ Clear distinction between expanded and collapsed folders
+
+---
+
+### **11. Geist-Style File Type Icons** ✅
+**Issue**: Generic Lucide icons used for all file types, not matching Vercel/Geist design
+
+**Solution**: Implemented Geist-style SVG icons for specific file types (ts, tsx, js, jsx, css)
+
+```tsx
+// Created new FileTypeIcon component with SVG path data
+// File: components/file-type-icon.tsx
+
+// Supported file types with Geist icons:
+- TypeScript (.ts) → Custom SVG with "TS" badge
+- TypeScript React (.tsx) → Custom SVG with "TS" badge  
+- JavaScript (.js) → Custom SVG with "JS" badge
+- JavaScript React (.jsx) → Custom SVG with "JS" badge
+- CSS (.css) → Custom SVG with "CSS" badge
+- Markdown (.md) → Custom SVG with "MD" badge
+
+// Fallback to Lucide icons:
+- JSON files → Braces icon (kept existing)
+- Other files → Generic File icon (kept existing)
+```
+
+**Implementation Details:**
+```tsx
+// SVG structure (from Vercel inspection):
+<svg 
+  className="shrink-0"
+  data-testid="geist-icon" 
+  height="16"
+  strokeLinejoin="miter"
+  viewBox="0 0 16 16"
+  width="16"
+  style={{ color: 'currentColor' }}
+>
+  <path d="..." fill="currentColor" />
+</svg>
+
+// Uses currentColor - inherits from parent text color
+// Fixed 16x16 size for consistency
+// shrink-0 prevents flexbox shrinking
+```
+
+**Changes Applied:**
+- ✅ Created new `FileTypeIcon` component
+- ✅ Added SVG path data for ts, tsx, js, jsx, css, md file types
+- ✅ Kept Lucide Braces icon for JSON files
+- ✅ Kept Lucide File icon as fallback for other types
+- ✅ Updated version-card.tsx to use FileTypeIcon
+- ✅ Removed old getFileIcon function
+- ✅ Icons use currentColor for theme compatibility
+- ✅ Black color in version card (text-gray-900/gray-100)
+
+**Result:**
+- ✅ Professional Vercel/Geist-style file icons
+- ✅ Visual file type badges (TS, JS, CSS, MD)
+- ✅ Consistent with modern IDEs and code editors
+- ✅ Better file type recognition at a glance
+- ✅ Maintains theme compatibility with currentColor
+
+---
+
 ## 📂 Files Modified
 
 1. **components/simple-header.tsx**
    - Made Share button icon-only on mobile
    - Added Globe icon to Publish button
+   - Changed navbar background from `bg-white` to `bg-[#FAFAFA]`
    - Improved responsive button layout
 
 2. **app/projects/[projectId]/project-page-client.tsx**
-   - Changed prompt input background from `bg-background/50` to `bg-[#fafafa]`
+   - Changed chat interface background from `bg-white` to `bg-[#FAFAFA]`
+   - Changed prompt input background from `bg-[#fafafa]` to `bg-white`
+   - Changed user message background from `bg-muted/40` to `bg-[#EBEBEB]`
+   - Changed selected file highlight from `bg-primary/10` to `bg-[#E6E6E6]`
+   - Changed file sidebar background from `bg-white` to `bg-[#FAFAFA]`
+   - Changed code viewer backgrounds from `bg-muted/30` to `bg-white`
+   - Added description display below version card as separate message
+   - Simplified `getFileIcon()` to use only generic File icon for all files
+   - Added `FolderClosed` import from lucide-react
+   - Updated file explorer to use `FolderClosed` for collapsed folders
+   - Updated file explorer to use `FolderOpen` for expanded folders
+   - Enabled sandbox preview header (changed hideHeader from true to false)
+   - Removed language-specific icons from file explorer
    - Removed CSS mask gradients from messages area
    - Removed blur overlay divs
+
+3. **components/version-card.tsx**
+   - Redesigned card to show only title and version number
+   - Changed background to `bg-white` in light mode
+   - Removed description from card header
+   - Moved chevron to the left side
+   - Added three-dot menu icon
+   - Simplified file list display (no grouping)
+   - Fixed file display: filename and path on SAME LINE (horizontal)
+   - Replaced custom `getFileIcon()` with `FileTypeIcon` component
+   - Now uses Geist-style icons for TypeScript, JavaScript, CSS files
+   - Changed all file icons to BLACK (gray-900/gray-100)
+   - Reduced spacing from `space-y-2` to `space-y-0.5` (compact)
+   - Reduced padding from `py-1.5` to `py-1`
+   - Added hover effects on file items
+
+4. **components/sandbox-preview.tsx**
+   - Made Monitor (computer) icon more visible in path navigation
+   - Changed icon size from h-3.5 to h-4 for better visibility
+   - Changed icon color to black (gray-900/gray-100)
+   - Added "/" separator after Monitor icon
+
+5. **components/file-type-icon.tsx** (NEW FILE)
+   - Created new FileTypeIcon component
+   - Added SVG path data for TypeScript, JavaScript, CSS, and Markdown files
+   - Uses Geist/Vercel icon design system
+   - Implements currentColor for theme compatibility
+   - Falls back to Lucide icons for JSON and generic files
+   - Fixed 16x16 size with proper viewBox
 
 ---
 
@@ -143,6 +414,19 @@ text-gray-900 dark:text-white
 | **Prompt Input Background** | Very light, barely visible | Clear light gray (#fafafa) |
 | **User Message Background** | Too light (bg-muted/40) | Clear gray (#EBEBEB) |
 | **Version Card Visibility** | Overlapped by blur effects | Fully visible, no overlap |
+| **Selected File Highlight** | Blue tint (bg-primary/10) | Neutral gray (#E6E6E6) |
+| **File Sidebar Background** | White | Light gray (#FAFAFA) |
+| **Code Viewer Background** | Washed out (bg-muted/30) | Pure white (#FFFFFF) |
+| **Navbar Background** | White | Light gray (#FAFAFA) |
+| **Chat Interface Background** | White | Light gray (#FAFAFA) |
+| **Input Box Background** | #FAFAFA (same as bg) | White (stands out) |
+| **Version Card Design** | Cluttered with description | Minimal (title + version only) |
+| **Version Card Files** | Grouped by status | Clean list with name + path |
+| **File Display in Version Card** | Stacked (2 lines) | Same line (horizontal) |
+| **File Icons in Version Card** | Generic Lucide icons | Geist-style icons with file badges (TS, JS, CSS) |
+| **File Icon Color** | Previously colored | Black (gray-900/gray-100) |
+| **Path Navigation** | Hidden (hideHeader=true) | Visible with Computer icon + "/" |
+| **Folder Icons in Explorer** | Generic Folder | FolderClosed/FolderOpen based on state |
 
 ---
 
@@ -154,6 +438,15 @@ The project page now has:
 - ✅ **Improved readability** with proper input and message contrast
 - ✅ **Visible user messages** with clear gray backgrounds
 - ✅ **Clean scrolling** without interfering blur effects
-- ✅ **Professional appearance** matching design system
+- ✅ **Consistent color scheme** throughout (navbar, chat, sidebar, code)
+- ✅ **Neutral file selection** without distracting blue highlights
+- ✅ **Minimal version cards** with clean file lists
+- ✅ **Horizontal file display** (name and path on same line)
+- ✅ **Geist-style file type icons** with visual badges (TS, JS, CSS, MD)
+- ✅ **Black file icons** for professional, clean appearance
+- ✅ **Visible path navigation** with computer icon + "/"
+- ✅ **Smart folder icons** (FolderClosed/FolderOpen based on state)
+- ✅ **Better information hierarchy** (description separated from version card)
+- ✅ **Professional appearance** matching Vercel/modern design patterns
 
 All improvements maintain theme consistency and responsive design! 🚀

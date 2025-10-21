@@ -119,7 +119,8 @@ export function SandboxPreview({ sandboxUrl, projectName, projectId, hideHeader 
           <div className="flex items-center gap-2 flex-1 min-w-0">
             {/* URL Bar with controls - v0.app style */}
             <div className="flex items-center gap-1.5 bg-[#f2f2f2] dark:bg-[#0E100F] border border-border dark:border-[#333433] rounded-lg px-2.5 py-1.5 flex-1 min-w-0">
-              <Monitor className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+              <Monitor className="h-4 w-4 text-gray-900 dark:text-gray-100 flex-shrink-0" />
+              <span className="text-muted-foreground text-xs">/</span>
               <input
                 type="text"
                 value={path}

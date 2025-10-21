@@ -4,8 +4,13 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Folder, 
-  FolderOpen, 
-  FileCode, 
+  FolderOpen,
+  FolderClosed,
+  FileCode,
+  File,
+  FileCode2,
+  FileText,
+  Braces,
   ChevronRight,
   ChevronLeft,
   ChevronsRight,
@@ -306,10 +311,15 @@ function buildTreeFromPaths(files: Record<string, any>): TreeNode[] {
 }
 
 function getFileIcon(name: string) {
-  if (name.includes('.')) {
-    return <FileCode className="size-3.5 sm:size-4 text-blue-500 dark:text-blue-400" />;
+  const iconClass = "size-3.5 sm:size-4 flex-shrink-0";
+  
+  // If no extension, it's a folder (use FolderClosed)
+  if (!name.includes('.')) {
+    return <FolderClosed className={`${iconClass} text-yellow-500 dark:text-yellow-400`} />;
   }
-  return <Folder className="size-3.5 sm:size-4 text-yellow-500 dark:text-yellow-400" />;
+  
+  // All files use the same generic File icon
+  return <File className={`${iconClass} text-gray-500 dark:text-gray-400`} />;
 }
 
 function TreeItem({ 
@@ -334,7 +344,7 @@ function TreeItem({
     <div>
       <div
         className={`flex items-center gap-1.5 sm:gap-2 px-1.5 sm:px-2 py-2 sm:py-1 cursor-pointer hover:bg-muted/50 transition-colors rounded-md ${
-          isSelected ? 'bg-primary/10 dark:bg-[#333433] text-primary dark:text-foreground' : 'text-foreground'
+          isSelected ? 'bg-[#E6E6E6] dark:bg-[#333433] text-foreground' : 'text-foreground'
         }`}
         style={{ paddingLeft: `${depth * 8 + 6}px` }}
         onClick={() => {
@@ -351,7 +361,7 @@ function TreeItem({
           />
         )}
         {node.type === "folder" ? (
-          isExpanded ? <FolderOpen className="size-3.5 sm:size-4 flex-shrink-0 text-yellow-500 dark:text-yellow-400" /> : <Folder className="size-3.5 sm:size-4 flex-shrink-0 text-yellow-500 dark:text-yellow-400" />
+          isExpanded ? <FolderOpen className="size-3.5 sm:size-4 flex-shrink-0 text-yellow-500 dark:text-yellow-400" /> : <FolderClosed className="size-3.5 sm:size-4 flex-shrink-0 text-yellow-500 dark:text-yellow-400" />
         ) : (
           <span className="flex-shrink-0">{getFileIcon(node.name)}</span>
         )}
@@ -430,7 +440,7 @@ function CodeViewer({
 
   if (!selectedFile || selectedFile.type === 'folder') {
     return (
-        <div className="h-full flex items-center justify-center text-muted-foreground bg-muted/30 dark:bg-[#1D1D1D] p-4">
+        <div className="h-full flex items-center justify-center text-muted-foreground bg-white dark:bg-[#1D1D1D] p-4">
         <div className="text-center">
           <FileCode className="size-10 sm:size-12 mx-auto mb-3 sm:mb-4 opacity-50" />
           <p className="text-sm sm:text-base">Select a file to view its contents</p>
@@ -442,7 +452,7 @@ function CodeViewer({
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Code viewer header - sticky and always visible with clear filename - NO bottom border for unified look */}
-      <div className="sticky top-0 z-10 h-12 sm:h-10 px-2 sm:px-3 flex items-center justify-between gap-3 text-xs text-foreground bg-muted/30 dark:bg-[#1D1D1D] backdrop-blur-sm flex-shrink-0">
+      <div className="sticky top-0 z-10 h-12 sm:h-10 px-2 sm:px-3 flex items-center justify-between gap-3 text-xs text-foreground bg-white dark:bg-[#1D1D1D] backdrop-blur-sm flex-shrink-0">
         {/* Filename section with FULL PATH - responsive spacing */}
         <div className="flex items-center gap-4 sm:gap-5 lg:gap-2.5 min-w-0 flex-1 overflow-hidden">
           <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6">
@@ -492,7 +502,7 @@ function CodeViewer({
 
             {/* Code display container - proper overflow handling for mobile/tablet */}
             <div 
-              className="flex-1 overflow-y-auto overflow-x-auto md:overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-muted/30 dark:bg-[#1D1D1D] overscroll-contain" 
+              className="flex-1 overflow-y-auto overflow-x-auto md:overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-white dark:bg-[#1D1D1D] overscroll-contain" 
               style={{ 
                 minHeight: 0,
                 scrollBehavior: 'smooth',
@@ -1334,7 +1344,7 @@ export function ProjectPageClient({
             minWidth: 'auto',
             width: '100%'
           } : undefined}
-          className={`flex-col h-full bg-white dark:bg-[#0E100F] ${
+          className={`flex-col h-full bg-[#FAFAFA] dark:bg-[#0E100F] ${
             isChatPanelCollapsed 
               ? 'overflow-hidden' 
               : 'w-full sm:w-64 md:w-72 lg:w-80 xl:w-96 overflow-hidden'
@@ -1342,7 +1352,7 @@ export function ProjectPageClient({
         >
           
           {/* Messages Area - compact spacing for cleaner look */}
-          <div className="flex-1 overflow-y-auto px-1 sm:px-2 pt-3 sm:pt-4 pb-2 sm:pb-2 space-y-1.5 min-h-0 scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-white dark:bg-[#0E100F] relative">
+          <div className="flex-1 overflow-y-auto px-1 sm:px-2 pt-3 sm:pt-4 pb-2 sm:pb-2 space-y-1.5 min-h-0 scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-[#FAFAFA] dark:bg-[#0E100F] relative">
             
             <AnimatePresence>
               {allMessages.map((message, index) => {
@@ -1360,8 +1370,8 @@ export function ProjectPageClient({
                     className="text-sm"
                   >
                     {message.type === "version-card" && 'versionData' in message ? (
-                      // Version card - seamlessly integrated
-                      <div className="my-2">
+                      // Version card - seamlessly integrated with description below
+                      <div className="my-2 space-y-2">
                         <VersionCard
                           version={message.versionData}
                           isActive={selectedVersionId === message.versionData.id}
@@ -1370,6 +1380,13 @@ export function ProjectPageClient({
                             versions.find(v => v.id === message.versionData.parent_version_id)
                           }
                         />
+                        {message.versionData.description && (
+                          <div className="flex gap-2 sm:gap-3 items-start pr-2 sm:pr-4">
+                            <div className="whitespace-pre-wrap break-words leading-[1.5] text-[14px] sm:text-[15px] flex-1 text-muted-foreground">
+                              {message.versionData.description}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ) : message.role === "user" ? (
                       // User message - compact spacing
@@ -1422,8 +1439,8 @@ export function ProjectPageClient({
           </div>
 
           {/* Input Box - Compact design for more code space */}
-          <div className="px-1 sm:px-2 pb-2 sm:pb-2 bg-white dark:bg-[#0E100F] flex flex-col justify-end">
-            <div className="rounded-xl border border-border/50 dark:border-[#444444] bg-[#fafafa] dark:bg-[#1F2023] p-2 sm:p-3 shadow-lg flex flex-col">
+          <div className="px-1 sm:px-2 pb-2 sm:pb-2 bg-[#FAFAFA] dark:bg-[#0E100F] flex flex-col justify-end">
+            <div className="rounded-xl border border-border/50 dark:border-[#444444] bg-white dark:bg-[#1F2023] p-2 sm:p-3 shadow-lg flex flex-col">
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -1745,10 +1762,10 @@ export function ProjectPageClient({
               w-56 sm:w-36 md:w-40 lg:w-44 xl:w-48 2xl:w-52 border-r border-border dark:border-[#333433] flex-shrink-0 transition-all duration-300
               ${viewMode === 'preview' ? 'hidden' : ''}
               ${isMobileExplorerOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}
-              sm:relative absolute sm:z-auto z-40 h-full bg-white dark:bg-[#1D1D1D]
+              sm:relative absolute sm:z-auto z-40 h-full bg-[#FAFAFA] dark:bg-[#1D1D1D]
             `}>
               {/* File tree container - NO header, starts immediately */}
-              <div className="p-1.5 sm:p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent bg-white dark:bg-[#1D1D1D] h-full">
+              <div className="p-1.5 sm:p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent bg-[#FAFAFA] dark:bg-[#1D1D1D] h-full">
                 {/* Close button for mobile - positioned at top right */}
                 <button
                   onClick={() => setIsMobileExplorerOpen(false)}
@@ -1778,7 +1795,7 @@ export function ProjectPageClient({
             )}
 
             {/* Code/Preview content area with smooth animations */}
-            <div className="flex-1 min-w-0 overflow-hidden bg-muted/30 dark:bg-[#1D1D1D] relative">
+            <div className="flex-1 min-w-0 overflow-hidden bg-white dark:bg-[#1D1D1D] relative">
               <AnimatePresence mode="wait">
                 {viewMode === 'preview' ? (
                   <motion.div
@@ -1797,7 +1814,7 @@ export function ProjectPageClient({
                       }
                       projectName={currentProject.name}
                       projectId={projectId}
-                      hideHeader={true}
+                      hideHeader={false}
                       path={previewPath}
                     />
                   </motion.div>
