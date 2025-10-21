@@ -103,7 +103,7 @@ export function GitHubRepositoryDialog({
         <PopoverTrigger asChild>
           {children}
         </PopoverTrigger>
-        <PopoverContent className="w-80 bg-[#1F2023] border-[#444444] p-3" align="end">
+        <PopoverContent className="w-[calc(100vw-2rem)] sm:w-80 max-w-[400px] bg-[#1F2023] border-[#444444] p-3" align="end">
           <div className="flex items-center justify-center py-4">
             <div className="text-gray-300 text-sm">Checking GitHub connection...</div>
           </div>
@@ -118,7 +118,7 @@ export function GitHubRepositoryDialog({
         <PopoverTrigger asChild>
           {children}
         </PopoverTrigger>
-        <PopoverContent className="w-80 bg-[#1F2023] border-[#444444] p-3" align="end">
+        <PopoverContent className="w-[calc(100vw-2rem)] sm:w-80 max-w-[400px] bg-[#1F2023] border-[#444444] p-3" align="end">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-white text-sm font-medium">Connect to GitHub</h3>
             <Button
@@ -151,7 +151,7 @@ export function GitHubRepositoryDialog({
       <PopoverTrigger asChild>
         {children}
       </PopoverTrigger>
-      <PopoverContent className="w-80 bg-[#1F2023] border-[#444444] p-3" align="end">
+      <PopoverContent className="w-[calc(100vw-2rem)] sm:w-80 max-w-[400px] bg-[#1F2023] border-[#444444] p-3" align="end">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-white text-sm font-medium">Create GitHub Repository</h3>
           <Button

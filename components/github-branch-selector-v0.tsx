@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Github, GitBranch, Plus, Search, Check, X } from "lucide-react"
 import { trpc } from "@/src/trpc/client"
 import { toast } from "sonner"
+import { useTheme } from "next-themes"
 
 interface Project {
   id: string
@@ -39,6 +40,8 @@ export function GitHubBranchSelectorV0({
   project,
   isInitialSetup = false 
 }: GitHubBranchSelectorV0Props) {
+  const { theme, resolvedTheme } = useTheme()
+  const isDark = resolvedTheme === 'dark'
   const [open, setOpen] = useState(false)
   const [branchDropdownOpen, setBranchDropdownOpen] = useState(false)
   const [branches, setBranches] = useState<Branch[]>([])
@@ -314,40 +317,41 @@ export function GitHubBranchSelectorV0({
         {children}
       </PopoverTrigger>
       <PopoverContent 
-        className="w-[320px] p-0 bg-[#1e1e1e] border-[#333333] shadow-2xl" 
-        align="end"
+        className={`w-[calc(100vw-2rem)] sm:w-[320px] max-w-[360px] p-0 shadow-2xl ${isDark ? 'bg-[#1e1e1e] border-[#333333]' : 'bg-white border-[#e5e5e5]'}`}
+        align="center"
         side="bottom"
-        sideOffset={8}
+        sideOffset={12}
+        collisionPadding={16}
       >
         {!isConnected ? (
           // STATE 1: Select a Branch (Initial Setup)
-          <div className="p-4 space-y-4">
+          <div className="p-2.5 sm:p-4 space-y-2.5 sm:space-y-4">
             {/* Header */}
             <div className="space-y-1">
-              <h3 className="text-sm font-semibold text-white">
+              <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-[#171717]'}`}>
                 Select a Branch
               </h3>
-              <p className="text-xs text-gray-400">
+              <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                 Select which branch you want to sync changes to.
               </p>
             </div>
 
             {/* Project Repository */}
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-gray-400">
+            <div className="space-y-1.5 sm:space-y-2">
+              <label className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>
                 Project Repository
               </label>
-              <div className="flex items-center gap-2 p-2.5 bg-[#2a2a2a] rounded-md border border-[#404040]">
-                <Github className="h-4 w-4 text-gray-400" />
-                <span className="text-sm text-white font-mono">
+              <div className={`flex items-center gap-2 p-2 sm:p-2.5 rounded-md border ${isDark ? 'bg-[#2a2a2a] border-[#404040]' : 'bg-[#fafafa] border-[#e5e5e5]'}`}>
+                <Github className={`h-4 w-4 flex-shrink-0 ${isDark ? 'text-gray-400' : 'text-gray-600'}`} />
+                <span className={`text-xs sm:text-sm font-mono truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
                   {getRepositoryName()}
                 </span>
               </div>
             </div>
 
             {/* Active Branch */}
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-gray-400">
+            <div className="space-y-1.5 sm:space-y-2">
+              <label className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>
                 Active Branch
               </label>
               
@@ -355,7 +359,7 @@ export function GitHubBranchSelectorV0({
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className="w-full justify-between bg-[#2a2a2a] border-[#404040] text-white hover:bg-[#353535] h-9 text-sm font-normal"
+                    className={`w-full justify-between h-9 text-sm font-normal ${isDark ? 'bg-[#2a2a2a] border-[#404040] text-white hover:bg-[#353535]' : 'bg-white border-[#e5e5e5] text-gray-900 hover:bg-[#fafafa]'}`}
                   >
                     <div className="flex items-center gap-2">
                       <GitBranch className="h-3.5 w-3.5" />
@@ -367,7 +371,7 @@ export function GitHubBranchSelectorV0({
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent 
-                  className="w-[288px] p-0 bg-[#1e1e1e] border-[#333333]"
+                  className="w-[calc(100vw-3rem)] sm:w-[288px] max-w-[320px] p-0 bg-[#1e1e1e] border-[#333333]"
                   align="start"
                   side="bottom"
                   sideOffset={4}
@@ -435,31 +439,32 @@ export function GitHubBranchSelectorV0({
             {/* Set Active Branch Button */}
             <Button
               onClick={handleSetActiveBranch}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white h-9 font-medium"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white h-9 font-medium text-xs sm:text-sm"
             >
-              Set Active Branch & Push Code
+              <span className="hidden sm:inline">Set Active Branch & Push Code</span>
+              <span className="sm:hidden">Set Branch & Push</span>
             </Button>
           </div>
         ) : (
           // STATE 2: Connected to GitHub (Active State)
-          <div className="p-4 space-y-4">
+          <div className="p-2.5 sm:p-4 space-y-2.5 sm:space-y-4">
             {/* Connection Status */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                <span className="text-sm font-medium text-white">Connected to GitHub</span>
+                <span className={`text-sm font-medium ${isDark ? 'text-white' : 'text-[#171717]'}`}>Connected to GitHub</span>
               </div>
-              <span className="text-xs text-gray-400">Just now</span>
+              <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Just now</span>
             </div>
 
             {/* Repository */}
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-gray-400">
+            <div className="space-y-1.5 sm:space-y-2">
+              <label className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>
                 Repository
               </label>
-              <div className="flex items-center gap-2 p-2.5 bg-[#2a2a2a] rounded-md border border-[#404040]">
-                <Github className="h-4 w-4 text-gray-400" />
-                <span className="text-sm text-white font-mono">
+              <div className={`flex items-center gap-2 p-2 sm:p-2.5 rounded-md border ${isDark ? 'bg-[#2a2a2a] border-[#404040]' : 'bg-[#fafafa] border-[#e5e5e5]'}`}>
+                <Github className={`h-4 w-4 flex-shrink-0 ${isDark ? 'text-gray-400' : 'text-gray-600'}`} />
+                <span className={`text-xs sm:text-sm font-mono truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
                   {getRepositoryName()}
                 </span>
               </div>
@@ -467,7 +472,7 @@ export function GitHubBranchSelectorV0({
 
             {/* Active Branch */}
             <div className="space-y-2">
-              <label className="text-xs font-medium text-gray-400">
+              <label className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>
                 Active Branch
               </label>
               
@@ -476,7 +481,7 @@ export function GitHubBranchSelectorV0({
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
-                      className="flex-1 justify-between bg-[#2a2a2a] border-[#404040] text-white hover:bg-[#353535] h-9 text-sm font-normal"
+                      className={`flex-1 justify-between h-9 text-sm font-normal ${isDark ? 'bg-[#2a2a2a] border-[#404040] text-white hover:bg-[#353535]' : 'bg-white border-[#e5e5e5] text-gray-900 hover:bg-[#fafafa]'}`}
                     >
                       <div className="flex items-center gap-2">
                         <GitBranch className="h-3.5 w-3.5" />
@@ -488,7 +493,7 @@ export function GitHubBranchSelectorV0({
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent 
-                    className="w-[270px] p-0 bg-[#1e1e1e] border-[#333333]"
+                    className={`w-[calc(100vw-3rem)] sm:w-[270px] max-w-[300px] p-0 ${isDark ? 'bg-[#1e1e1e] border-[#333333]' : 'bg-white border-[#e5e5e5]'}`}
                     align="start"
                     side="bottom"
                     sideOffset={4}
@@ -501,7 +506,7 @@ export function GitHubBranchSelectorV0({
                           placeholder="Create or search branches"
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
-                          className="pl-8 bg-[#2a2a2a] border-[#404040] text-white placeholder:text-gray-500 h-8 text-sm"
+                          className={`pl-8 h-8 text-sm ${isDark ? 'bg-[#2a2a2a] border-[#404040] text-white placeholder:text-gray-500' : 'bg-white border-[#e5e5e5] text-gray-900 placeholder:text-gray-400'}`}
                         />
                       </div>
                       
@@ -515,14 +520,14 @@ export function GitHubBranchSelectorV0({
                               setBranchDropdownOpen(false)
                               setSearchQuery("")
                             }}
-                            className="w-full flex items-center justify-between p-2 hover:bg-[#2a2a2a] rounded text-sm"
+                            className={`w-full flex items-center justify-between p-2 rounded text-sm ${isDark ? 'hover:bg-[#2a2a2a]' : 'hover:bg-[#f2f2f2]'}`}
                           >
                             <div className="flex items-center gap-2">
-                              <GitBranch className="h-3.5 w-3.5 text-gray-400" />
-                              <span className="text-white">{branch.name}</span>
+                              <GitBranch className={`h-3.5 w-3.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`} />
+                              <span className={isDark ? 'text-white' : 'text-gray-900'}>{branch.name}</span>
                             </div>
                             {activeBranch === branch.name && (
-                              <Check className="h-3.5 w-3.5 text-white" />
+                              <Check className={`h-3.5 w-3.5 ${isDark ? 'text-white' : 'text-gray-900'}`} />
                             )}
                           </button>
                         ))}
@@ -531,7 +536,7 @@ export function GitHubBranchSelectorV0({
                       {/* Create Branch */}
                       <button
                         onClick={() => setIsCreatingBranch(true)}
-                        className="w-full flex items-center gap-2 p-2 hover:bg-[#2a2a2a] rounded text-sm border-t border-[#333333] mt-1 pt-2"
+                        className={`w-full flex items-center gap-2 p-2 rounded text-sm border-t mt-1 pt-2 ${isDark ? 'hover:bg-[#2a2a2a] border-[#333333]' : 'hover:bg-[#f2f2f2] border-[#e5e5e5]'}`}
                       >
                         <div className="flex items-center justify-center w-4 h-4 rounded-full bg-blue-600">
                           <Plus className="h-3 w-3 text-white" />
@@ -547,9 +552,9 @@ export function GitHubBranchSelectorV0({
                   onClick={() => setIsCreatingBranch(true)}
                   variant="outline"
                   size="icon"
-                  className="h-9 w-9 bg-[#2a2a2a] border-[#404040] hover:bg-[#353535]"
+                  className={`h-9 w-9 ${isDark ? 'bg-[#2a2a2a] border-[#404040] hover:bg-[#353535]' : 'bg-white border-[#e5e5e5] hover:bg-[#fafafa]'}`}
                 >
-                  <Plus className="h-4 w-4 text-white" />
+                  <Plus className={`h-4 w-4 ${isDark ? 'text-white' : 'text-gray-900'}`} />
                 </Button>
               </div>
             </div>
@@ -559,7 +564,7 @@ export function GitHubBranchSelectorV0({
               <Button
                 onClick={handlePullChanges}
                 variant="outline"
-                className="flex-1 bg-[#2a2a2a] border-[#404040] text-white hover:bg-[#353535] h-9 font-normal"
+                className={`flex-1 h-9 font-normal ${isDark ? 'bg-[#2a2a2a] border-[#404040] text-white hover:bg-[#353535]' : 'bg-white border-[#e5e5e5] text-gray-900 hover:bg-[#fafafa]'}`}
               >
                 Pull Changes
               </Button>
@@ -568,7 +573,7 @@ export function GitHubBranchSelectorV0({
                 className={`flex-1 h-9 font-normal ${
                   hasLocalChanges 
                     ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                    : 'bg-[#2a2a2a] border border-[#404040] text-gray-400 hover:bg-[#353535]'
+                    : isDark ? 'bg-[#2a2a2a] border border-[#404040] text-gray-400 hover:bg-[#353535]' : 'bg-white border border-[#e5e5e5] text-gray-400 hover:bg-[#fafafa]'
                 }`}
                 disabled={!hasLocalChanges}
               >
@@ -580,29 +585,29 @@ export function GitHubBranchSelectorV0({
 
         {/* Create Branch Modal */}
         {isCreatingBranch && (
-          <div className="absolute inset-0 bg-[#1e1e1e] rounded-lg p-4 space-y-4">
+          <div className={`absolute inset-0 rounded-lg p-3 sm:p-4 space-y-3 sm:space-y-4 ${isDark ? 'bg-[#1e1e1e]' : 'bg-white'}`}>
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-white">Create Branch</h3>
+              <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-[#171717]'}`}>Create Branch</h3>
               <button
                 onClick={() => {
                   setIsCreatingBranch(false)
                   setNewBranchName("")
                 }}
-                className="text-gray-400 hover:text-white"
+                className={isDark ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'}
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-medium text-gray-400">
+              <label className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>
                 Branch Name
               </label>
               <Input
                 value={newBranchName}
                 onChange={(e) => setNewBranchName(e.target.value)}
                 placeholder="feature/new-feature"
-                className="bg-[#2a2a2a] border-[#404040] text-white h-9"
+                className={`h-9 ${isDark ? 'bg-[#2a2a2a] border-[#404040] text-white' : 'bg-white border-[#e5e5e5] text-gray-900'}`}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleCreateBranch()
                 }}
@@ -616,7 +621,7 @@ export function GitHubBranchSelectorV0({
                   setNewBranchName("")
                 }}
                 variant="outline"
-                className="flex-1 bg-transparent border-[#404040] text-white hover:bg-[#2a2a2a] h-9"
+                className={`flex-1 h-9 ${isDark ? 'bg-transparent border-[#404040] text-white hover:bg-[#2a2a2a]' : 'bg-white border-[#e5e5e5] text-gray-900 hover:bg-[#fafafa]'}`}
               >
                 Cancel
               </Button>

@@ -1342,13 +1342,7 @@ export function ProjectPageClient({
         >
           
           {/* Messages Area - compact spacing for cleaner look */}
-          <div className="flex-1 overflow-y-auto px-1 sm:px-2 pt-3 sm:pt-4 pb-2 sm:pb-2 space-y-1.5 min-h-0 scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-white dark:bg-[#0E100F] relative" style={{
-            maskImage: 'linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%)',
-            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%)'
-          }}>
-            {/* Fade gradient overlays */}
-            <div className="absolute top-0 left-0 right-0 h-12 pointer-events-none z-10 bg-gradient-to-b from-white dark:from-[#0E100F] to-transparent" />
-            <div className="absolute bottom-0 left-0 right-0 h-12 pointer-events-none z-10 bg-gradient-to-t from-white dark:from-[#0E100F] to-transparent" />
+          <div className="flex-1 overflow-y-auto px-1 sm:px-2 pt-3 sm:pt-4 pb-2 sm:pb-2 space-y-1.5 min-h-0 scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-white dark:bg-[#0E100F] relative">
             
             <AnimatePresence>
               {allMessages.map((message, index) => {
@@ -1380,8 +1374,8 @@ export function ProjectPageClient({
                     ) : message.role === "user" ? (
                       // User message - compact spacing
                       <div className="flex justify-end mb-1.5">
-                        <div className="rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 bg-muted/40 dark:bg-[#262626] border border-border/30 dark:border-[#262626] max-w-[90%]">
-                          <div className="whitespace-pre-wrap break-words leading-[1.5] text-[14px] sm:text-[15px] text-foreground font-medium">
+                        <div className="rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 bg-[#EBEBEB] dark:bg-[#262626] border border-[#d1d5db] dark:border-[#262626] max-w-[90%]">
+                          <div className="whitespace-pre-wrap break-words leading-[1.5] text-[14px] sm:text-[15px] text-gray-900 dark:text-white font-medium">
                             {message.content}
                           </div>
                         </div>
@@ -1429,7 +1423,7 @@ export function ProjectPageClient({
 
           {/* Input Box - Compact design for more code space */}
           <div className="px-1 sm:px-2 pb-2 sm:pb-2 bg-white dark:bg-[#0E100F] flex flex-col justify-end">
-            <div className="rounded-xl border border-border/50 dark:border-[#444444] bg-background/50 dark:bg-[#1F2023] p-2 sm:p-3 shadow-lg flex flex-col">
+            <div className="rounded-xl border border-border/50 dark:border-[#444444] bg-[#fafafa] dark:bg-[#1F2023] p-2 sm:p-3 shadow-lg flex flex-col">
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}

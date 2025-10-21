@@ -1,8 +1,10 @@
 import React from "react";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
-import { ArrowUp, Square, Paperclip, SlidersHorizontal, Github } from "lucide-react";
+import { ArrowUp, Square, Paperclip, SlidersHorizontal } from "lucide-react";
 import { TypingAnimation } from "./typing-animation";
 import { GitHubRepoSelector } from "../github-repo-selector";
+import Image from "next/image";
+import { useTheme } from "next-themes";
 
 // Utility function for className merging
 const cn = (...classes: (string | undefined | null | false)[]) => classes.filter(Boolean).join(" ");
@@ -286,6 +288,8 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
 
     const hasContent = input.trim() !== "";
 
+    const { theme } = useTheme();
+
     return (
       <PromptInput
         value={input}
@@ -308,7 +312,13 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                 size="sm"
                 className="h-7 px-2 py-0 rounded-full text-xs text-gray-200 border-[#444444] bg-transparent hover:bg-gray-700/40"
               >
-                <Github className="h-3.5 w-3.5 mr-1.5" />
+                <Image 
+                  src={`/github-${theme === 'dark' ? 'dark' : 'light'}.svg`}
+                  alt="GitHub"
+                  width={14}
+                  height={14}
+                  className="mr-1.5 opacity-70"
+                />
                 {selectedGithubRepo ? selectedGithubRepo.repo_name : 'GitHub'}
               </Button>
             </GitHubRepoSelector>

@@ -2,7 +2,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { Logo } from "@/components/logo"
-import { Share, Settings } from "lucide-react"
+import { Share, Settings, Globe } from "lucide-react"
 import { GitHubSetupDialog } from "@/components/github-setup-dialog"
 import { GitHubBranchSelectorV0 } from "@/components/github-branch-selector-v0"
 import { useTheme } from "next-themes"
@@ -107,18 +107,19 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
             </GitHubBranchSelectorV0>
           )}
           
-          {/* Share button */}
+          {/* Share button - Icon only on mobile */}
           <button 
             className={`transition-all duration-300 h-8 px-2 rounded-md flex items-center justify-center ${isDark ? 'bg-[#1A1A1A] hover:bg-[#262626] border border-gray-600' : 'bg-[#fafafa] hover:bg-[#f2f2f2] border border-gray-300'}`}
           >
-            <Share className={`h-[18px] w-[18px] mr-1.5 transition-colors duration-300 ${isDark ? 'text-white' : 'text-gray-900'} pointer-events-none`} />
-            <span className={`text-xs transition-colors duration-300 ${isDark ? 'text-white' : 'text-gray-900'}`}>Share</span>
+            <Share className={`h-[18px] w-[18px] sm:mr-1.5 transition-colors duration-300 ${isDark ? 'text-white' : 'text-gray-900'} pointer-events-none`} />
+            <span className={`hidden sm:inline text-xs transition-colors duration-300 ${isDark ? 'text-white' : 'text-gray-900'}`}>Share</span>
           </button>
           
-          {/* Publish button - Theme-aware */}
+          {/* Publish button - Theme-aware with icon */}
           <button 
-            className={`transition-all duration-300 h-8 px-3 rounded-md flex items-center justify-center ${isDark ? 'bg-white hover:bg-gray-200 text-black' : 'bg-black hover:bg-gray-900 text-white'}`}
+            className={`transition-all duration-300 h-8 px-3 rounded-md flex items-center justify-center gap-1.5 ${isDark ? 'bg-white hover:bg-gray-200 text-black' : 'bg-black hover:bg-gray-900 text-white'}`}
           >
+            <Globe className="h-[16px] w-[16px]" />
             <span className="text-xs font-medium transition-colors duration-300">Publish</span>
           </button>
         </div>

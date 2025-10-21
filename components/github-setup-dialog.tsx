@@ -317,7 +317,7 @@ export function GitHubSetupDialog({
         <PopoverTrigger asChild>
           {children}
         </PopoverTrigger>
-        <PopoverContent className="w-80 bg-[#1F2023] border-[#444444] p-3" align="end">
+        <PopoverContent className="w-[calc(100vw-2rem)] sm:w-80 max-w-[400px] bg-[#1F2023] border-[#444444] p-3" align="end">
           <div className="flex items-center justify-center py-4">
             <Loader2 className="h-4 w-4 animate-spin text-gray-300" />
             <span className="ml-2 text-gray-300 text-sm">Checking GitHub connection...</span>
@@ -334,8 +334,8 @@ export function GitHubSetupDialog({
         <PopoverTrigger asChild>
           {children}
         </PopoverTrigger>
-        <PopoverContent className={`w-[400px] p-4 ${isDark ? 'bg-[#0a0a0a] border-[#262626]' : 'bg-white border-[#e5e5e5]'}`} align="end">
-          <div className="flex items-center justify-between mb-3">
+        <PopoverContent className={`w-[calc(100vw-2rem)] sm:w-[400px] max-w-[400px] p-2.5 sm:p-4 ${isDark ? 'bg-[#0a0a0a] border-[#262626]' : 'bg-white border-[#e5e5e5]'}`} align="center" side="bottom" sideOffset={12} collisionPadding={16}>
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
             <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-[#171717]'}`}>Connect to GitHub</h3>
             <Button
               variant="ghost"
@@ -369,8 +369,8 @@ export function GitHubSetupDialog({
         <PopoverTrigger asChild>
           {children}
         </PopoverTrigger>
-        <PopoverContent className={`w-[400px] p-4 ${isDark ? 'bg-[#0a0a0a] border-[#262626]' : 'bg-white border-[#e5e5e5]'}`} align="end">
-          <div className="flex items-center justify-between mb-3">
+        <PopoverContent className={`w-[calc(100vw-2rem)] sm:w-[400px] max-w-[400px] p-2.5 sm:p-4 ${isDark ? 'bg-[#0a0a0a] border-[#262626]' : 'bg-white border-[#e5e5e5]'}`} align="center" side="bottom" sideOffset={12} collisionPadding={16}>
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
             <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-[#171717]'}`}>Create Repository</h3>
             <Button
               variant="ghost"
@@ -382,8 +382,8 @@ export function GitHubSetupDialog({
             </Button>
           </div>
 
-          <div className="space-y-3">
-            <p className={`text-sm leading-relaxed ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+          <div className="space-y-2 sm:space-y-3">
+            <p className={`text-xs sm:text-sm leading-snug sm:leading-relaxed ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
               Create a new{" "}
               <a 
                 href="https://docs.github.com/en/repositories/creating-and-managing-repositories/about-repositories" 
@@ -396,8 +396,8 @@ export function GitHubSetupDialog({
               to sync changes to. SmartAPIForge will push changes to a branch on this repository each time you send a message.
             </p>
             
-            <div className="space-y-1.5">
-              <Label htmlFor="git-scope" className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>Git Scope</Label>
+            <div className="space-y-1 sm:space-y-1.5">
+              <Label htmlFor="git-scope" className={`text-xs sm:text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>Git Scope</Label>
               <Select value={gitScope} onValueChange={setGitScope} disabled={loadingScopes}>
                 <SelectTrigger className={`w-full h-9 text-sm ${isDark ? 'bg-[#262626] border-[#404040] text-white hover:bg-[#2a2a2a]' : 'bg-white border-[#e5e5e5] text-gray-900 hover:bg-[#fafafa]'}`}>
                   <div className="flex items-center gap-2">
@@ -432,8 +432,8 @@ export function GitHubSetupDialog({
               </Select>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="repository-name" className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>Repository Name</Label>
+            <div className="space-y-1 sm:space-y-1.5">
+              <Label htmlFor="repository-name" className={`text-xs sm:text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>Repository Name</Label>
               <Input
                 id="repository-name"
                 value={repositoryName}
@@ -446,7 +446,7 @@ export function GitHubSetupDialog({
             <Button 
               onClick={handleCreateRepository}
               disabled={!repositoryName.trim() || !gitScope || isCreating}
-              className={`w-full disabled:opacity-50 text-sm h-9 mt-4 ${isDark ? 'bg-[#EDEDED] hover:bg-[#E0E0E0] text-black' : 'bg-[#171717] hover:bg-black text-white'}`}
+              className={`w-full disabled:opacity-50 text-sm h-9 mt-2 sm:mt-3 ${isDark ? 'bg-[#EDEDED] hover:bg-[#E0E0E0] text-black' : 'bg-[#171717] hover:bg-black text-white'}`}
             >
               {isCreating ? (
                 <>
@@ -469,8 +469,8 @@ export function GitHubSetupDialog({
       <PopoverTrigger asChild>
         {children}
       </PopoverTrigger>
-      <PopoverContent className={`w-[400px] p-4 ${isDark ? 'bg-[#0a0a0a] border-[#262626]' : 'bg-white border-[#e5e5e5]'}`} align="end">
-        <div className="flex items-center justify-between mb-3">
+      <PopoverContent className={`w-[calc(100vw-2rem)] sm:w-[400px] max-w-[400px] p-2.5 sm:p-4 ${isDark ? 'bg-[#0a0a0a] border-[#262626]' : 'bg-white border-[#e5e5e5]'}`} align="center" side="bottom" sideOffset={12} collisionPadding={16}>
+        <div className="flex items-center justify-between mb-2 sm:mb-3">
           <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-[#171717]'}`}>Select a Branch</h3>
           <Button
             variant="ghost"
@@ -482,28 +482,28 @@ export function GitHubSetupDialog({
           </Button>
         </div>
 
-        <div className="space-y-3">
-          <p className={`text-sm leading-relaxed ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+        <div className="space-y-2 sm:space-y-3">
+          <p className={`text-xs sm:text-sm leading-snug sm:leading-relaxed ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
             Select which branch you want to sync changes to.
           </p>
 
           {/* Repository Info */}
-          <div className={`rounded p-2.5 border ${isDark ? 'bg-[#262626] border-[#404040]' : 'bg-[#fafafa] border-[#e5e5e5]'}`}>
-            <div className="flex items-center gap-2">
+          <div className={`rounded p-2 sm:p-2.5 border ${isDark ? 'bg-[#262626] border-[#404040]' : 'bg-[#fafafa] border-[#e5e5e5]'}`}>
+            <div className="flex items-center gap-2 min-w-0">
               <Image 
                 src={isDark ? "/github-dark.svg" : "/github-light.svg"}
                 alt="GitHub"
                 width={16}
                 height={16}
-                className={isDark ? "opacity-70" : "opacity-90"}
+                className={`flex-shrink-0 ${isDark ? "opacity-70" : "opacity-90"}`}
               />
-              <span className={`text-xs font-mono ${isDark ? 'text-white' : 'text-gray-900'}`}>{repoFullName}</span>
+              <span className={`text-xs font-mono truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{repoFullName}</span>
             </div>
           </div>
 
           {/* Branch Selection */}
-          <div className="space-y-1.5">
-            <Label className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>Active Branch</Label>
+          <div className="space-y-1 sm:space-y-1.5">
+            <Label className={`text-xs sm:text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>Active Branch</Label>
             
             <Popover open={branchDropdownOpen} onOpenChange={setBranchDropdownOpen}>
               <PopoverTrigger asChild>
@@ -521,7 +521,7 @@ export function GitHubSetupDialog({
                 </Button>
               </PopoverTrigger>
               <PopoverContent 
-                className={`w-[280px] p-0 ${isDark ? 'bg-[#1a1a1a] border-[#333333]' : 'bg-white border-[#e5e5e5]'}`}
+                className={`w-[calc(100vw-2.5rem)] sm:w-[280px] max-w-[320px] p-0 ${isDark ? 'bg-[#1a1a1a] border-[#333333]' : 'bg-white border-[#e5e5e5]'}`}
                 align="start"
                 side="bottom"
                 sideOffset={4}
