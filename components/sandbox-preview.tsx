@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Loader2, RefreshCw, ExternalLink, AlertCircle, Monitor, RotateCw, Eye, Code2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useSandboxManager } from '@/hooks/use-sandbox-manager';
@@ -24,14 +24,32 @@ export function SandboxPreview({ sandboxUrl, projectName, projectId, hideHeader 
   const [error, setError] = useState(false);
   const [key, setKey] = useState(0); // For forcing iframe refresh
   const [internalPath, setInternalPath] = useState('/');
+  const [currentSandboxUrl, setCurrentSandboxUrl] = useState(sandboxUrl);
 
   // Use external path if provided, otherwise use internal state
   const path = externalPath !== undefined ? externalPath : internalPath;
 
-  // Manage sandbox lifecycle
+  // Handle sandbox restoration - update URL without page reload
+  const handleSandboxRestored = useCallback((newUrl: string) => {
+    console.log(`🔄 Updating sandbox URL from ${currentSandboxUrl} to ${newUrl}`);
+    setCurrentSandboxUrl(newUrl);
+    setIsLoading(true);
+    setError(false);
+    setKey(prev => prev + 1); // Force iframe reload with new URL
+  }, [currentSandboxUrl]);
+
+  // Update current URL when prop changes (initial load)
+  useEffect(() => {
+    if (sandboxUrl && sandboxUrl !== currentSandboxUrl) {
+      setCurrentSandboxUrl(sandboxUrl);
+    }
+  }, [sandboxUrl]);
+
+  // Manage sandbox lifecycle with auto-restoration
   const sandbox = useSandboxManager({
     projectId: projectId || '',
     enabled: !!projectId && !!sandboxUrl,
+    onSandboxRestored: handleSandboxRestored,
   });
 
   const handleRefresh = () => {
@@ -42,7 +60,7 @@ export function SandboxPreview({ sandboxUrl, projectName, projectId, hideHeader 
   };
 
   const handleOpenInNewTab = () => {
-    const fullUrl = sandboxUrl + (path !== '/' ? path : '');
+    const fullUrl = currentSandboxUrl + (path !== '/' ? path : '');
     window.open(fullUrl, '_blank', 'noopener,noreferrer');
   };
 
@@ -61,9 +79,9 @@ export function SandboxPreview({ sandboxUrl, projectName, projectId, hideHeader 
     }
   };
 
-  const currentUrl = sandboxUrl + (path !== '/' ? path : '');
+  const currentUrl = currentSandboxUrl + (path !== '/' ? path : '');
 
-  if (!sandboxUrl || sandboxUrl === 'undefined') {
+  if (!currentSandboxUrl || currentSandboxUrl === 'undefined') {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground bg-muted/30 dark:bg-[#1D1D1D]">
         <div className="text-center space-y-3">
@@ -96,15 +114,22 @@ export function SandboxPreview({ sandboxUrl, projectName, projectId, hideHeader 
     );
   }
 
-  // Show restart UI if sandbox needs restart
+  // Show restoration UI if sandbox is being restored
   if (sandbox.isRestarting) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground bg-muted/30 dark:bg-[#1D1D1D]">
-        <div className="text-center space-y-3">
+        <div className="text-center space-y-4 max-w-md px-4">
           <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
-          <p className="text-sm">Restarting sandbox...</p>
-          <p className="text-xs text-muted-foreground">
-            This may take a moment
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Restoring sandbox...</p>
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p>📦 Cloning repository</p>
+              <p>🔧 Installing dependencies</p>
+              <p>🚀 Starting dev server</p>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground italic">
+            This may take 30-60 seconds
           </p>
         </div>
       </div>
@@ -209,8 +234,20 @@ export function SandboxPreview({ sandboxUrl, projectName, projectId, hideHeader 
             setError(false);
           }}
           onError={() => {
+            console.error('Iframe failed to load, sandbox may be expired');
             setIsLoading(false);
             setError(true);
+            
+            // Trigger immediate sandbox check and potential restoration
+            if (projectId && !sandbox.isRestarting) {
+              console.log('Triggering sandbox health check due to load error');
+              sandbox.keepAlive().then(status => {
+                if (status && status.needsRestart) {
+                  console.log('Sandbox expired, triggering restoration');
+                  sandbox.manualRestart();
+                }
+              });
+            }
           }}
         />
       </div>

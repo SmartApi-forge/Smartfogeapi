@@ -312,55 +312,81 @@ export class GitHubRepositoryService {
       }
 
       console.log(`📦 Running: ${installCommand}`);
-      const result = await sandbox.commands.run(`cd ${repoPath} && ${installCommand}`, {
-        timeoutMs: 600000, // 10 minutes timeout (Next.js 15 can take long)
-      });
+      
+      // Wrap in try-catch because E2B throws CommandExitError on non-zero exit
+      let result: any;
+      try {
+        result = await sandbox.commands.run(`cd ${repoPath} && ${installCommand}`, {
+          timeoutMs: 600000, // 10 minutes timeout (Next.js 15 can take long)
+        });
 
-      // If successful, return immediately
-      if (result.exitCode === 0) {
-        console.log('✅ Dependencies installed successfully');
-        return {
-          success: true,
-          output: result.stdout,
+        // If successful, return immediately
+        if (result.exitCode === 0) {
+          console.log('✅ Dependencies installed successfully');
+          return {
+            success: true,
+            output: result.stdout,
+          };
+        }
+      } catch (cmdError: any) {
+        console.error('❌ Command failed with exception:', cmdError.message);
+        console.error('📄 Command stdout:', cmdError.stdout || 'No stdout');
+        console.error('📄 Command stderr:', cmdError.stderr || 'No stderr');
+        
+        // Extract output from the error if available
+        result = {
+          exitCode: cmdError.exitCode || 1,
+          stdout: cmdError.stdout || '',
+          stderr: cmdError.stderr || cmdError.message || 'Command failed',
         };
       }
 
       // If failed, log the error details
       const errorDetails = result.stderr || result.stdout || 'Unknown error';
-      console.error('❌ Installation failed with error:', errorDetails);
+      console.error('❌ Installation failed:', errorDetails);
 
       // Try fallback for npm if available
       if (fallbackCommand && packageManager === 'npm') {
         console.log(`🔄 Retrying with fallback: ${fallbackCommand}`);
         
-        const fallbackResult = await sandbox.commands.run(`cd ${repoPath} && ${fallbackCommand}`, {
-          timeoutMs: 600000, // 10 minutes timeout
-        });
+        try {
+          const fallbackResult = await sandbox.commands.run(`cd ${repoPath} && ${fallbackCommand}`, {
+            timeoutMs: 600000, // 10 minutes timeout
+          });
 
-        if (fallbackResult.exitCode === 0) {
-          console.log('✅ Dependencies installed successfully with --legacy-peer-deps');
+          if (fallbackResult.exitCode === 0) {
+            console.log('✅ Dependencies installed successfully with --legacy-peer-deps');
+            return {
+              success: true,
+              output: fallbackResult.stdout,
+              fallbackUsed: true,
+            };
+          }
+
+          // Fallback completed but failed
+          const fallbackError = fallbackResult.stderr || fallbackResult.stdout || 'Unknown error';
+          console.error('❌ Fallback also failed:', fallbackError);
+          
           return {
-            success: true,
-            output: fallbackResult.stdout,
-            fallbackUsed: true,
+            success: false,
+            output: result.stdout + '\n\n--- Fallback attempt ---\n' + fallbackResult.stdout,
+            error: `Primary: ${errorDetails}\n\nFallback (--legacy-peer-deps): ${fallbackError}`,
+          };
+        } catch (fallbackError: any) {
+          console.error('❌ Fallback threw exception:', fallbackError.message);
+          
+          return {
+            success: false,
+            output: result.stdout + '\n\n--- Fallback attempt ---\n' + (fallbackError.stdout || ''),
+            error: `Primary: ${errorDetails}\n\nFallback exception: ${fallbackError.message}`,
           };
         }
-
-        // Both attempts failed
-        const fallbackError = fallbackResult.stderr || fallbackResult.stdout || 'Unknown error';
-        console.error('❌ Fallback also failed:', fallbackError);
-        
-        return {
-          success: false,
-          output: result.stdout + '\n\n--- Fallback attempt ---\n' + fallbackResult.stdout,
-          error: `Primary: ${errorDetails}\n\nFallback (--legacy-peer-deps): ${fallbackError}`,
-        };
       }
 
       // No fallback available or not npm
       return {
         success: false,
-        output: result.stdout,
+        output: result.stdout || '',
         error: errorDetails,
       };
     } catch (error: any) {
