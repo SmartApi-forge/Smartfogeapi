@@ -2,7 +2,8 @@
 import Link from "next/link"
 import Image from "next/image"
 import { Logo } from "@/components/logo"
-import { Share, Settings, Globe } from "lucide-react"
+import { Share, Globe, Monitor } from "lucide-react"
+import { Settings5Line } from "./settings-5-line"
 import { GitHubSetupDialog } from "@/components/github-setup-dialog"
 import { GitHubBranchSelectorV0 } from "@/components/github-branch-selector-v0"
 import { useTheme } from "next-themes"
@@ -54,9 +55,9 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
           </Link>
         </div>
 
-        {/* Center - Empty (view toggle moved to sandbox preview) */}
+        {/* Center - Empty (view toggle is in sandbox preview) */}
         <div className="flex items-center">
-          {/* View toggle is now positioned in the sandbox preview component */}
+          {/* View toggle is positioned in the sandbox preview component */}
         </div>
 
         {/* Right side - Action buttons - Responsive with subtle hover */}
@@ -65,7 +66,7 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
           <button 
             className={`transition-all duration-300 h-8 w-8 p-0 rounded-md flex items-center justify-center ${isDark ? 'bg-[#1A1A1A] hover:bg-[#262626] border border-gray-600' : 'bg-[#fafafa] hover:bg-[#f2f2f2] border border-gray-300'}`}
           >
-            <Settings className={`h-[18px] w-[18px] transition-colors duration-300 ${isDark ? 'text-white' : 'text-gray-900'} pointer-events-none`} />
+            <Settings5Line className={`h-[18px] w-[18px] transition-colors duration-300 ${isDark ? 'text-white' : 'text-gray-900'} pointer-events-none`} />
           </button>
           
           {/* GitHub button - Icon only - Conditionally rendered */}

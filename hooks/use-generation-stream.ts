@@ -211,6 +211,12 @@ export function useGenerationStream(projectId: string | undefined): UseGeneratio
       setIsConnected(false);
       eventSource.close();
       
+      // Set status to complete when stream closes (for workflows that don't emit explicit complete event)
+      setState((prevState: GenerationState): GenerationState => ({
+        ...prevState,
+        status: 'complete',
+      }));
+      
       // Decrement active streaming sessions counter
       if (typeof window !== 'undefined') {
         (window as any).__activeStreamingSessions = Math.max(0, ((window as any).__activeStreamingSessions || 1) - 1);

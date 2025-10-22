@@ -361,7 +361,7 @@ function TreeItem({
           />
         )}
         {node.type === "folder" ? (
-          isExpanded ? <FolderOpen className="size-3.5 sm:size-4 flex-shrink-0 text-yellow-500 dark:text-yellow-400" /> : <FolderClosed className="size-3.5 sm:size-4 flex-shrink-0 text-yellow-500 dark:text-yellow-400" />
+          isExpanded ? <FolderOpen className="size-3.5 sm:size-4 flex-shrink-0" style={{ color: '#8AADF4' }} /> : <FolderClosed className="size-3.5 sm:size-4 flex-shrink-0" style={{ color: '#8AADF4' }} />
         ) : (
           <span className="flex-shrink-0">{getFileIcon(node.name)}</span>
         )}
@@ -636,14 +636,31 @@ export function ProjectPageClient({
   // Use streaming hook for real-time updates
   const streamState = useGenerationStream(projectId);
   
+  // Track when stream completed to limit refetch duration
+  const [completionTime, setCompletionTime] = useState<number | null>(null);
+  const hasAutoSwitched = useRef(false);
+  
+  // Update completion time when stream completes
+  useEffect(() => {
+    if (streamState.status === 'complete' && !streamState.isStreaming && !completionTime) {
+      setCompletionTime(Date.now());
+    }
+  }, [streamState.status, streamState.isStreaming, completionTime]);
+  
+  // Calculate if we should still be refetching (within 15 seconds of completion)
+  const shouldRefetch = completionTime ? (Date.now() - completionTime < 15000) : false;
+  
   // Fetch project data with auto-refresh to get updated status
-  const { data: currentProject = project } = api.projects.getOne.useQuery(
+  const { data: currentProject = project, refetch: refetchProject } = api.projects.getOne.useQuery(
     { id: projectId },
     {
       initialData: project as any,
       refetchOnWindowFocus: true,
-      // Poll every 5 seconds when streaming to catch status changes from "generating" to "deployed"
-      refetchInterval: streamState.isStreaming ? 5000 : false,
+      // Poll every 5 seconds when streaming, then continue for 15 seconds after to catch DB updates
+      refetchInterval: streamState.isStreaming ? 5000 : 
+        (shouldRefetch ? 3000 : false),
+      // CRITICAL: Keep staleTime at 0 during refetch window to allow manual refetch() calls to fetch fresh data
+      staleTime: (streamState.isStreaming || shouldRefetch) ? 0 : 5000,
     }
   );
   
@@ -794,7 +811,9 @@ export function ProjectPageClient({
       return msgs;
     }
     
-    // First pass: collect file events and validation status
+    // First pass: collect file events, validation status, and step status
+    const stepStatusMap = new Map<string, { start: any | null; complete: any | null }>();
+    
     streamState.events.forEach((event) => {
       if (event.type === 'file:generating') {
         if (!fileStatusMap.has(event.filename)) {
@@ -811,6 +830,19 @@ export function ProjectPageClient({
         validationStatus.start = event;
       } else if (event.type === 'validation:complete') {
         validationStatus.complete = event;
+      } else if (event.type === 'step:start' && event.step && event.step !== 'Validating') {
+        const stepKey = event.step;
+        if (!stepStatusMap.has(stepKey)) {
+          stepStatusMap.set(stepKey, { start: event, complete: null });
+        }
+      } else if (event.type === 'step:complete' && event.step && event.step !== 'Validating') {
+        const stepKey = event.step;
+        const existing = stepStatusMap.get(stepKey);
+        if (existing) {
+          existing.complete = event;
+        } else {
+          stepStatusMap.set(stepKey, { start: null, complete: event });
+        }
       }
     });
     
@@ -869,28 +901,30 @@ export function ProjectPageClient({
     }
     
     // Add other event types (step:start, complete)
-    streamState.events.forEach((event) => {
-      if (event.type === 'step:start' && event.step !== 'Validating') {
+    stepStatusMap.forEach((status, stepName) => {
+      if (status.complete) {
+        // Show completed step with checkmark
         msgs.push({
-          id: `stream-step-${event.timestamp}`,
-          content: event.message,
+          id: `stream-step-${stepName}`,
+          content: status.complete.message,
           role: 'assistant' as const,
           type: 'text' as const,
-          created_at: new Date(event.timestamp).toISOString(),
-          updated_at: new Date(event.timestamp).toISOString(),
-          isStreaming: true,
-          icon: 'processing',
-        });
-      } else if (event.type === 'complete') {
-        msgs.push({
-          id: `stream-done-${event.timestamp}`,
-          content: `✓ ${event.summary}`,
-          role: 'assistant' as const,
-          type: 'text' as const,
-          created_at: new Date(event.timestamp).toISOString(),
-          updated_at: new Date(event.timestamp).toISOString(),
+          created_at: new Date(status.complete.timestamp).toISOString(),
+          updated_at: new Date(status.complete.timestamp).toISOString(),
           isStreaming: true,
           icon: 'complete',
+        });
+      } else if (status.start) {
+        // Show in-progress step with spinner
+        msgs.push({
+          id: `stream-step-${stepName}`,
+          content: status.start.message,
+          role: 'assistant' as const,
+          type: 'text' as const,
+          created_at: new Date(status.start.timestamp).toISOString(),
+          updated_at: new Date(status.start.timestamp).toISOString(),
+          isStreaming: true,
+          icon: 'processing',
         });
       }
     });
@@ -1119,6 +1153,67 @@ export function ProjectPageClient({
       }
     }
   }, [viewMode, selected, fileTree]);
+
+  // Auto-switch to Code tab when GitHub clone completes and refetch project
+  useEffect(() => {
+    if (streamState.status === 'complete' && !streamState.isStreaming && !hasAutoSwitched.current) {
+      hasAutoSwitched.current = true;
+      
+      console.log('[AUTO-SWITCH] Clone complete! Starting auto-switch sequence...');
+      console.log('[AUTO-SWITCH] isMobileScreen:', isMobileScreen);
+      console.log('[AUTO-SWITCH] Current sandbox_url:', ('sandbox_url' in currentProject ? currentProject.sandbox_url : 'not set'));
+      
+      // Aggressive refetch strategy - multiple attempts to catch DB update
+      const refetchSequence = async () => {
+        console.log('[AUTO-SWITCH] Refetch #1 (immediate)');
+        await refetchProject();
+        
+        setTimeout(async () => {
+          console.log('[AUTO-SWITCH] Refetch #2 (1s)');
+          await refetchProject();
+        }, 1000);
+        
+        setTimeout(async () => {
+          console.log('[AUTO-SWITCH] Refetch #3 (3s)');
+          await refetchProject();
+        }, 3000);
+        
+        setTimeout(async () => {
+          console.log('[AUTO-SWITCH] Refetch #4 (5s)');
+          await refetchProject();
+        }, 5000);
+      };
+      
+      refetchSequence();
+      
+      // Auto-switch to Code section on mobile (desktop shows both panels already)
+      // Do this regardless of refetch success
+      setTimeout(() => {
+        console.log('[AUTO-SWITCH] Switching views...');
+        console.log('[AUTO-SWITCH] isClonedProject:', isClonedProject);
+        console.log('[AUTO-SWITCH] Current viewMode:', viewMode);
+        
+        // For mobile: switch to code section (which will show preview for cloned projects)
+        if (isMobileScreen) {
+          console.log('[AUTO-SWITCH] Mobile detected - switching to code section');
+          setMobileView('code');
+        } else {
+          console.log('[AUTO-SWITCH] Desktop detected - both panels already visible');
+        }
+        
+        // DON'T change viewMode for cloned projects - they default to 'preview' which is correct
+        // Only set to 'code' for non-cloned projects
+        if (!isClonedProject) {
+          console.log('[AUTO-SWITCH] Non-cloned project - switching to code view');
+          setViewMode('code');
+        } else {
+          console.log('[AUTO-SWITCH] Cloned project - keeping preview mode');
+        }
+        
+        console.log('[AUTO-SWITCH] View switch complete!');
+      }, 800);
+    }
+  }, [streamState.status, streamState.isStreaming, refetchProject, isMobileScreen, currentProject, isClonedProject, viewMode]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1352,7 +1447,7 @@ export function ProjectPageClient({
         >
           
           {/* Messages Area - compact spacing for cleaner look */}
-          <div className="flex-1 overflow-y-auto px-1 sm:px-2 pt-3 sm:pt-4 pb-2 sm:pb-2 space-y-1.5 min-h-0 scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-[#FAFAFA] dark:bg-[#0E100F] relative">
+          <div className="flex-1 overflow-y-auto px-3 sm:px-4 pt-3 sm:pt-4 pb-2 sm:pb-2 space-y-1.5 min-h-0 scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-[#FAFAFA] dark:bg-[#0E100F] relative">
             
             <AnimatePresence>
               {allMessages.map((message, index) => {
@@ -1439,7 +1534,7 @@ export function ProjectPageClient({
           </div>
 
           {/* Input Box - Compact design for more code space */}
-          <div className="px-1 sm:px-2 pb-2 sm:pb-2 bg-[#FAFAFA] dark:bg-[#0E100F] flex flex-col justify-end">
+          <div className="px-3 sm:px-4 pb-2 sm:pb-2 bg-[#FAFAFA] dark:bg-[#0E100F] flex flex-col justify-end">
             <div className="rounded-xl border border-border/50 dark:border-[#444444] bg-white dark:bg-[#1F2023] p-2 sm:p-3 shadow-lg flex flex-col">
               <textarea
                 value={input}
@@ -1589,14 +1684,14 @@ export function ProjectPageClient({
                   </div>
                 </div>
                 
-            {/* Path bar and menu container - shown in both modes */}
+            {/* Path bar and menu container - only shown in preview mode */}
             <div className="flex items-center gap-1 sm:gap-2 flex-1 min-w-0">
-              {/* Path bar - shown only in preview mode */}
-              {viewMode === 'preview' && currentProject && (
+              {/* Path bar - only shown in preview mode for navigation */}
+              {currentProject && viewMode === 'preview' && (
                 <>
                   {/* URL Bar with controls - v0.app style - adjusted height */}
                   <div className="flex items-center gap-1 sm:gap-1.5 bg-background dark:bg-[#0E100F] border border-border dark:border-[#333433] rounded-lg px-1.5 sm:px-2.5 py-[5px] flex-1 min-w-0 max-w-[200px] sm:max-w-none">
-                    <Monitor className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0 hidden xs:block" />
+                    <Monitor className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                     <input
                       type="text"
                       value={previewPath}
@@ -1814,7 +1909,7 @@ export function ProjectPageClient({
                       }
                       projectName={currentProject.name}
                       projectId={projectId}
-                      hideHeader={false}
+                      hideHeader={true}
                       path={previewPath}
                     />
                   </motion.div>

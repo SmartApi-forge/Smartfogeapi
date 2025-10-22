@@ -317,7 +317,7 @@ export function GitHubSetupDialog({
         <PopoverTrigger asChild>
           {children}
         </PopoverTrigger>
-        <PopoverContent className="w-[calc(100vw-2rem)] sm:w-80 max-w-[400px] bg-[#1F2023] border-[#444444] p-3" align="end">
+        <PopoverContent className="w-[calc(100vw-2rem)] sm:w-80 max-w-[400px] bg-[#1F2023] border-[#444444] p-3 overflow-hidden" align="end">
           <div className="flex items-center justify-center py-4">
             <Loader2 className="h-4 w-4 animate-spin text-gray-300" />
             <span className="ml-2 text-gray-300 text-sm">Checking GitHub connection...</span>
@@ -334,7 +334,7 @@ export function GitHubSetupDialog({
         <PopoverTrigger asChild>
           {children}
         </PopoverTrigger>
-        <PopoverContent className={`w-[calc(100vw-2rem)] sm:w-[400px] max-w-[400px] p-2.5 sm:p-4 ${isDark ? 'bg-[#0a0a0a] border-[#262626]' : 'bg-white border-[#e5e5e5]'}`} align="center" side="bottom" sideOffset={12} collisionPadding={16}>
+        <PopoverContent className={`w-[calc(100vw-2rem)] sm:w-[400px] max-w-[400px] p-2.5 sm:p-4 overflow-hidden ${isDark ? 'bg-[#0a0a0a] border-[#262626]' : 'bg-white border-[#e5e5e5]'}`} align="center" side="bottom" sideOffset={12} collisionPadding={16}>
           <div className="flex items-center justify-between mb-2 sm:mb-3">
             <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-[#171717]'}`}>Connect to GitHub</h3>
             <Button
@@ -369,7 +369,7 @@ export function GitHubSetupDialog({
         <PopoverTrigger asChild>
           {children}
         </PopoverTrigger>
-        <PopoverContent className={`w-[calc(100vw-2rem)] sm:w-[400px] max-w-[400px] p-2.5 sm:p-4 ${isDark ? 'bg-[#0a0a0a] border-[#262626]' : 'bg-white border-[#e5e5e5]'}`} align="center" side="bottom" sideOffset={12} collisionPadding={16}>
+        <PopoverContent className={`w-[calc(100vw-2rem)] sm:w-[400px] max-w-[400px] p-2.5 sm:p-4 overflow-hidden ${isDark ? 'bg-[#0a0a0a] border-[#262626]' : 'bg-white border-[#e5e5e5]'}`} align="center" side="bottom" sideOffset={12} collisionPadding={16}>
           <div className="flex items-center justify-between mb-2 sm:mb-3">
             <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-[#171717]'}`}>Create Repository</h3>
             <Button
@@ -399,32 +399,32 @@ export function GitHubSetupDialog({
             <div className="space-y-1 sm:space-y-1.5">
               <Label htmlFor="git-scope" className={`text-xs sm:text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>Git Scope</Label>
               <Select value={gitScope} onValueChange={setGitScope} disabled={loadingScopes}>
-                <SelectTrigger className={`w-full h-9 text-sm ${isDark ? 'bg-[#262626] border-[#404040] text-white hover:bg-[#2a2a2a]' : 'bg-white border-[#e5e5e5] text-gray-900 hover:bg-[#fafafa]'}`}>
-                  <div className="flex items-center gap-2">
+                <SelectTrigger className={`w-full h-9 text-sm overflow-hidden ${isDark ? 'bg-[#262626] border-[#404040] text-white hover:bg-[#2a2a2a]' : 'bg-white border-[#e5e5e5] text-gray-900 hover:bg-[#fafafa]'}`}>
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     <Image 
                       src={isDark ? "/github-dark.svg" : "/github-light.svg"}
                       alt="GitHub"
                       width={16}
                       height={16}
-                      className={isDark ? "opacity-70" : "opacity-90"}
+                      className={`flex-shrink-0 ${isDark ? "opacity-70" : "opacity-90"}`}
                     />
-                    <SelectValue placeholder={loadingScopes ? "Loading..." : "Select Git Scope"} />
+                    <SelectValue placeholder={loadingScopes ? "Loading..." : "Select Git Scope"} className="truncate" />
                   </div>
                 </SelectTrigger>
                 <SelectContent className={`${isDark ? 'bg-[#262626] border-[#404040]' : 'bg-white border-[#e5e5e5]'}`}>
                   {gitHubUsername && (
                     <SelectItem value={gitHubUsername} className={`text-sm ${isDark ? 'text-white focus:bg-[#2a2a2a] data-[highlighted]:bg-[#2a2a2a]' : 'text-black focus:bg-[#f2f2f2] data-[highlighted]:bg-[#f2f2f2] data-[highlighted]:text-black'}`}>
-                      <div className="flex items-center gap-2">
-                        <span className={isDark ? '' : 'text-black'}>{gitHubUsername}</span>
-                        <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>(Personal)</span>
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className={`truncate min-w-0 flex-1 ${isDark ? '' : 'text-black'}`}>{gitHubUsername}</span>
+                        <span className={`text-xs flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>(Personal)</span>
                       </div>
                     </SelectItem>
                   )}
                   {gitHubOrgs.map((org) => (
                     <SelectItem key={org.login} value={org.login} className={`text-sm ${isDark ? 'text-white focus:bg-[#2a2a2a] data-[highlighted]:bg-[#2a2a2a]' : 'text-black focus:bg-[#f2f2f2] data-[highlighted]:bg-[#f2f2f2] data-[highlighted]:text-black'}`}>
-                      <div className="flex items-center gap-2">
-                        <span className={isDark ? '' : 'text-black'}>{org.login}</span>
-                        <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>(Organization)</span>
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className={`truncate min-w-0 flex-1 ${isDark ? '' : 'text-black'}`}>{org.login}</span>
+                        <span className={`text-xs flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>(Organization)</span>
                       </div>
                     </SelectItem>
                   ))}
@@ -469,7 +469,7 @@ export function GitHubSetupDialog({
       <PopoverTrigger asChild>
         {children}
       </PopoverTrigger>
-      <PopoverContent className={`w-[calc(100vw-2rem)] sm:w-[400px] max-w-[400px] p-2.5 sm:p-4 ${isDark ? 'bg-[#0a0a0a] border-[#262626]' : 'bg-white border-[#e5e5e5]'}`} align="center" side="bottom" sideOffset={12} collisionPadding={16}>
+      <PopoverContent className={`w-[calc(100vw-2rem)] sm:w-[400px] max-w-[400px] p-2.5 sm:p-4 overflow-hidden ${isDark ? 'bg-[#0a0a0a] border-[#262626]' : 'bg-white border-[#e5e5e5]'}`} align="center" side="bottom" sideOffset={12} collisionPadding={16}>
         <div className="flex items-center justify-between mb-2 sm:mb-3">
           <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-[#171717]'}`}>Select a Branch</h3>
           <Button
@@ -497,7 +497,7 @@ export function GitHubSetupDialog({
                 height={16}
                 className={`flex-shrink-0 ${isDark ? "opacity-70" : "opacity-90"}`}
               />
-              <span className={`text-xs font-mono truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{repoFullName}</span>
+              <span className={`text-xs font-mono truncate min-w-0 flex-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{repoFullName}</span>
             </div>
           </div>
 
@@ -509,13 +509,13 @@ export function GitHubSetupDialog({
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
-                  className={`w-full justify-between h-9 text-sm font-normal ${isDark ? 'bg-[#262626] border-[#404040] text-white hover:bg-[#2a2a2a]' : 'bg-white border-[#e5e5e5] text-gray-900 hover:bg-[#fafafa]'}`}
+                  className={`w-full justify-between h-9 text-sm font-normal min-w-0 ${isDark ? 'bg-[#262626] border-[#404040] text-white hover:bg-[#2a2a2a]' : 'bg-white border-[#e5e5e5] text-gray-900 hover:bg-[#fafafa]'}`}
                 >
-                  <div className="flex items-center gap-2">
-                    <GitBranch className="h-4 w-4" />
-                    <span>{selectedBranch}</span>
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <GitBranch className="h-4 w-4 flex-shrink-0" />
+                    <span className="truncate min-w-0 flex-1">{selectedBranch}</span>
                   </div>
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="opacity-50">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="opacity-50 flex-shrink-0">
                     <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </Button>
@@ -552,14 +552,14 @@ export function GitHubSetupDialog({
                               setSelectedBranch(branch.name)
                               setBranchDropdownOpen(false)
                             }}
-                            className={`w-full flex items-center justify-between p-2 rounded text-sm transition-colors ${isDark ? 'hover:bg-[#2a2a2a]' : 'hover:bg-[#f2f2f2]'}`}
+                            className={`w-full flex items-center justify-between p-2 rounded text-sm transition-colors min-w-0 ${isDark ? 'hover:bg-[#2a2a2a]' : 'hover:bg-[#f2f2f2]'}`}
                           >
-                            <div className="flex items-center gap-2">
-                              <GitBranch className="h-3.5 w-3.5 text-gray-400" />
-                              <span className={isDark ? 'text-white' : 'text-gray-900'}>{branch.name}</span>
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <GitBranch className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                              <span className={`truncate min-w-0 flex-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{branch.name}</span>
                             </div>
                             {selectedBranch === branch.name && (
-                              <Check className={`h-3.5 w-3.5 ${isDark ? 'text-white' : 'text-gray-900'}`} />
+                              <Check className={`h-3.5 w-3.5 flex-shrink-0 ${isDark ? 'text-white' : 'text-gray-900'}`} />
                             )}
                           </button>
                         ))}
@@ -570,13 +570,13 @@ export function GitHubSetupDialog({
                             onClick={() => {
                               setBranchDropdownOpen(false)
                             }}
-                            className={`w-full flex items-center justify-between p-2 rounded text-sm transition-colors ${isDark ? 'hover:bg-[#2a2a2a]' : 'hover:bg-[#f2f2f2]'}`}
+                            className={`w-full flex items-center justify-between p-2 rounded text-sm transition-colors min-w-0 ${isDark ? 'hover:bg-[#2a2a2a]' : 'hover:bg-[#f2f2f2]'}`}
                           >
-                            <div className="flex items-center gap-2">
-                              <GitBranch className="h-3.5 w-3.5 text-gray-400" />
-                              <span className={isDark ? 'text-white' : 'text-gray-900'}>{selectedBranch}</span>
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <GitBranch className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                              <span className={`truncate min-w-0 flex-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{selectedBranch}</span>
                             </div>
-                            <Check className={`h-3.5 w-3.5 ${isDark ? 'text-white' : 'text-gray-900'}`} />
+                            <Check className={`h-3.5 w-3.5 flex-shrink-0 ${isDark ? 'text-white' : 'text-gray-900'}`} />
                           </button>
                         )}
                       </>

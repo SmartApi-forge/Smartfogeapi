@@ -3,14 +3,36 @@
 import { SVGProps } from 'react';
 import { File, Braces } from 'lucide-react';
 
+// React icon component for TSX/JSX files with official React color
+function ReactIcon({ className = '', size = 16 }: { className?: string; size?: number }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 16 16"
+      width={size}
+      height={size}
+      className={`shrink-0 ${className}`}
+    >
+      <g
+        fill="none"
+        stroke="#8AADF4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M8 11.3c4.14 0 7.5-1.28 7.5-2.86S12.14 5.58 8 5.58S.5 6.86.5 8.44s3.36 2.87 7.5 2.87Z"></path>
+        <path d="M5.52 9.87c2.07 3.6 4.86 5.86 6.23 5.07c1.37-.8.8-4.34-1.27-7.93S5.62 1.16 4.25 1.95s-.8 4.34 1.27 7.92"></path>
+        <path d="M5.52 7.01c-2.07 3.59-2.64 7.14-1.27 7.93s4.16-1.48 6.23-5.07c2.07-3.58 2.64-7.13 1.27-7.92c-1.37-.8-4.16 1.47-6.23 5.06"></path>
+        <path d="M8.5 8.44a.5.5 0 0 1-.5.5a.5.5 0 0 1-.5-.5a.5.5 0 0 1 .5-.5a.5.5 0 0 1 .5.5"></path>
+      </g>
+    </svg>
+  );
+}
+
 // SVG path data for file type icons (from Geist/Vercel inspection)
 const ICON_PATHS = {
   ts: "M9.18457 0.00488281C9.41351 0.0276021 9.62886 0.128861 9.79297 0.292969L14.207 4.70703C14.3945 4.89453 14.5 5.1489 14.5 5.41406V16H13V6.5H8V1.5H3V6.5H1.5V0H9.08594L9.18457 0.00488281ZM5 10.5H3.75V15H2.25V10.5H1V9H5V10.5ZM9.25 10.5H7.875C7.66789 10.5 7.5 10.6679 7.5 10.875C7.5 11.0821 7.66789 11.25 7.875 11.25C8.91053 11.25 9.75 12.0895 9.75 13.125C9.75 14.1605 8.91053 15 7.875 15H6.25V13.5H7.875C8.08211 13.5 8.25 13.3321 8.25 13.125C8.25 12.9179 8.08211 12.75 7.875 12.75C6.83947 12.75 6 11.9105 6 10.875C6 9.83947 6.83947 9 7.875 9H9.25V10.5ZM9.5 5H12.3789L9.5 2.12109V5Z",
-  tsx: "M9.18457 0.00488281C9.41351 0.0276021 9.62886 0.128861 9.79297 0.292969L14.207 4.70703C14.3945 4.89453 14.5 5.1489 14.5 5.41406V16H13V6.5H8V1.5H3V6.5H1.5V0H9.08594L9.18457 0.00488281ZM5 10.5H3.75V15H2.25V10.5H1V9H5V10.5ZM9.25 10.5H7.875C7.66789 10.5 7.5 10.6679 7.5 10.875C7.5 11.0821 7.66789 11.25 7.875 11.25C8.91053 11.25 9.75 12.0895 9.75 13.125C9.75 14.1605 8.91053 15 7.875 15H6.25V13.5H7.875C8.08211 13.5 8.25 13.3321 8.25 13.125C8.25 12.9179 8.08211 12.75 7.875 12.75C6.83947 12.75 6 11.9105 6 10.875C6 9.83947 6.83947 9 7.875 9H9.25V10.5ZM9.5 5H12.3789L9.5 2.12109V5Z",
   // JS icon with "JS" badge in lower-left area
   js: "M9.18457 0.00488281C9.41351 0.0276021 9.62886 0.128861 9.79297 0.292969L14.207 4.70703C14.3945 4.89453 14.5 5.1489 14.5 5.41406V16H13V6.5H8V1.5H3V6.5H1.5V0H9.08594L9.18457 0.00488281ZM5 9V13.125C5 14.1605 4.16053 15 3.125 15C2.08947 15 1.25 14.1605 1.25 13.125V12.75H2.75V13.125C2.75 13.3321 2.91789 13.5 3.125 13.5C3.33211 13.5 3.5 13.3321 3.5 13.125V9H5ZM9.5 10.5H8.125C7.91789 10.5 7.75 10.6679 7.75 10.875C7.75 11.0821 7.91789 11.25 8.125 11.25C9.16053 11.25 10 12.0895 10 13.125C10 14.1605 9.16053 15 8.125 15H6.5V13.5H8.125C8.33211 13.5 8.5 13.3321 8.5 13.125C8.5 12.9179 8.33211 12.75 8.125 12.75C7.08947 12.75 6.25 11.9105 6.25 10.875C6.25 9.83947 7.08947 9 8.125 9H9.5V10.5ZM9.5 5H12.3789L9.5 2.12109V5Z",
-  // JSX icon (same as JS)
-  jsx: "M9.18457 0.00488281C9.41351 0.0276021 9.62886 0.128861 9.79297 0.292969L14.207 4.70703C14.3945 4.89453 14.5 5.1489 14.5 5.41406V16H13V6.5H8V1.5H3V6.5H1.5V0H9.08594L9.18457 0.00488281ZM5 9V13.125C5 14.1605 4.16053 15 3.125 15C2.08947 15 1.25 14.1605 1.25 13.125V12.75H2.75V13.125C2.75 13.3321 2.91789 13.5 3.125 13.5C3.33211 13.5 3.5 13.3321 3.5 13.125V9H5ZM9.5 10.5H8.125C7.91789 10.5 7.75 10.6679 7.75 10.875C7.75 11.0821 7.91789 11.25 8.125 11.25C9.16053 11.25 10 12.0895 10 13.125C10 14.1605 9.16053 15 8.125 15H6.5V13.5H8.125C8.33211 13.5 8.5 13.3321 8.5 13.125C8.5 12.9179 8.33211 12.75 8.125 12.75C7.08947 12.75 6.25 11.9105 6.25 10.875C6.25 9.83947 7.08947 9 8.125 9H9.5V10.5ZM9.5 5H12.3789L9.5 2.12109V5Z",
   // CSS icon with "CSS" badges in lower area
   css: "M9.18457 0.00488281C9.41351 0.0276021 9.62886 0.128861 9.79297 0.292969L14.207 4.70703C14.3945 4.89453 14.5 5.1489 14.5 5.41406V7.5H13V6.5H8V1.5H3V7.5H1.5V0H9.08594L9.18457 0.00488281ZM5.25 10.5H3.75C3.33579 10.5 3 10.8358 3 11.25V12.75C3 13.1642 3.33579 13.5 3.75 13.5H5.25V15H3.75C2.50736 15 1.5 13.9926 1.5 12.75V11.25C1.5 10.0074 2.50736 9 3.75 9H5.25V10.5ZM9.5 10.5H8.125C7.91789 10.5 7.75 10.6679 7.75 10.875C7.75 11.0821 7.91789 11.25 8.125 11.25C9.16053 11.25 10 12.0895 10 13.125C10 14.1605 9.16053 15 8.125 15H6.5V13.5H8.125C8.33211 13.5 8.5 13.3321 8.5 13.125C8.5 12.9179 8.33211 12.75 8.125 12.75C7.08947 12.75 6.25 11.9105 6.25 10.875C6.25 9.83947 7.08947 9 8.125 9H9.5V10.5ZM14 10.5H12.625C12.4179 10.5 12.25 10.6679 12.25 10.875C12.25 11.0821 12.4179 11.25 12.625 11.25C13.6605 11.25 14.5 12.0895 14.5 13.125C14.5 14.1605 13.6605 15 12.625 15H11V13.5H12.625C12.8321 13.5 13 13.3321 13 13.125C13 12.9179 12.8321 12.75 12.625 12.75C11.5895 12.75 10.75 11.9105 10.75 10.875C10.75 9.83947 11.5895 9 12.625 9H14V10.5ZM9.5 5H12.3789L9.5 2.12109V5Z",
   // MD (Markdown) icon with "MD" badge in lower area
@@ -24,17 +46,24 @@ interface FileTypeIconProps extends Omit<SVGProps<SVGSVGElement>, 'children'> {
 
 /**
  * File type icon component
- * Uses Geist-style SVG icons for specific file types (ts, tsx, js, jsx, css, md)
+ * Uses Geist-style SVG icons for specific file types (ts, js, css, md)
+ * Uses React icon for tsx/jsx files
  * Falls back to Lucide icons for JSON and generic files
  */
 export function FileTypeIcon({ filename, size = 16, className = '', ...props }: FileTypeIconProps) {
   const ext = filename.split('.').pop()?.toLowerCase() || '';
-  const iconPath = ICON_PATHS[ext as keyof typeof ICON_PATHS];
+  
+  // For TSX/JSX files, use React icon
+  if (ext === 'tsx' || ext === 'jsx') {
+    return <ReactIcon className={className} size={size} />;
+  }
 
   // For JSON files, use Lucide Braces icon (keep existing)
   if (ext === 'json') {
     return <Braces className={`flex-shrink-0 ${className}`} size={size} />;
   }
+
+  const iconPath = ICON_PATHS[ext as keyof typeof ICON_PATHS];
 
   // If we have a custom icon path for this file type, use it
   if (iconPath) {
@@ -46,10 +75,9 @@ export function FileTypeIcon({ filename, size = 16, className = '', ...props }: 
         strokeLinejoin="miter"
         viewBox="0 0 16 16"
         width={size}
-        style={{ color: 'currentColor' }}
         {...props}
       >
-        <path d={iconPath} fill="currentColor" />
+        <path d={iconPath} fill="#666666" />
       </svg>
     );
   }

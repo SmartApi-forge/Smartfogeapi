@@ -2057,6 +2057,25 @@ export const cloneAndPreviewRepository = inngest.createFunction(
     let sandboxId: string | null = null;
     
     try {
+      // Step 0.5: Create user message showing clone request
+      await step.run("create-user-message", async () => {
+        try {
+          const { MessageService } = await import('../modules/messages/service');
+          
+          await MessageService.saveResult({
+            content: `Clone ${repoFullName}`,
+            role: 'user',
+            type: 'text',
+            project_id: projectId,
+          });
+          
+          console.log(`Created user message for clone request: ${repoFullName}`);
+        } catch (error) {
+          console.error('Failed to create user message:', error);
+          // Don't fail workflow if message creation fails
+        }
+      });
+      
       // Step 1: Get GitHub integration
       const integration = await step.run("get-github-integration", async () => {
         const { data, error } = await supabase
@@ -2424,51 +2443,52 @@ export const cloneAndPreviewRepository = inngest.createFunction(
         };
       });
       
-      // Step 7: Save repository files to database
-      const savedResult = await step.run("save-repository-files", async () => {
-        try {
-          const { MessageService } = await import('../modules/messages/service');
-          
-          // Create a message with the repository files
-          const filesCount = Object.keys(repoFiles || {}).length;
-          const previewStatus = previewResult.sandboxUrl 
-            ? `Preview: ${previewResult.sandboxUrl}` 
-            : `Sandbox created (${frameworkInfo.framework || 'framework detection failed'})`;
-          const messageContent = `Repository cloned successfully! ${previewStatus}`;
-          
-          const result = await MessageService.saveResult({
-            content: messageContent,
-            role: 'assistant',
-            type: 'result',
-            project_id: projectId,
-            fragment: {
-              title: `${repoFullName} - Cloned Repository`,
-              sandbox_url: previewResult.sandboxUrl || `https://github.com/${repoFullName}`,
-              files: repoFiles || {},
-              fragment_type: 'repo_clone',
-              order_index: 0,
-              metadata: {
-                repoUrl,
-                repoFullName,
-                framework: frameworkInfo.framework || 'unknown',
-                packageManager: frameworkInfo.packageManager || 'unknown',
-                filesCount,
-                sandboxId: cloneResult.sandboxId || 'N/A',
-                sandboxUrl: previewResult.sandboxUrl,
-                previewError: previewResult.error,
-                installError: installResult.success ? undefined : installResult.error,
-              }
-            }
-          });
-          
-          console.log(`Saved ${filesCount} repository files to database with sandbox URL: ${previewResult.sandboxUrl}`);
-          return result;
-        } catch (error) {
-          console.error('Failed to save repository files:', error);
-          // Don't fail the entire workflow if saving fails
-          return null;
+// Step 7: Save repository files to database
+const savedResult = await step.run("save-repository-files", async () => {
+  try {
+    const { MessageService } = await import('../modules/messages/service');
+    
+    // Create a message with the repository files
+    const filesCount = Object.keys(repoFiles || {}).length;
+    const repoName = repoFullName.split('/').pop() || 'Repository';
+    const framework = frameworkInfo.framework || 'unknown';
+    
+    // Simple initial message - No markdown, plain text for clean rendering
+    const messageContent = `${repoName} was imported from GitHub.\nContinue chatting to ask questions about or make changes to it.`;
+    
+    const result = await MessageService.saveResult({
+      content: messageContent,
+      role: 'assistant',
+      type: 'result',
+      project_id: projectId,
+      fragment: {
+        title: `${repoFullName} - Cloned Repository`,
+        sandbox_url: previewResult.sandboxUrl || `https://github.com/${repoFullName}`,
+        files: repoFiles || {},
+        fragment_type: 'repo_clone',
+        order_index: 0,
+        metadata: {
+          repoUrl,
+          repoFullName,
+          framework: frameworkInfo.framework || 'unknown',
+          packageManager: frameworkInfo.packageManager || 'unknown',
+          filesCount,
+          sandboxId: cloneResult.sandboxId || 'N/A',
+          sandboxUrl: previewResult.sandboxUrl,
+          previewError: previewResult.error,
+          installError: installResult.success ? undefined : installResult.error,
         }
-      });
+      }
+    });
+    
+    console.log(`Saved ${filesCount} repository files to database with sandbox URL: ${previewResult.sandboxUrl}`);
+    return result;
+  } catch (error) {
+    console.error('Failed to save repository files:', error);
+    // Don't fail the entire workflow if saving fails
+    return null;
+  }
+});
       
       // Step 7.5: Create initial version for the cloned repository
       const versionResult = await step.run("create-initial-version", async () => {
@@ -2495,7 +2515,7 @@ export const cloneAndPreviewRepository = inngest.createFunction(
             project_id: projectId,
             version_number: 1,
             name: versionName,
-            description: `Cloned from GitHub: ${repoFullName}`,
+            description: `Cloned ${frameworkInfo.framework} project from GitHub: ${repoFullName}`,
             files: repoFiles || {},
             command_type: 'CLONE_REPO',
             prompt: `Clone and preview GitHub repository: ${repoFullName}`,
@@ -2621,17 +2641,8 @@ export const cloneAndPreviewRepository = inngest.createFunction(
         return data;
       });
       
-      // Step 9: Emit completion and ensure stream is closed
-      await step.run("emit-complete", async () => {
-        const filesCount = Object.keys(repoFiles || {}).length;
-        
-        await streamingService.emit(projectId, {
-          type: 'complete',
-          summary: `✓ Repository cloned successfully! Preview is ready.`,
-          totalFiles: filesCount,
-          sandboxUrl: previewResult.sandboxUrl,
-        });
-        
+      // Step 9: Close stream to stop loading animations
+      await step.run("close-stream", async () => {
         // CRITICAL: Close the stream to stop loading animations on frontend
         streamingService.closeProject(projectId);
         
@@ -2639,7 +2650,7 @@ export const cloneAndPreviewRepository = inngest.createFunction(
         console.log(`   - Project ID: ${projectId}`);
         console.log(`   - Status: deployed`);
         console.log(`   - Sandbox URL: ${previewResult.sandboxUrl}`);
-        console.log(`   - Files processed: ${filesCount}`);
+        console.log(`   - Files processed: ${Object.keys(repoFiles || {}).length}`);
       });
       
       return {

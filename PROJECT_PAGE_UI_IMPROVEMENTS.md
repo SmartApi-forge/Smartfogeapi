@@ -297,11 +297,11 @@ AFTER: bg-white (stands out from background)
 // Created new FileTypeIcon component with SVG path data
 // File: components/file-type-icon.tsx
 
-// Supported file types with Geist icons:
+// Supported file types with custom icons:
 - TypeScript (.ts) → Custom SVG with "TS" badge
-- TypeScript React (.tsx) → Custom SVG with "TS" badge  
+- TypeScript React (.tsx) → React atom icon (orbital design)
 - JavaScript (.js) → Custom SVG with "JS" badge
-- JavaScript React (.jsx) → Custom SVG with "JS" badge
+- JavaScript React (.jsx) → React atom icon (orbital design)
 - CSS (.css) → Custom SVG with "CSS" badge
 - Markdown (.md) → Custom SVG with "MD" badge
 
@@ -312,7 +312,7 @@ AFTER: bg-white (stands out from background)
 
 **Implementation Details:**
 ```tsx
-// SVG structure (from Vercel inspection):
+// For TS, JS, CSS, MD files - SVG with gray badges:
 <svg 
   className="shrink-0"
   data-testid="geist-icon" 
@@ -320,32 +320,74 @@ AFTER: bg-white (stands out from background)
   strokeLinejoin="miter"
   viewBox="0 0 16 16"
   width="16"
-  style={{ color: 'currentColor' }}
 >
-  <path d="..." fill="currentColor" />
+  <path d="..." fill="#666666" /> {/* Neutral gray for badges */}
 </svg>
 
-// Uses currentColor - inherits from parent text color
+// For TSX/JSX files - React atom icon in blue:
+<svg viewBox="0 0 16 16" width="16" height="16">
+  <g fill="none" stroke="#8AADF4" strokeLinecap="round" strokeLinejoin="round">
+    {/* Orbital paths forming React logo in blue */}
+  </g>
+</svg>
+
 // Fixed 16x16 size for consistency
 // shrink-0 prevents flexbox shrinking
+// Color-coded for instant recognition
 ```
 
 **Changes Applied:**
 - ✅ Created new `FileTypeIcon` component
-- ✅ Added SVG path data for ts, tsx, js, jsx, css, md file types
+- ✅ Created `ReactIcon` component for TSX/JSX files
+- ✅ Added SVG path data for ts, js, css, md file types with badges
+- ✅ TSX/JSX files now use React atom icon (orbital design)
 - ✅ Kept Lucide Braces icon for JSON files
 - ✅ Kept Lucide File icon as fallback for other types
 - ✅ Updated version-card.tsx to use FileTypeIcon
 - ✅ Removed old getFileIcon function
-- ✅ Icons use currentColor for theme compatibility
-- ✅ Black color in version card (text-gray-900/gray-100)
+- ✅ TSX/JSX use blue color (#8AADF4) matching the design system
+- ✅ TS/JS/CSS/MD badges use neutral gray color (#666666)
 
 **Result:**
 - ✅ Professional Vercel/Geist-style file icons
-- ✅ Visual file type badges (TS, JS, CSS, MD)
+- ✅ Visual file type badges (TS, JS, CSS, MD) in neutral gray (#666666)
+- ✅ React atom icon for TSX/JSX files in blue (#8AADF4)
+- ✅ Instantly recognizable file types with proper branding
 - ✅ Consistent with modern IDEs and code editors
 - ✅ Better file type recognition at a glance
-- ✅ Maintains theme compatibility with currentColor
+
+---
+
+### **12. Unified Color System & Chat Spacing** ✅
+**Issue**: Folder icons were yellow (inconsistent with file icons), and chat interface had minimal padding causing messages to touch edges
+
+**Solution**: Unified color scheme with blue (#8AADF4) for React/folders, and added comfortable padding to chat interface
+
+```tsx
+// Folder icons now use blue instead of yellow
+<FolderOpen style={{ color: '#8AADF4' }} />
+<FolderClosed style={{ color: '#8AADF4' }} />
+
+// React icon also uses blue
+stroke="#8AADF4"
+
+// Chat interface padding increased for better spacing
+<div className="px-3 sm:px-4"> {/* was px-1 sm:px-2 */}
+```
+
+**Changes Applied:**
+- ✅ Changed React icon from cyan (#61DAFB) to blue (#8AADF4)
+- ✅ Changed folder icons from yellow to blue (#8AADF4)
+- ✅ Increased chat messages padding from `px-1 sm:px-2` to `px-3 sm:px-4`
+- ✅ Increased chat input padding from `px-1 sm:px-2` to `px-3 sm:px-4`
+- ✅ Maintains responsive design across all screen sizes
+
+**Result:**
+- ✅ Unified blue color scheme (#8AADF4) for React files and folders
+- ✅ Gray badges (#666666) for other file types (TS, JS, CSS, MD)
+- ✅ Better visual consistency throughout the interface
+- ✅ Messages don't feel cramped or touching edges
+- ✅ More comfortable reading experience
 
 ---
 
@@ -369,6 +411,9 @@ AFTER: bg-white (stands out from background)
    - Added `FolderClosed` import from lucide-react
    - Updated file explorer to use `FolderClosed` for collapsed folders
    - Updated file explorer to use `FolderOpen` for expanded folders
+   - **Changed folder icons from yellow to blue (#8AADF4)**
+   - **Increased chat messages padding from `px-1 sm:px-2` to `px-3 sm:px-4`**
+   - **Increased chat input padding from `px-1 sm:px-2` to `px-3 sm:px-4`**
    - Enabled sandbox preview header (changed hideHeader from true to false)
    - Removed language-specific icons from file explorer
    - Removed CSS mask gradients from messages area
@@ -397,9 +442,12 @@ AFTER: bg-white (stands out from background)
 
 5. **components/file-type-icon.tsx** (NEW FILE)
    - Created new FileTypeIcon component
+   - Created ReactIcon component with orbital/atom design
    - Added SVG path data for TypeScript, JavaScript, CSS, and Markdown files
+   - TSX/JSX files use React atom icon instead of badges
+   - **React icon uses blue color (#8AADF4)**
+   - **Badge icons use neutral gray (#666666)**
    - Uses Geist/Vercel icon design system
-   - Implements currentColor for theme compatibility
    - Falls back to Lucide icons for JSON and generic files
    - Fixed 16x16 size with proper viewBox
 
@@ -423,10 +471,11 @@ AFTER: bg-white (stands out from background)
 | **Version Card Design** | Cluttered with description | Minimal (title + version only) |
 | **Version Card Files** | Grouped by status | Clean list with name + path |
 | **File Display in Version Card** | Stacked (2 lines) | Same line (horizontal) |
-| **File Icons in Version Card** | Generic Lucide icons | Geist-style icons with file badges (TS, JS, CSS) |
-| **File Icon Color** | Previously colored | Black (gray-900/gray-100) |
+| **File Icons in Version Card** | Generic Lucide icons | Geist-style with badges + React atom for TSX/JSX |
+| **File Icon Color** | Theme-dependent | Gray (#666) for badges, Blue (#8AADF4) for React |
 | **Path Navigation** | Hidden (hideHeader=true) | Visible with Computer icon + "/" |
-| **Folder Icons in Explorer** | Generic Folder | FolderClosed/FolderOpen based on state |
+| **Folder Icons in Explorer** | Yellow (text-yellow-500) | Blue (#8AADF4) - FolderClosed/FolderOpen |
+| **Chat Interface Padding** | Minimal (px-1 sm:px-2) | Comfortable (px-3 sm:px-4) |
 
 ---
 
@@ -442,10 +491,11 @@ The project page now has:
 - ✅ **Neutral file selection** without distracting blue highlights
 - ✅ **Minimal version cards** with clean file lists
 - ✅ **Horizontal file display** (name and path on same line)
-- ✅ **Geist-style file type icons** with visual badges (TS, JS, CSS, MD)
-- ✅ **Black file icons** for professional, clean appearance
+- ✅ **Geist-style file type icons** with badges (TS, JS, CSS, MD) in gray (#666666)
+- ✅ **React atom icons** for TSX/JSX in blue (#8AADF4) - instantly recognizable
 - ✅ **Visible path navigation** with computer icon + "/"
-- ✅ **Smart folder icons** (FolderClosed/FolderOpen based on state)
+- ✅ **Smart folder icons** (FolderClosed/FolderOpen) in blue (#8AADF4)
+- ✅ **Comfortable chat padding** (px-3 sm:px-4) - messages don't touch edges
 - ✅ **Better information hierarchy** (description separated from version card)
 - ✅ **Professional appearance** matching Vercel/modern design patterns
 

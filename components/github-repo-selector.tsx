@@ -76,8 +76,8 @@ export function GitHubRepoSelector({ onRepositorySelected, children }: GitHubRep
       <DialogTrigger asChild>
         {children}
       </DialogTrigger>
-      <DialogContent showCloseButton={false} className={`w-[calc(100vw-2rem)] sm:max-w-[500px] p-0 ${isDark ? 'bg-[#0a0a0a] border-[#262626]' : 'bg-white border-[#e5e5e5]'}`}>
-        <div className="p-2.5 sm:p-4">
+      <DialogContent showCloseButton={false} className={`w-[calc(100vw-2rem)] sm:max-w-[500px] p-0 overflow-hidden ${isDark ? 'bg-[#0a0a0a] border-[#262626]' : 'bg-white border-[#e5e5e5]'}`}>
+        <div className="p-2.5 sm:p-4 overflow-hidden">
           <div className="flex items-center justify-between mb-2 sm:mb-3">
             <DialogTitle className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-[#171717]'}`}>
               Connect GitHub Repository
@@ -115,9 +115,9 @@ export function GitHubRepoSelector({ onRepositorySelected, children }: GitHubRep
               </div>
             ) : (
               <>
-                <div className={`flex items-center gap-2 p-2 sm:p-2.5 rounded border ${isDark ? 'bg-[#262626] border-[#404040]' : 'bg-[#fafafa] border-[#e5e5e5]'}`}>
+                <div className={`flex items-center gap-2 p-2 sm:p-2.5 rounded border min-w-0 ${isDark ? 'bg-[#262626] border-[#404040]' : 'bg-[#fafafa] border-[#e5e5e5]'}`}>
                   <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 text-green-500" />
-                  <span className={`text-xs sm:text-sm ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  <span className={`text-xs sm:text-sm truncate min-w-0 ${isDark ? 'text-white' : 'text-gray-900'}`}>
                     Connected as {integrationStatus.username}
                   </span>
                 </div>
@@ -132,17 +132,17 @@ export function GitHubRepoSelector({ onRepositorySelected, children }: GitHubRep
                   >
                     <SelectTrigger 
                       id="repository-select"
-                      className={`w-full h-9 text-sm ${isDark ? 'bg-[#262626] border-[#404040] text-white hover:bg-[#2a2a2a]' : 'bg-white border-[#e5e5e5] text-gray-900 hover:bg-[#fafafa]'}`}
+                      className={`w-full h-9 text-sm overflow-hidden ${isDark ? 'bg-[#262626] border-[#404040] text-white hover:bg-[#2a2a2a]' : 'bg-white border-[#e5e5e5] text-gray-900 hover:bg-[#fafafa]'}`}
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
                         <Image 
                           src={isDark ? "/github-dark.svg" : "/github-light.svg"}
                           alt="GitHub"
                           width={16}
                           height={16}
-                          className={isDark ? "opacity-70" : "opacity-90"}
+                          className={`flex-shrink-0 ${isDark ? "opacity-70" : "opacity-90"}`}
                         />
-                        <SelectValue placeholder="Choose a repository..." />
+                        <SelectValue placeholder="Choose a repository..." className="truncate" />
                       </div>
                     </SelectTrigger>
                     <SelectContent className={`${isDark ? 'bg-[#262626] border-[#404040]' : 'bg-white border-[#e5e5e5]'}`}>
@@ -151,11 +151,12 @@ export function GitHubRepoSelector({ onRepositorySelected, children }: GitHubRep
                           key={repo.id} 
                           value={repo.id.toString()}
                           className={`text-sm ${isDark ? 'text-white focus:bg-[#2a2a2a] data-[highlighted]:bg-[#2a2a2a]' : 'text-black focus:bg-[#f2f2f2] data-[highlighted]:bg-[#f2f2f2] data-[highlighted]:text-black'}`}
+                          title={repo.full_name}
                         >
-                          <div className="flex items-center gap-2">
-                            <span>{repo.full_name}</span>
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <span className="truncate min-w-0 flex-1">{repo.full_name}</span>
                             {repo.private && (
-                              <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>(Private)</span>
+                              <span className={`text-xs flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>(Private)</span>
                             )}
                           </div>
                         </SelectItem>
@@ -163,7 +164,10 @@ export function GitHubRepoSelector({ onRepositorySelected, children }: GitHubRep
                     </SelectContent>
                   </Select>
                   {repositories && repositories.length > 0 && selectedRepoId && (
-                    <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                    <p 
+                      className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'} truncate`}
+                      title={repositories.find(r => r.id === selectedRepoId)?.description || 'No description'}
+                    >
                       {repositories.find(r => r.id === selectedRepoId)?.description || 'No description'}
                     </p>
                   )}

@@ -120,7 +120,6 @@ export function VersionCard({ version, isActive, onClick, previousVersion }: Ver
                     <FileTypeIcon 
                       filename={filename} 
                       size={16}
-                      className="text-gray-900 dark:text-gray-100" 
                     />
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <span className="text-sm text-foreground truncate">{name}</span>
