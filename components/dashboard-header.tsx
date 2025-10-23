@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, User, Menu, Plus, Search } from "lucide-react";
+import { LogOut, Settings, User, Menu, Plus, Search, FolderOpen, Clock, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ModernSidebar } from "@/components/modern-sidebar";
 import { CustomHamburgerButton } from "@/components/custom-hamburger-button";
 import { supabase } from "@/lib/supabase";
@@ -47,6 +48,11 @@ export function DashboardHeader({
   const [user, setUser] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isHovering, setIsHovering] = useState(false);
+  
+  // Mobile projects state
+  const [mobileProjects, setMobileProjects] = useState<any[]>([]);
+  const [mobileLoading, setMobileLoading] = useState(false);
+  const [mobileError, setMobileError] = useState<string | null>(null);
 
   // Use external state if provided, otherwise use internal state
   const sidebarOpen =
@@ -60,6 +66,41 @@ export function DashboardHeader({
       : internalMobileMenuOpen;
   const setMobileMenuOpen =
     externalSetMobileMenuOpen || setInternalMobileMenuOpen;
+
+  // Fetch projects for mobile menu
+  const fetchMobileProjects = async () => {
+    try {
+      setMobileLoading(true);
+      setMobileError(null);
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setMobileError("Please log in to view your projects");
+        return;
+      }
+
+      const { data, error: fetchError } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (fetchError) {
+        console.error("Error fetching projects:", fetchError);
+        setMobileError("Failed to load projects");
+        return;
+      }
+
+      setMobileProjects(data || []);
+    } catch (err) {
+      console.error("Error in fetchMobileProjects:", err);
+      setMobileError("An unexpected error occurred");
+    } finally {
+      setMobileLoading(false);
+    }
+  };
 
   useEffect(() => {
     // Get user data from Supabase
@@ -90,6 +131,65 @@ export function DashboardHeader({
 
     getUser();
   }, []);
+
+  // Fetch projects when mobile menu opens
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      fetchMobileProjects();
+    }
+  }, [mobileMenuOpen]);
+
+  // Helper functions for mobile projects
+  const getProjectTitle = (project: any) => {
+    if (project.description && project.description.trim()) {
+      let title = project.description.trim();
+      
+      // Capitalize first letter
+      title = title.charAt(0).toUpperCase() + title.slice(1);
+
+      // Truncate if too long for better display
+      if (title.length > 50) {
+        title = title.substring(0, 50) + "...";
+      }
+
+      return title;
+    }
+
+    if (
+      project.name &&
+      project.name !==
+        `API Project ${new Date(project.created_at).toLocaleDateString()}`
+    ) {
+      return project.name;
+    }
+
+    return `${project.framework.toUpperCase()} API`;
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60),
+    );
+
+    if (diffInHours < 1) return "Just now";
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    if (diffInHours < 168) return `${Math.floor(diffInHours / 24)}d ago`;
+    return date.toLocaleDateString();
+  };
+
+  const handleMobileProjectClick = (project: any) => {
+    router.push(`/projects/${project.id}`);
+    setMobileMenuOpen(false);
+  };
+
+  // Filter projects based on search query
+  const filteredMobileProjects = mobileProjects.filter((project) => {
+    if (!searchQuery) return true;
+    const title = getProjectTitle(project).toLowerCase();
+    return title.includes(searchQuery.toLowerCase());
+  });
 
   const handleLogout = async () => {
     try {
@@ -382,12 +482,83 @@ export function DashboardHeader({
             <div className="flex-1 overflow-hidden">
               <ScrollArea className="h-full">
                 <div className="p-2">
-                  {/* Projects would be loaded here */}
-                  <div className="space-y-1">
-                    <div className="px-3 py-2 text-sm text-gray-400">
-                      No projects found
+                  {mobileLoading ? (
+                    // Loading skeletons
+                    <div className="space-y-3">
+                      {[...Array(3)].map((_, i) => (
+                        <div key={i} className="px-3 py-3 rounded-lg">
+                          <Skeleton className="h-4 w-3/4 mb-2 bg-[#2A2D31]" />
+                          <Skeleton className="h-3 w-1/2 bg-[#2A2D31]" />
+                        </div>
+                      ))}
                     </div>
-                  </div>
+                  ) : mobileError ? (
+                    // Error state
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <p className="text-sm text-gray-300 mb-3">{mobileError}</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={fetchMobileProjects}
+                        className="text-blue-400 border-[#444444] hover:bg-blue-500/20 hover:border-blue-400"
+                      >
+                        Try Again
+                      </Button>
+                    </div>
+                  ) : filteredMobileProjects.length === 0 ? (
+                    // Empty state
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <FolderOpen className="h-8 w-8 text-gray-400 mb-2" />
+                      <p className="text-sm text-gray-300 mb-3">
+                        {searchQuery ? "No projects found" : "No projects yet"}
+                      </p>
+                      {!searchQuery && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            router.push("/ask");
+                            setMobileMenuOpen(false);
+                          }}
+                          className="text-blue-400 border-[#444444] hover:bg-blue-500/20 hover:border-blue-400"
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Create your first project
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    // Projects list
+                    <div className="space-y-2">
+                      {filteredMobileProjects.map((project) => (
+                        <motion.div
+                          key={project.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="group cursor-pointer"
+                          onClick={() => handleMobileProjectClick(project)}
+                        >
+                          <div className="px-3 py-3 rounded-lg transition-all duration-200 ease-in-out hover:bg-[#2A2D31]/60 hover:shadow-sm border border-transparent hover:border-[#444444]/50 group-hover:scale-[1.01]">
+                            <div className="mb-2">
+                              <h3 className="font-medium text-gray-100 text-sm leading-relaxed group-hover:text-blue-400 transition-colors duration-200 line-clamp-2 break-words">
+                                {getProjectTitle(project)}
+                              </h3>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 text-xs text-gray-400 group-hover:text-blue-400 transition-colors duration-200">
+                                <Clock className="h-3 w-3 flex-shrink-0" />
+                                <span className="font-medium truncate">
+                                  {formatDate(project.created_at)}
+                                </span>
+                              </div>
+                              <ChevronRight className="h-3 w-3 text-gray-500 group-hover:text-blue-400 transition-colors duration-200 flex-shrink-0" />
+                            </div>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
             </div>
