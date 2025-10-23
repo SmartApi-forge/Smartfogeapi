@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers';
+import { createRouteHandlerClient } from '@/lib/supabase-route-handler';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { projectId, repoFullName, branch, files } = body;
+    const { projectId, repoFullName, branch, files, commitMessage } = body;
 
     if (!projectId || !repoFullName || !branch || !files) {
       return NextResponse.json(
@@ -14,26 +13,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get auth token from cookies
-    const cookieStore = await cookies();
-    const authToken = cookieStore.get('sb-access-token')?.value || 
-                     cookieStore.get('sb-' + process.env.NEXT_PUBLIC_SUPABASE_URL!.split('//')[1].split('.')[0] + '-auth-token')?.value;
-
-    if (!authToken) {
+    if (typeof files !== 'object' || Array.isArray(files)) {
       return NextResponse.json(
-        { error: 'Unauthorized - No auth token found' },
-        { status: 401 }
+        { error: 'Files must be an object with path-content pairs' },
+        { status: 400 }
       );
     }
 
-    // Create Supabase client with service role for querying
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    if (typeof repoFullName !== 'string' || !repoFullName.includes('/')) {
+      return NextResponse.json(
+        { error: 'Invalid repository format. Expected: owner/repo' },
+        { status: 400 }
+      );
+    }
 
-    // Verify auth token and get user
-    const { data: { user }, error: userError } = await supabase.auth.getUser(authToken);
+    // Create Supabase client with user's session
+    const supabase = await createRouteHandlerClient();
+
+    // Get user from session
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
     
     if (userError || !user) {
       console.error('Auth error:', userError);
@@ -60,7 +58,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const [owner, repo] = repoFullName.split('/');
+    // Validate and split repoFullName
+    const parts = repoFullName.split('/');
+    if (parts.length !== 2 || !parts[0].trim() || !parts[1].trim()) {
+      return NextResponse.json(
+        { error: 'Invalid repository format. Expected: owner/repo with non-empty parts' },
+        { status: 400 }
+      );
+    }
+    const [owner, repo] = parts;
     const accessToken = integration.access_token;
 
     // Get the latest commit SHA for the branch
@@ -75,10 +81,14 @@ export async function POST(request: NextRequest) {
     );
 
     if (!branchResponse.ok) {
-      throw new Error('Failed to fetch branch info');
+      const errorData = await branchResponse.json().catch(() => ({}));
+      throw new Error(`Failed to fetch branch info: ${errorData.message || branchResponse.statusText}`);
     }
 
     const branchData = await branchResponse.json();
+    if (!branchData.object?.sha) {
+      throw new Error('Invalid branch response structure');
+    }
     const latestCommitSha = branchData.object.sha;
 
     // Get the tree SHA from the latest commit
@@ -92,12 +102,24 @@ export async function POST(request: NextRequest) {
       }
     );
 
+    if (!commitResponse.ok) {
+      const errorData = await commitResponse.json().catch(() => ({}));
+      throw new Error(`Failed to fetch commit: ${errorData.message || commitResponse.statusText}`);
+    }
+
     const commitData = await commitResponse.json();
+    if (!commitData.tree?.sha) {
+      throw new Error('Invalid commit response structure');
+    }
     const baseTreeSha = commitData.tree.sha;
 
     // Create blobs for each file
     const tree = await Promise.all(
       Object.entries(files).map(async ([path, content]) => {
+        // Convert content to base64
+        const contentString = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+        const base64Content = Buffer.from(contentString, 'utf-8').toString('base64');
+        
         const blobResponse = await fetch(
           `https://api.github.com/repos/${owner}/${repo}/git/blobs`,
           {
@@ -108,13 +130,26 @@ export async function POST(request: NextRequest) {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              content: typeof content === 'string' ? content : JSON.stringify(content, null, 2),
-              encoding: 'utf-8',
+              content: base64Content,
+              encoding: 'base64',
             }),
           }
         );
 
+        if (!blobResponse.ok) {
+          const errorText = await blobResponse.text();
+          throw new Error(
+            `Failed to create blob for file "${path}": ${blobResponse.status} ${blobResponse.statusText}. Response: ${errorText}`
+          );
+        }
+
         const blobData = await blobResponse.json();
+        
+        if (!blobData.sha) {
+          throw new Error(
+            `Blob creation for file "${path}" succeeded but returned no SHA. Response: ${JSON.stringify(blobData)}`
+          );
+        }
 
         return {
           path,
@@ -142,9 +177,25 @@ export async function POST(request: NextRequest) {
       }
     );
 
+    if (!treeResponse.ok) {
+      const errorText = await treeResponse.text();
+      throw new Error(
+        `Failed to create Git tree: ${treeResponse.status} ${treeResponse.statusText}. Response: ${errorText}`
+      );
+    }
+
     const treeData = await treeResponse.json();
+    
+    if (!treeData.sha) {
+      throw new Error(
+        `Tree creation succeeded but returned no SHA. Response: ${JSON.stringify(treeData)}`
+      );
+    }
 
     // Create a new commit
+    const defaultCommitMessage = `Update from SmartAPIForge (project: ${projectId})`;
+    const finalCommitMessage = commitMessage || defaultCommitMessage;
+    
     const newCommitResponse = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/git/commits`,
       {
@@ -155,14 +206,27 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: `Push code from SmartAPIForge project`,
+          message: finalCommitMessage,
           tree: treeData.sha,
           parents: [latestCommitSha],
         }),
       }
     );
 
+    if (!newCommitResponse.ok) {
+      const errorText = await newCommitResponse.text();
+      throw new Error(
+        `Failed to create commit: ${newCommitResponse.status} ${newCommitResponse.statusText}. Response: ${errorText}`
+      );
+    }
+
     const newCommitData = await newCommitResponse.json();
+    
+    if (!newCommitData.sha) {
+      throw new Error(
+        `Commit creation succeeded but returned no SHA. Response: ${JSON.stringify(newCommitData)}`
+      );
+    }
 
     // Update the branch reference
     const updateRefResponse = await fetch(

@@ -64,6 +64,7 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
         <div className="flex items-center space-x-1 sm:space-x-2" style={{ opacity: mounted ? 1 : 0.99 }}>
           {/* Settings button */}
           <button 
+            aria-label="Open settings"
             className={`transition-all duration-300 h-8 w-8 p-0 rounded-md flex items-center justify-center ${isDark ? 'bg-[#1A1A1A] hover:bg-[#262626] border border-gray-600' : 'bg-[#fafafa] hover:bg-[#f2f2f2] border border-gray-300'}`}
           >
             <Settings5Line className={`h-[18px] w-[18px] transition-colors duration-300 ${isDark ? 'text-white' : 'text-gray-900'} pointer-events-none`} />
@@ -76,6 +77,7 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
               projectFiles={projectFiles}
             >
               <button 
+                aria-label="Connect to GitHub"
                 className={`transition-all duration-300 h-8 w-8 p-0 rounded-md flex items-center justify-center ${isDark ? 'bg-[#1A1A1A] hover:bg-[#262626] border border-gray-600' : 'bg-[#fafafa] hover:bg-[#f2f2f2] border border-gray-300'}`}
               >
                 <Image 
@@ -84,7 +86,6 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
                   width={18}
                   height={18}
                   className="opacity-100 pointer-events-none transition-opacity duration-300"
-                  priority
                 />
               </button>
             </GitHubSetupDialog>
@@ -94,6 +95,7 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
           {shouldShowGitHubBranchSelector && project && (
             <GitHubBranchSelectorV0 project={project}>
               <button 
+                aria-label="Manage GitHub branches"
                 className={`transition-all duration-300 h-8 w-8 p-0 rounded-md flex items-center justify-center ${isDark ? 'bg-[#1A1A1A] hover:bg-[#262626] border border-gray-600' : 'bg-[#fafafa] hover:bg-[#f2f2f2] border border-gray-300'}`}
               >
                 <Image 
@@ -102,7 +104,6 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
                   width={18}
                   height={18}
                   className="opacity-100 pointer-events-none transition-opacity duration-300"
-                  priority
                 />
               </button>
             </GitHubBranchSelectorV0>
@@ -110,6 +111,7 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
           
           {/* Share button - Icon only on mobile */}
           <button 
+            aria-label="Share project"
             className={`transition-all duration-300 h-8 px-2 rounded-md flex items-center justify-center ${isDark ? 'bg-[#1A1A1A] hover:bg-[#262626] border border-gray-600' : 'bg-[#fafafa] hover:bg-[#f2f2f2] border border-gray-300'}`}
           >
             <Share className={`h-[18px] w-[18px] sm:mr-1.5 transition-colors duration-300 ${isDark ? 'text-white' : 'text-gray-900'} pointer-events-none`} />
@@ -118,6 +120,7 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
           
           {/* Publish button - Theme-aware with icon */}
           <button 
+            aria-label="Publish project"
             className={`transition-all duration-300 h-8 px-3 rounded-md flex items-center justify-center gap-1.5 ${isDark ? 'bg-white hover:bg-gray-200 text-black' : 'bg-black hover:bg-gray-900 text-white'}`}
           >
             <Globe className="h-[16px] w-[16px]" />

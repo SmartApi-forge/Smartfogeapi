@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Sandbox } from 'e2b';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { createRouteHandlerClient } from '@/lib/supabase-route-handler';
 
 /**
  * Keep E2B sandbox alive while user is viewing the project
@@ -17,6 +12,9 @@ export async function POST(
 ) {
   try {
     const { projectId } = await params;
+
+    // Create Supabase client with user's session
+    const supabase = await createRouteHandlerClient();
 
     // Get project with sandbox info from metadata
     const { data: project, error } = await supabase

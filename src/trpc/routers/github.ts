@@ -9,6 +9,17 @@ import { TRPCError } from '@trpc/server';
 import { githubOAuth } from '@/lib/github-oauth';
 import { githubRepositoryService } from '@/src/services/github-repository-service';
 import { githubSyncService } from '@/src/services/github-sync-service';
+import { createClient } from '@supabase/supabase-js';
+
+/**
+ * Helper function to create Supabase client with service role key
+ */
+async function getSupabaseClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 export const githubRouter = createTRPCRouter({
   /**
@@ -26,9 +37,13 @@ export const githubRouter = createTRPCRouter({
           avatar: integration?.metadata?.avatar_url,
         };
       } catch (error: any) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: error.message,
+          message: error.message || 'An unexpected error occurred',
+          cause: error,
         });
       }
     }),
@@ -46,9 +61,62 @@ export const githubRouter = createTRPCRouter({
           message: 'GitHub integration disconnected',
         };
       } catch (error: any) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: error.message,
+          message: error.message || 'An unexpected error occurred',
+          cause: error,
+        });
+      }
+    }),
+
+  /**
+   * Get user's GitHub organizations
+   */
+  getUserOrgs: protectedProcedure
+    .query(async ({ ctx }) => {
+      try {
+        const integration = await githubOAuth.getUserIntegration(ctx.user.id);
+        
+        if (!integration?.access_token) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'GitHub integration not found',
+          });
+        }
+
+        const response = await fetch('https://api.github.com/user/orgs', {
+          headers: {
+            'Accept': 'application/vnd.github.v3+json',
+            'Authorization': `Bearer ${integration.access_token}`,
+          },
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            throw new TRPCError({
+              code: 'UNAUTHORIZED',
+              message: 'GitHub authentication failed. Please reconnect.',
+            });
+          }
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `GitHub API error: ${response.statusText}`,
+          });
+        }
+
+        const orgs = await response.json();
+        return orgs;
+      } catch (error: any) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'Failed to fetch GitHub organizations',
+          cause: error,
         });
       }
     }),
@@ -80,9 +148,13 @@ export const githubRouter = createTRPCRouter({
 
         return repositories;
       } catch (error: any) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: error.message,
+          message: error.message || 'An unexpected error occurred',
+          cause: error,
         });
       }
     }),
@@ -96,6 +168,8 @@ export const githubRouter = createTRPCRouter({
       repositoryFullName: z.string(),
       projectId: z.string().optional(),
       createProject: z.boolean().default(false),
+      page: z.number().default(1),
+      perPage: z.number().default(100),
     }))
     .mutation(async ({ ctx, input }) => {
       try {
@@ -108,8 +182,12 @@ export const githubRouter = createTRPCRouter({
           });
         }
 
-        // Fetch repository details
-        const repositories = await githubRepositoryService.listUserRepositories(integration.access_token);
+        // Fetch repository details with pagination
+        const repositories = await githubRepositoryService.listUserRepositories(
+          integration.access_token,
+          input.page,
+          input.perPage
+        );
         const repo = repositories.find(r => r.id === input.repositoryId);
 
         if (!repo) {
@@ -123,11 +201,7 @@ export const githubRouter = createTRPCRouter({
 
         // Create project if requested
         if (input.createProject) {
-          const { createClient } = await import('@supabase/supabase-js');
-          const supabase = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!
-          );
+          const supabase = await getSupabaseClient();
 
           // Create project
           const { data: project, error: projectError } = await supabase
@@ -184,9 +258,13 @@ export const githubRouter = createTRPCRouter({
           projectId,
         };
       } catch (error: any) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: error.message,
+          message: error.message || 'An unexpected error occurred',
+          cause: error,
         });
       }
     }),
@@ -200,9 +278,13 @@ export const githubRouter = createTRPCRouter({
         const repositories = await githubRepositoryService.getUserRepositories(ctx.user.id);
         return repositories;
       } catch (error: any) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: error.message,
+          message: error.message || 'An unexpected error occurred',
+          cause: error,
         });
       }
     }),
@@ -259,7 +341,7 @@ export const githubRouter = createTRPCRouter({
 
         // Record sync history
         if (result.success) {
-          await githubSyncService.recordSyncHistory(
+          const historyResult = await githubSyncService.recordSyncHistory(
             input.repositoryId,
             input.projectId,
             ctx.user.id,
@@ -273,37 +355,80 @@ export const githubRouter = createTRPCRouter({
               status: 'completed',
             }
           );
+          
+          if (!historyResult.success) {
+            console.warn('Failed to record sync history:', historyResult.error);
+          }
 
-          // Update project timestamps
-          const { createClient } = await import('@supabase/supabase-js');
-          const supabase = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!
-          );
+          // Update project timestamps with ownership verification
+          const supabase = await getSupabaseClient();
 
-          await supabase
+          const { error: projectUpdateError } = await supabase
             .from('projects')
             .update({
               last_push_at: new Date().toISOString(),
               has_local_changes: false,
             })
-            .eq('id', input.projectId);
+            .eq('id', input.projectId)
+            .eq('user_id', ctx.user.id);
 
-          // Update repository sync status
-          await supabase
+          if (projectUpdateError) {
+            console.error('Failed to update project after push:', projectUpdateError);
+            // Set repository to error state since project update failed
+            await supabase
+              .from('github_repositories')
+              .update({
+                sync_status: 'error',
+                last_sync_at: new Date().toISOString(),
+              })
+              .eq('id', input.repositoryId)
+              .eq('user_id', ctx.user.id);
+            
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: `Push succeeded but failed to update project: ${projectUpdateError.message}`,
+              cause: projectUpdateError,
+            });
+          }
+
+          // Update repository sync status with ownership verification
+          const { error: repoUpdateError } = await supabase
             .from('github_repositories')
             .update({
               last_sync_at: new Date().toISOString(),
               sync_status: 'idle',
             })
-            .eq('id', input.repositoryId);
+            .eq('id', input.repositoryId)
+            .eq('user_id', ctx.user.id);
+
+          if (repoUpdateError) {
+            console.error('Failed to update repository sync status:', repoUpdateError);
+            // Revert project state since repo update failed
+            await supabase
+              .from('projects')
+              .update({
+                has_local_changes: true,
+              })
+              .eq('id', input.projectId)
+              .eq('user_id', ctx.user.id);
+            
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: `Push succeeded but failed to update repository status: ${repoUpdateError.message}`,
+              cause: repoUpdateError,
+            });
+          }
         }
 
         return result;
       } catch (error: any) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: error.message,
+          message: error.message || 'An unexpected error occurred',
+          cause: error,
         });
       }
     }),
@@ -349,29 +474,63 @@ export const githubRouter = createTRPCRouter({
           }
         );
 
+        // Log any per-file errors that occurred during fetch
+        if (result.errors && result.errors.length > 0) {
+          console.warn(`Pull completed with ${result.errors.length} file fetch errors:`, result.errors);
+        }
+
         // Record sync history for pull
         if (result.success && result.files) {
-          const { createClient } = await import('@supabase/supabase-js');
-          const supabase = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!
-          );
+          const supabase = await getSupabaseClient();
 
           // Save pulled files to database (fragments table)
           if (repo.project_id) {
-            // First, get the latest version number for this project
-            const { data: latestVersion } = await supabase
+            // Verify project ownership before modifying
+            const { data: projectOwnership, error: ownershipError } = await supabase
+              .from('projects')
+              .select('id')
+              .eq('id', repo.project_id)
+              .eq('user_id', ctx.user.id)
+              .maybeSingle();
+
+            if (ownershipError) {
+              console.error('Failed to verify project ownership:', ownershipError);
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: `Failed to verify project ownership: ${ownershipError.message}`,
+                cause: ownershipError,
+              });
+            }
+
+            if (!projectOwnership) {
+              throw new TRPCError({
+                code: 'FORBIDDEN',
+                message: 'You do not have permission to modify this project',
+              });
+            }
+
+            // Get the latest version number for this project
+            const { data: latestVersion, error: versionError } = await supabase
               .from('versions')
               .select('version_number')
               .eq('project_id', repo.project_id)
               .order('version_number', { ascending: false })
               .limit(1)
-              .single();
+              .maybeSingle();
 
-            const nextVersionNumber = (latestVersion?.version_number || 0) + 1;
+            if (versionError) {
+              console.error('Failed to fetch latest version:', versionError);
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: `Failed to fetch version history: ${versionError.message}`,
+                cause: versionError,
+              });
+            }
+
+            const nextVersionNumber = (latestVersion?.version_number ?? 0) + 1;
 
             // Create a new version with the pulled files
-            await supabase
+            const { error: versionInsertError } = await supabase
               .from('versions')
               .insert({
                 project_id: repo.project_id,
@@ -381,43 +540,82 @@ export const githubRouter = createTRPCRouter({
                 commit_message: `Pulled from GitHub branch: ${input.branchName || repo.default_branch}`,
               });
 
-            // Update project timestamps
-            await supabase
+            if (versionInsertError) {
+              console.error('Failed to create new version:', versionInsertError);
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: `Failed to create version: ${versionInsertError.message}`,
+                cause: versionInsertError,
+              });
+            }
+
+            // Update project timestamps with ownership verification
+            const { error: projectUpdateError } = await supabase
               .from('projects')
               .update({
                 last_pull_at: new Date().toISOString(),
               })
-              .eq('id', repo.project_id);
+              .eq('id', repo.project_id)
+              .eq('user_id', ctx.user.id);
+
+            if (projectUpdateError) {
+              console.error('Failed to update project after pull:', projectUpdateError);
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: `Failed to update project: ${projectUpdateError.message}`,
+                cause: projectUpdateError,
+              });
+            }
           }
 
-          // Record sync history
-          await githubSyncService.recordSyncHistory(
-            input.repositoryId,
-            repo.project_id || '',
-            ctx.user.id,
-            'pull',
-            {
-              branchName: input.branchName,
-              filesChanged: Object.keys(result.files).length,
-              status: 'completed',
+          // Record sync history (only if project_id exists)
+          if (repo.project_id) {
+            const historyResult = await githubSyncService.recordSyncHistory(
+              input.repositoryId,
+              repo.project_id,
+              ctx.user.id,
+              'pull',
+              {
+                branchName: input.branchName,
+                filesChanged: Object.keys(result.files).length,
+                status: 'completed',
+              }
+            );
+            
+            if (!historyResult.success) {
+              console.warn('Failed to record sync history:', historyResult.error);
             }
-          );
+          }
 
-          // Update repository sync status
-          await supabase
+          // Update repository sync status with ownership verification
+          const { error: repoUpdateError } = await supabase
             .from('github_repositories')
             .update({
               last_sync_at: new Date().toISOString(),
               sync_status: 'idle',
             })
-            .eq('id', input.repositoryId);
+            .eq('id', input.repositoryId)
+            .eq('user_id', ctx.user.id);
+
+          if (repoUpdateError) {
+            console.error('Failed to update repository sync status after pull:', repoUpdateError);
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: `Pull succeeded but failed to update repository status: ${repoUpdateError.message}`,
+              cause: repoUpdateError,
+            });
+          }
         }
 
         return result;
       } catch (error: any) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: error.message,
+          message: error.message || 'An unexpected error occurred',
+          cause: error,
         });
       }
     }),
@@ -456,9 +654,13 @@ export const githubRouter = createTRPCRouter({
 
         return result;
       } catch (error: any) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: error.message,
+          message: error.message || 'An unexpected error occurred',
+          cause: error,
         });
       }
     }),
@@ -473,16 +675,27 @@ export const githubRouter = createTRPCRouter({
     }))
     .query(async ({ ctx, input }) => {
       try {
-        const history = await githubSyncService.getSyncHistory(
+        const result = await githubSyncService.getSyncHistory(
           input.repositoryId,
           input.limit
         );
 
-        return history;
+        if (!result.success) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: result.error || 'Failed to fetch sync history',
+          });
+        }
+
+        return result.data || [];
       } catch (error: any) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: error.message,
+          message: error.message || 'An unexpected error occurred',
+          cause: error,
         });
       }
     }),
@@ -514,9 +727,13 @@ export const githubRouter = createTRPCRouter({
 
         return branches;
       } catch (error: any) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: error.message,
+          message: error.message || 'An unexpected error occurred',
+          cause: error,
         });
       }
     }),
@@ -556,11 +773,7 @@ export const githubRouter = createTRPCRouter({
         }
 
         // Find the repository in database to record sync history
-        const { createClient } = await import('@supabase/supabase-js');
-        const supabase = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!
-        );
+        const supabase = await getSupabaseClient();
 
         const { data: repo } = await supabase
           .from('github_repositories')
@@ -569,10 +782,11 @@ export const githubRouter = createTRPCRouter({
           .eq('user_id', ctx.user.id)
           .single();
 
-        if (repo) {
-          await githubSyncService.recordSyncHistory(
+        // Only record sync history if project_id exists (not null/undefined)
+        if (repo?.project_id) {
+          const historyResult = await githubSyncService.recordSyncHistory(
             repo.id,
-            repo.project_id || '',
+            repo.project_id,
             ctx.user.id,
             'create_branch',
             {
@@ -580,13 +794,21 @@ export const githubRouter = createTRPCRouter({
               status: 'completed',
             }
           );
+          
+          if (!historyResult.success) {
+            console.warn('Failed to record sync history:', historyResult.error);
+          }
         }
 
         return result;
       } catch (error: any) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: error.message,
+          message: error.message || 'An unexpected error occurred',
+          cause: error,
         });
       }
     }),
@@ -615,14 +837,37 @@ export const githubRouter = createTRPCRouter({
           });
         }
 
-        const [owner, repo] = input.repoFullName.split('/');
+        // Validate repoFullName format
+        const trimmedRepoFullName = input.repoFullName.trim();
+        
+        if (!trimmedRepoFullName) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Repository full name cannot be empty',
+          });
+        }
+
+        const firstSlash = trimmedRepoFullName.indexOf('/');
+        const lastSlash = trimmedRepoFullName.lastIndexOf('/');
+        
+        if (firstSlash === -1 || firstSlash !== lastSlash) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Repository full name must be in format "owner/repo"',
+          });
+        }
+
+        const [owner, repo] = trimmedRepoFullName.split('/');
+        
+        if (!owner || !repo) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Both owner and repository name must be non-empty',
+          });
+        }
 
         // Store in github_repositories table
-        const { createClient } = await import('@supabase/supabase-js');
-        const supabase = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!
-        );
+        const supabase = await getSupabaseClient();
 
         const { data: storedRepo, error: repoError } = await supabase
           .from('github_repositories')
@@ -631,7 +876,7 @@ export const githubRouter = createTRPCRouter({
             integration_id: integration.id,
             project_id: input.projectId,
             repo_id: input.repoId,
-            repo_full_name: input.repoFullName,
+            repo_full_name: trimmedRepoFullName,
             repo_name: repo,
             repo_owner: owner,
             repo_url: input.repoUrl,
@@ -670,7 +915,7 @@ export const githubRouter = createTRPCRouter({
         }
 
         // Record repository creation in sync history
-        await githubSyncService.recordSyncHistory(
+        const historyResult = await githubSyncService.recordSyncHistory(
           storedRepo.id,
           input.projectId,
           ctx.user.id,
@@ -680,15 +925,23 @@ export const githubRouter = createTRPCRouter({
             status: 'completed',
           }
         );
+        
+        if (!historyResult.success) {
+          console.warn('Failed to record sync history:', historyResult.error);
+        }
 
         return {
           success: true,
           repository: storedRepo,
         };
       } catch (error: any) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: error.message,
+          message: error.message || 'An unexpected error occurred',
+          cause: error,
         });
       }
     }),
@@ -703,11 +956,7 @@ export const githubRouter = createTRPCRouter({
     }))
     .mutation(async ({ ctx, input }) => {
       try {
-        const { createClient } = await import('@supabase/supabase-js');
-        const supabase = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!
-        );
+        const supabase = await getSupabaseClient();
 
         const { error } = await supabase
           .from('projects')
@@ -726,9 +975,13 @@ export const githubRouter = createTRPCRouter({
 
         return { success: true };
       } catch (error: any) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: error.message,
+          message: error.message || 'An unexpected error occurred',
+          cause: error,
         });
       }
     }),
@@ -742,11 +995,7 @@ export const githubRouter = createTRPCRouter({
     }))
     .query(async ({ ctx, input }) => {
       try {
-        const { createClient } = await import('@supabase/supabase-js');
-        const supabase = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!
-        );
+        const supabase = await getSupabaseClient();
 
         // Get project with GitHub info
         const { data: project, error: projectError } = await supabase
@@ -786,9 +1035,13 @@ export const githubRouter = createTRPCRouter({
           github_mode: project.github_mode,
         };
       } catch (error: any) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: error.message,
+          message: error.message || 'An unexpected error occurred',
+          cause: error,
         });
       }
     }),

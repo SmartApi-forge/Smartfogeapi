@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Sandbox } from 'e2b';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { createRouteHandlerClient } from '@/lib/supabase-route-handler';
 
 /**
- * Pause E2B sandbox to preserve state beyond 1-hour timeout
- * Uses E2B's betaPause to serialize filesystem and process state
+ * Pause E2B sandbox to preserve state beyond timeout
+ * Uses E2B's auto-pause when connections close
  * On Hobby Plan: Paused sandboxes can be resumed later with connect()
  */
 export async function POST(
@@ -18,6 +13,9 @@ export async function POST(
 ) {
   try {
     const { projectId } = await params;
+
+    // Create Supabase client with user's session
+    const supabase = await createRouteHandlerClient();
 
     // Get project with sandbox info
     const { data: project, error } = await supabase

@@ -12,9 +12,11 @@ export async function GET(request: NextRequest) {
   const state = searchParams.get('state');
   const error = searchParams.get('error');
 
-  // Check for OAuth errors
+  // Check for OAuth errors - sanitize to prevent leaking sensitive OAuth configuration
   if (error) {
-    const errorDescription = searchParams.get('error_description') || error;
+    // Map OAuth errors to generic user-friendly messages
+    const errorDescription = 'GitHub authorization failed. Please try again.';
+    console.error('GitHub OAuth error:', error, searchParams.get('error_description'));
     return NextResponse.redirect(
       new URL(`/ask?error=${encodeURIComponent(errorDescription)}`, request.url)
     );
@@ -70,8 +72,10 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (error: any) {
     console.error('GitHub OAuth callback error:', error);
+    // Sanitize error message to prevent leaking sensitive details
+    const sanitizedError = 'Failed to connect GitHub account. Please try again.';
     return NextResponse.redirect(
-      new URL(`/ask?error=${encodeURIComponent(error.message)}`, request.url)
+      new URL(`/ask?error=${encodeURIComponent(sanitizedError)}`, request.url)
     );
   }
 }

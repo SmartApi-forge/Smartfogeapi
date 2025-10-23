@@ -170,4 +170,81 @@ export class ProjectService {
       })
     }
   }
+
+  /**
+   * Get project files from latest version or fragments
+   */
+  static async getFiles(
+    projectId: string,
+    userId: string
+  ): Promise<Record<string, string>> {
+    try {
+      // Verify project ownership
+      const { data: project, error: projectError } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('id', projectId)
+        .eq('user_id', userId)
+        .single()
+
+      if (projectError || !project) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Project not found'
+        })
+      }
+
+      // Get the latest version for the project
+      const { data: versions, error: versionsError } = await supabase
+        .from('versions')
+        .select('files')
+        .eq('project_id', projectId)
+        .eq('status', 'complete')
+        .order('version_number', { ascending: false })
+        .limit(1)
+
+      if (versionsError) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to fetch versions: ${versionsError.message}`
+        })
+      }
+
+      if (versions && versions.length > 0 && versions[0].files) {
+        return versions[0].files as Record<string, string>
+      }
+
+      // Try to get files from fragments if no versions exist
+      const { data: fragments, error: fragmentsError } = await supabase
+        .from('fragments')
+        .select('files')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      if (fragmentsError) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to fetch fragments: ${fragmentsError.message}`
+        })
+      }
+
+      if (fragments && fragments.length > 0 && fragments[0].files) {
+        return fragments[0].files as Record<string, string>
+      }
+
+      return {}
+    } catch (error) {
+      console.error('Error fetching project files:', error)
+      
+      if (error instanceof TRPCError) {
+        throw error
+      }
+      
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch project files'
+      })
+    }
+  }
 }

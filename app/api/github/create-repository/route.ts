@@ -1,32 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Octokit } from '@octokit/rest';
-import { createClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers';
+import { createRouteHandlerClient } from '@/lib/supabase-route-handler';
+import { githubOAuth } from '@/lib/github-oauth';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+/**
+ * Validate GitHub token by making a lightweight API call
+ */
+async function validateGitHubToken(token: string): Promise<boolean> {
+  try {
+    const response = await fetch('https://api.github.com/user', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+      },
+    });
+    return response.ok;
+  } catch (error) {
+    return false;
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
-    // Get user session from cookies
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('sb-access-token');
+    // Create Supabase server client with cookies adapter
+    const supabase = await createRouteHandlerClient();
     
-    if (!sessionCookie) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-    }
-
-    // Verify user session with Supabase
-    const { data: { user }, error: userError } = await supabase.auth.getUser(sessionCookie.value);
+    // Get user session - handled automatically by server client
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
     
     if (userError || !user) {
-      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
+      return NextResponse.json({ 
+        error: 'Not authenticated. Please sign in.',
+        requiresAuth: true 
+      }, { status: 401 });
     }
 
     // Get request body
-    const { repositoryName, gitScope } = await request.json();
+    const { repositoryName, gitScope, organization } = await request.json();
 
     if (!repositoryName || !gitScope) {
       return NextResponse.json({ error: 'Repository name and git scope are required' }, { status: 400 });
@@ -42,10 +52,37 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (integrationError || !integration) {
-      return NextResponse.json({ error: 'GitHub integration not found. Please connect your GitHub account first.' }, { status: 400 });
+      return NextResponse.json({ 
+        error: 'GitHub integration not found. Please connect your GitHub account first.',
+        requiresGitHubAuth: true 
+      }, { status: 400 });
     }
 
-    // Initialize Octokit with user's access token
+    // Validate GitHub token before using it
+    const isTokenValid = await validateGitHubToken(integration.access_token);
+    
+    if (!isTokenValid) {
+      console.error('GitHub token validation failed for user:', user.id);
+      
+      // Attempt to use the githubOAuth service to validate/refresh
+      // Note: GitHub OAuth doesn't support refresh tokens by default
+      // If token is invalid, user needs to re-authenticate
+      
+      // Mark integration as inactive
+      await supabase
+        .from('user_integrations')
+        .update({ is_active: false })
+        .eq('user_id', user.id)
+        .eq('provider', 'github');
+      
+      return NextResponse.json({ 
+        error: 'GitHub token is invalid or expired. Please re-authenticate with GitHub.',
+        requiresGitHubAuth: true,
+        tokenExpired: true
+      }, { status: 401 });
+    }
+
+    // Initialize Octokit with validated access token
     const octokit = new Octokit({ auth: integration.access_token });
 
     // Create repository based on git scope
@@ -60,18 +97,50 @@ export async function POST(request: NextRequest) {
         auto_init: true,
       });
     } else if (gitScope === 'organization') {
-      // For organization repos, we need to get user's organizations first
-      const orgsResponse = await octokit.orgs.listForAuthenticatedUser();
-      
-      if (orgsResponse.data.length === 0) {
-        return NextResponse.json({ error: 'No organizations found for your account' }, { status: 400 });
+      // For organization repos, require explicit organization selection
+      if (!organization) {
+        // Fetch user's organizations to present for selection
+        const orgsResponse = await octokit.orgs.listForAuthenticatedUser();
+        
+        if (orgsResponse.data.length === 0) {
+          return NextResponse.json({ error: 'No organizations found for your account' }, { status: 400 });
+        }
+
+        // Return organizations for client to present selection
+        return NextResponse.json({ 
+          error: 'Organization selection required',
+          organizations: orgsResponse.data.map(org => ({
+            login: org.login,
+            id: org.id,
+            avatar_url: org.avatar_url,
+            description: org.description
+          }))
+        }, { status: 400 });
       }
 
-      // Use the first organization (in a real app, you'd let user choose)
-      const orgName = orgsResponse.data[0].login;
+      // Validate user has permissions in the specified organization
+      try {
+        const membership = await octokit.orgs.getMembershipForAuthenticatedUser({
+          org: organization
+        });
+
+        // Check if user has admin or repo creation permissions
+        if (membership.data.role !== 'admin' && membership.data.state !== 'active') {
+          return NextResponse.json({ 
+            error: `Insufficient permissions in organization '${organization}'. You need admin or repo creation permissions.` 
+          }, { status: 403 });
+        }
+      } catch (orgError: any) {
+        if (orgError.status === 404) {
+          return NextResponse.json({ 
+            error: `Organization '${organization}' not found or you are not a member.` 
+          }, { status: 404 });
+        }
+        throw orgError;
+      }
       
       createRepoResponse = await octokit.repos.createInOrg({
-        org: orgName,
+        org: organization,
         name: repositoryName,
         private: true,
         description: `Repository created from SmartForge project`,
@@ -124,6 +193,20 @@ export async function POST(request: NextRequest) {
     console.error('GitHub repository creation error:', error);
     
     // Handle specific GitHub API errors
+    if (error.status === 401) {
+      // Log the authentication failure event
+      console.error('GitHub API 401 error - token authentication failed:', {
+        message: error.message,
+        timestamp: new Date().toISOString(),
+      });
+      
+      return NextResponse.json({ 
+        error: 'Authentication failed: invalid or expired GitHub token. Please re-authenticate.',
+        requiresGitHubAuth: true,
+        tokenExpired: true
+      }, { status: 401 });
+    }
+    
     if (error.status === 422) {
       return NextResponse.json({ 
         error: 'Repository name already exists or is invalid. Please choose a different name.' 

@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { createRouteHandlerClient } from '@/lib/supabase-route-handler';
 
 export async function GET(
   request: NextRequest,
@@ -12,6 +7,9 @@ export async function GET(
 ) {
   try {
     const { projectId } = await params;
+
+    // Create Supabase client with user's session
+    const supabase = await createRouteHandlerClient();
 
     // Get the latest version for the project
     const { data: versions, error: versionsError } = await supabase

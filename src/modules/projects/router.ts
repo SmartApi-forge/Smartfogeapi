@@ -81,4 +81,27 @@ export const projectsRouter = createTRPCRouter({
         })
       }
     }),
+
+  /**
+   * Get project files (latest version or fragments)
+   */
+  getFiles: protectedProcedure
+    .input(z.object({
+      projectId: z.string(),
+    }))
+    .query(async ({ input, ctx }) => {
+      try {
+        return await ProjectService.getFiles(input.projectId, ctx.user.id)
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error
+        }
+        
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch project files',
+          cause: error
+        })
+      }
+    }),
 })

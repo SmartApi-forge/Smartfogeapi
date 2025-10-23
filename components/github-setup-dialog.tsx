@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,7 @@ export function GitHubSetupDialog({
 }: GitHubSetupDialogProps) {
   const { theme, resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
+  const router = useRouter();
   const trpcUtils = trpc.useUtils();
   
   // Dialog state
@@ -52,6 +54,7 @@ export function GitHubSetupDialog({
   const [createBranchMode, setCreateBranchMode] = useState(false);
   const [newBranchName, setNewBranchName] = useState("");
   const [isPushing, setIsPushing] = useState(false);
+  const [branchSearchTerm, setBranchSearchTerm] = useState("");
   
   // Created repo info
   const [repoUrl, setRepoUrl] = useState<string>("");
@@ -80,15 +83,9 @@ export function GitHubSetupDialog({
         setGitScope(integrationStatus.username); // Set default to user's account
       }
 
-      // Fetch user's organizations from GitHub API
-      const orgsResponse = await fetch('https://api.github.com/user/orgs', {
-        headers: {
-          'Accept': 'application/vnd.github.v3+json',
-        },
-      });
-
-      if (orgsResponse.ok) {
-        const orgs = await orgsResponse.json();
+      // Fetch user's organizations using authenticated tRPC endpoint
+      const orgs = await trpcUtils.github.getUserOrgs.fetch();
+      if (orgs && Array.isArray(orgs)) {
         setGitHubOrgs(orgs);
       }
     } catch (error) {
@@ -115,13 +112,25 @@ export function GitHubSetupDialog({
         setRepoFullName(data.repoFullName);
         setRepoId(data.repoId);
         
-        // Wait for GitHub to initialize the repository (2-3 seconds)
+        // Poll for repository initialization with exponential backoff
         toast.loading("Initializing repository...", { id: "init" });
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        toast.success("Repository initialized!", { id: "init" });
-        
-        // Fetch branches (should have "main" by default)
-        await fetchBranches(data.repoFullName);
+        let retries = 0;
+        const maxRetries = 5;
+        while (retries < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retries)));
+          try {
+            await fetchBranches(data.repoFullName);
+            toast.success("Repository initialized!", { id: "init" });
+            break;
+          } catch (error) {
+            retries++;
+            if (retries === maxRetries) {
+              toast.error("Repository initialization timeout", { id: "init" });
+              setIsCreating(false);
+              return;
+            }
+          }
+        }
         
         // Move to branch selection step
         setStep('select-branch');
@@ -166,20 +175,31 @@ export function GitHubSetupDialog({
           setSelectedBranch(branchData[0].name);
         }
       } else {
-        // Repository is empty or still initializing
-        toast.warning("Repository has no branches yet. Please try again in a moment.");
-        setSelectedBranch('main'); // Set default
+        // Repository is empty or still initializing - throw error to trigger retry
+        setBranches([]);
+        setSelectedBranch('');
+        throw new Error('Repository has no branches yet');
       }
     } catch (error: any) {
       console.error("Failed to fetch branches:", error);
-      // More specific error messages
-      if (error.message && error.message.includes('404')) {
-        toast.error("Repository not found or not yet initialized");
-      } else if (error.message && error.message.includes('401')) {
-        toast.error("GitHub authentication failed. Please reconnect.");
-      } else {
-        toast.error("Failed to fetch branches: " + (error.message || "Unknown error"));
+      setBranches([]);
+      setSelectedBranch('');
+      
+      // Use structured error properties instead of string matching
+      const status = error?.response?.status || error?.status || error?.data?.httpStatus;
+      const errorCode = error?.code;
+      
+      if (status === 404 || errorCode === 'NOT_FOUND') {
+        // Repository not found or not yet initialized - re-throw for retry
+        throw new Error('Repository not found or not yet initialized');
+      } else if (status === 401 || errorCode === 'UNAUTHORIZED') {
+        // Authentication failed - don't retry, show error
+        toast.error('GitHub authentication failed. Please reconnect.');
+        throw new Error('Authentication failed');
       }
+      
+      // Re-throw to allow retry logic to handle it
+      throw error;
     } finally {
       setLoadingBranches(false);
     }
@@ -235,10 +255,12 @@ export function GitHubSetupDialog({
         // Close this dialog - GitHub button will now show GitHubBranchSelectorV0
         setIsOpen(false);
         
-        // Reload to switch from GitHubSetupDialog to GitHubBranchSelectorV0
-        setTimeout(() => {
-          window.location.reload();
-        }, 500);
+        // Invalidate queries to refresh UI without full page reload
+        await trpcUtils.github.getIntegrationStatus.invalidate();
+        await trpcUtils.projects.getOne.invalidate();
+        
+        // Optionally refresh the router to update any server components
+        router.refresh();
       } else {
         throw new Error('Failed to push code');
       }
@@ -308,6 +330,7 @@ export function GitHubSetupDialog({
       setRepoUrl("");
       setRepoFullName("");
       setRepoId(0);
+      setBranchSearchTerm("");
     }
   }, [isOpen]);
 
@@ -513,7 +536,7 @@ export function GitHubSetupDialog({
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1">
                     <GitBranch className="h-4 w-4 flex-shrink-0" />
-                    <span className="truncate min-w-0 flex-1">{selectedBranch}</span>
+                    <span className="truncate min-w-0 flex-1">{selectedBranch || 'No branch selected'}</span>
                   </div>
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="opacity-50 flex-shrink-0">
                     <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -531,7 +554,9 @@ export function GitHubSetupDialog({
                   <div className="relative mb-2">
                     <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
                     <Input
-                      placeholder="Create or search branches"
+                      placeholder="Search branches"
+                      value={branchSearchTerm}
+                      onChange={(e) => setBranchSearchTerm(e.target.value)}
                       className={`pl-8 h-8 text-sm ${isDark ? 'bg-[#262626] border-[#404040] text-white placeholder:text-gray-500' : 'bg-[#fafafa] border-[#e5e5e5] text-gray-900 placeholder:text-gray-400'}`}
                     />
                   </div>
@@ -544,8 +569,10 @@ export function GitHubSetupDialog({
                       </div>
                     ) : (
                       <>
-                        {/* Show branches from API */}
-                        {branches.map((branch) => (
+                        {/* Show branches from API (filtered by search term) */}
+                        {branches.filter((branch) => 
+                          branch.name.toLowerCase().includes(branchSearchTerm.toLowerCase())
+                        ).map((branch) => (
                           <button
                             key={branch.name}
                             onClick={() => {
@@ -563,6 +590,15 @@ export function GitHubSetupDialog({
                             )}
                           </button>
                         ))}
+                        
+                        {/* Show "no results" message if search returns nothing */}
+                        {branches.filter((branch) => 
+                          branch.name.toLowerCase().includes(branchSearchTerm.toLowerCase())
+                        ).length === 0 && branches.length > 0 && (
+                          <div className={`p-2 text-center text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                            No branches match "{branchSearchTerm}"
+                          </div>
+                        )}
                         
                         {/* If no branches from API but we have selectedBranch, show it */}
                         {branches.length === 0 && selectedBranch && (
@@ -583,13 +619,18 @@ export function GitHubSetupDialog({
                     )}
                   </div>
 
-                  {/* Create Branch option */}
+                  {/* Create Branch option - disabled if no branches exist */}
                   <button
                     onClick={() => {
+                      if (branches.length === 0) {
+                        toast.error("Cannot create branch: repository has no base branch yet");
+                        return;
+                      }
                       setBranchDropdownOpen(false)
                       setCreateBranchMode(true)
                     }}
-                    className={`w-full flex items-center gap-2 p-2 rounded text-sm transition-colors pt-2 ${isDark ? 'hover:bg-[#2a2a2a] border-t border-[#333333]' : 'hover:bg-[#f2f2f2] border-t border-[#e5e5e5]'}`}
+                    disabled={branches.length === 0}
+                    className={`w-full flex items-center gap-2 p-2 rounded text-sm transition-colors pt-2 ${branches.length === 0 ? 'opacity-50 cursor-not-allowed' : ''} ${isDark ? 'hover:bg-[#2a2a2a] border-t border-[#333333]' : 'hover:bg-[#f2f2f2] border-t border-[#e5e5e5]'}`}
                   >
                     <div className={`flex items-center justify-center w-4 h-4 rounded-full ${isDark ? 'bg-white' : 'bg-gray-900'}`}>
                       <Plus className={`h-3 w-3 ${isDark ? 'text-gray-900' : 'text-white'}`} />
@@ -601,11 +642,19 @@ export function GitHubSetupDialog({
             </Popover>
           </div>
 
+          {/* No branches warning */}
+          {branches.length === 0 && (
+            <div className={`p-2 rounded border text-xs ${isDark ? 'bg-yellow-900/20 border-yellow-700/30 text-yellow-200' : 'bg-yellow-50 border-yellow-200 text-yellow-800'}`}>
+              <p className="font-medium mb-1">No branches available</p>
+              <p className="opacity-90">The repository is empty. Create a branch first or wait for initialization to complete.</p>
+            </div>
+          )}
+
           {/* Set Active Branch Button */}
           <Button
             onClick={handleSetActiveBranch}
-            disabled={isPushing}
-            className={`w-full font-medium text-sm h-9 ${isDark ? 'bg-[#171717] hover:bg-black text-white' : 'bg-[#fafafa] hover:bg-[#f2f2f2] text-gray-900'}`}
+            disabled={isPushing || !selectedBranch || branches.length === 0}
+            className={`w-full font-medium text-sm h-9 ${isDark ? 'bg-[#171717] hover:bg-black text-white disabled:opacity-50' : 'bg-[#fafafa] hover:bg-[#f2f2f2] text-gray-900 disabled:opacity-50'}`}
           >
             {isPushing ? (
               <>

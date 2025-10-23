@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 export function Settings5Line(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg

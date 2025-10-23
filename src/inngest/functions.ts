@@ -7,17 +7,31 @@ import { AgentState, AIResult } from './types';
 import { streamingService } from '../services/streaming-service';
 import { VersionManager } from '../services/version-manager';
 import { ContextBuilder } from '../services/context-builder';
+import { SANDBOX_DEFAULT_TIMEOUT_MS, getSandboxTimeout } from '../config/sandbox';
 
 // Initialize OpenAI client with API key from environment
 const openaiClient = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+/**
+ * Create a per-request Supabase client
+ * IMPORTANT: Do not use service role key at module level as it bypasses RLS
+ * Note: Inngest functions run in background and need service role for admin operations
+ */
+function createSupabaseClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
+// Create module-level client for backward compatibility
+// TODO: Refactor all usages to call createSupabaseClient() per-request
+
+// Default E2B fullstack template ID - single source of truth
+const DEFAULT_E2B_FULLSTACK_TEMPLATE_ID = 'ckskh5feot2y94v5z07d';
+const supabase = createSupabaseClient();
 
 const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN,
@@ -184,7 +198,7 @@ export const generateAPI = inngest.createFunction(
           }
           
           // Create sandbox for repository analysis using full-stack template
-          const templateId = process.env.E2B_FULLSTACK_TEMPLATE_ID || 'ckskh5feot2y94v5z07d';
+          const templateId = process.env.E2B_FULLSTACK_TEMPLATE_ID || DEFAULT_E2B_FULLSTACK_TEMPLATE_ID;
           sandbox = await Sandbox.create(templateId);
           
           // Clone repository using service with authentication
@@ -709,7 +723,7 @@ EXAMPLE STRUCTURE:
       try {
         // Create sandbox with our custom template and timeout configuration
         console.log('🏗️ Creating E2B sandbox with timeout configuration...');
-        const templateId = process.env.E2B_FULLSTACK_TEMPLATE_ID || 'ckskh5feot2y94v5z07d';
+        const templateId = process.env.E2B_FULLSTACK_TEMPLATE_ID || DEFAULT_E2B_FULLSTACK_TEMPLATE_ID;
         sandbox = await Sandbox.create(templateId, {
           timeoutMs: 300000, // 5 minutes timeout
         });
@@ -1403,7 +1417,7 @@ EXAMPLE STRUCTURE:
           
           if (result.success) {
             // Record sync history
-            await githubSyncService.recordSyncHistory(
+            const historyResult = await githubSyncService.recordSyncHistory(
               githubRepoId,
               projectId,
               userId,
@@ -1418,12 +1432,33 @@ EXAMPLE STRUCTURE:
               }
             );
             
+            if (!historyResult.success) {
+              console.warn('Failed to record sync history:', historyResult.error);
+            }
+            
             return result.prUrl;
           }
           
           return null;
         } catch (error) {
           console.error('Failed to create GitHub PR:', error);
+          
+          // Emit user-facing error event via streaming
+          if (projectId) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            // Sanitize sensitive details from error message
+            const sanitizedMessage = errorMessage
+              .replace(/token[=:]\s*[\w-]+/gi, 'token=***')
+              .replace(/key[=:]\s*[\w-]+/gi, 'key=***')
+              .replace(/secret[=:]\s*[\w-]+/gi, 'secret=***');
+            
+            await streamingService.emit(projectId, {
+              type: 'error',
+              message: `Failed to create GitHub pull request: ${sanitizedMessage}`,
+              stage: 'GitHub PR Creation',
+            });
+          }
+          
           return null;
         }
       });
@@ -2078,6 +2113,7 @@ export const cloneAndPreviewRepository = inngest.createFunction(
       
       // Step 1: Get GitHub integration
       const integration = await step.run("get-github-integration", async () => {
+        const supabase = createSupabaseClient();
         const { data, error } = await supabase
           .from('user_integrations')
           .select('*')
@@ -2100,10 +2136,10 @@ export const cloneAndPreviewRepository = inngest.createFunction(
         try {
           const { githubRepositoryService } = await import('../services/github-repository-service');
           
-          // Create sandbox using full-stack template
-          const templateId = process.env.E2B_FULLSTACK_TEMPLATE_ID || 'ckskh5feot2y94v5z07d';
+          // Create sandbox using full-stack template with reasonable timeout
+          const templateId = process.env.E2B_FULLSTACK_TEMPLATE_ID || DEFAULT_E2B_FULLSTACK_TEMPLATE_ID;
           sandbox = await Sandbox.create(templateId, {
-            timeoutMs: 3600000, // 1 hour timeout for better user experience
+            timeoutMs: getSandboxTimeout('clone'), // 5 minutes - use keepalive for active sessions
           });
           
           // Store sandbox ID for later cleanup if needed
@@ -2141,6 +2177,17 @@ export const cloneAndPreviewRepository = inngest.createFunction(
           };
         } catch (error) {
           console.error('Clone repository error:', error);
+          
+          // Cleanup sandbox on error
+          if (sandbox) {
+            try {
+              await sandbox.kill();
+              console.log('✅ Sandbox cleaned up after clone error');
+            } catch (killError) {
+              console.error('Failed to cleanup sandbox after error:', killError);
+            }
+          }
+          
           throw error;
         }
       });
@@ -2667,7 +2714,20 @@ const savedResult = await step.run("save-repository-files", async () => {
     } catch (error: any) {
       console.error('Clone and preview workflow error:', error);
       
+      // CRITICAL: Cleanup sandbox on workflow failure
+      if (sandboxId) {
+        try {
+          const sandbox = await Sandbox.connect(sandboxId);
+          await sandbox.kill();
+          console.log('✅ Sandbox cleaned up after workflow error');
+        } catch (killError) {
+          console.error('Failed to cleanup sandbox after workflow error:', killError);
+          // Continue with error handling even if cleanup fails
+        }
+      }
+      
       // Update project status to failed and close streaming
+      const supabase = createSupabaseClient();
       const { error: failError } = await supabase
         .from('projects')
         .update({ 

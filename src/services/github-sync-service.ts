@@ -26,9 +26,77 @@ export interface PullOptions {
   repoFullName: string;
   branchName?: string;
   path?: string;
+  maxFiles?: number; // Maximum number of files to fetch (default: 100)
 }
 
 export class GitHubSyncService {
+  // Binary file extensions to skip during pull operations
+  private readonly BINARY_EXTENSIONS = [
+    '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.webp', '.svg',
+    '.pdf', '.zip', '.tar', '.gz', '.rar', '.7z',
+    '.exe', '.dll', '.so', '.dylib',
+    '.woff', '.woff2', '.ttf', '.eot', '.otf',
+    '.mp3', '.mp4', '.avi', '.mov', '.wmv',
+    '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+  ];
+
+  /**
+   * Validates repository full name format (owner/repo)
+   */
+  private validateRepoFullName(repoFullName: string): { valid: boolean; owner?: string; repo?: string; error?: string } {
+    if (!repoFullName || typeof repoFullName !== 'string') {
+      return { valid: false, error: 'Invalid repository name format. Expected "owner/repo"' };
+    }
+
+    const parts = repoFullName.split('/');
+    if (parts.length !== 2 || !parts[0] || !parts[1]) {
+      return { valid: false, error: 'Invalid repository name format. Expected "owner/repo"' };
+    }
+
+    return { valid: true, owner: parts[0], repo: parts[1] };
+  }
+
+  /**
+   * Sanitizes error messages to prevent leaking sensitive information
+   * Logs full error details server-side for debugging
+   */
+  private sanitizeError(error: any, context: string): string {
+    // Log full error with stack trace for server-side debugging
+    console.error(`[${context}] Full error details:`, {
+      message: error?.message,
+      stack: error?.stack,
+      status: error?.status,
+      response: error?.response?.data,
+    });
+
+    // Map known GitHub API errors to safe messages
+    if (error?.status === 401) {
+      return 'Authentication failed. Please check your GitHub credentials.';
+    }
+    if (error?.status === 403) {
+      return 'Access denied. You may not have permission to access this resource.';
+    }
+    if (error?.status === 404) {
+      return 'Resource not found. Please verify the repository or branch exists.';
+    }
+    if (error?.status === 422) {
+      return 'Invalid request. Please check your input parameters.';
+    }
+    if (error?.message?.includes('rate limit')) {
+      return 'GitHub API rate limit exceeded. Please try again later.';
+    }
+
+    // Return generic error for unknown cases
+    return 'An error occurred while communicating with GitHub. Please try again.';
+  }
+
+  /**
+   * Checks if a file is binary based on its extension
+   */
+  private isBinaryFile(path: string): boolean {
+    const lowerPath = path.toLowerCase();
+    return this.BINARY_EXTENSIONS.some(ext => lowerPath.endsWith(ext));
+  }
   /**
    * Push changes to GitHub repository
    * Automatically creates branch if it doesn't exist
@@ -37,8 +105,15 @@ export class GitHubSyncService {
     accessToken: string,
     options: PushOptions
   ): Promise<{ success: boolean; commitSha?: string; prUrl?: string; error?: string }> {
+    // Validate repository name format
+    const validation = this.validateRepoFullName(options.repoFullName);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
+
     const octokit = new Octokit({ auth: accessToken });
-    const [owner, repo] = options.repoFullName.split('/');
+    const owner = validation.owner!;
+    const repo = validation.repo!;
 
     try {
       // Get the default branch's latest commit
@@ -52,7 +127,8 @@ export class GitHubSyncService {
       const baseCommitSha = refData.object.sha;
 
       // Check if feature branch exists, create if not
-      let branchSha = baseCommitSha;
+      // Handle race conditions where branch might be created concurrently
+      let branchSha: string;
       try {
         const { data: branchRef } = await octokit.git.getRef({
           owner,
@@ -63,13 +139,32 @@ export class GitHubSyncService {
       } catch (error: any) {
         // Branch doesn't exist, create it
         if (error.status === 404) {
-          await octokit.git.createRef({
-            owner,
-            repo,
-            ref: `refs/heads/${options.branchName}`,
-            sha: baseCommitSha,
-          });
+          try {
+            await octokit.git.createRef({
+              owner,
+              repo,
+              ref: `refs/heads/${options.branchName}`,
+              sha: baseCommitSha,
+            });
+            // Branch created successfully, it points to baseCommitSha
+            branchSha = baseCommitSha;
+          } catch (createError: any) {
+            // Handle race condition: branch was created by another process
+            if (createError.status === 422 || createError.message?.includes('Reference already exists')) {
+              // Retry getRef to get the actual branch SHA
+              const { data: retryBranchRef } = await octokit.git.getRef({
+                owner,
+                repo,
+                ref: `heads/${options.branchName}`,
+              });
+              branchSha = retryBranchRef.object.sha;
+            } else {
+              // Some other error, rethrow
+              throw createError;
+            }
+          }
         } else {
+          // Some other error during initial getRef, rethrow
           throw error;
         }
       }
@@ -146,10 +241,9 @@ export class GitHubSyncService {
         prUrl,
       };
     } catch (error: any) {
-      console.error('GitHub push error:', error);
       return {
         success: false,
-        error: error.message,
+        error: this.sanitizeError(error, 'pushChangesToGithub'),
       };
     }
   }
@@ -160,9 +254,22 @@ export class GitHubSyncService {
   async pullLatestChanges(
     accessToken: string,
     options: PullOptions
-  ): Promise<{ success: boolean; files?: Record<string, string>; error?: string }> {
+  ): Promise<{ 
+    success: boolean; 
+    files?: Record<string, string>; 
+    errors?: Array<{ path: string; error: string }>;
+    skippedBinaryFiles?: string[];
+    error?: string;
+  }> {
+    // Validate repository name format
+    const validation = this.validateRepoFullName(options.repoFullName);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
+
     const octokit = new Octokit({ auth: accessToken });
-    const [owner, repo] = options.repoFullName.split('/');
+    const owner = validation.owner!;
+    const repo = validation.repo!;
 
     try {
       // Get repository info to find default branch
@@ -191,16 +298,32 @@ export class GitHubSyncService {
 
       // Filter files if path is specified
       const files: Record<string, string> = {};
+      const fileErrors: Array<{ path: string; error: string }> = [];
+      const skippedBinaryFiles: string[] = [];
       const filteredTree = options.path
         ? tree.tree.filter(item => item.path?.startsWith(options.path!))
         : tree.tree;
 
       // Fetch content for each file (limit to avoid rate limits)
-      const fileItems = filteredTree.filter(item => item.type === 'blob').slice(0, 100);
+      // Default to 100 files, but allow configuration via options
+      const maxFiles = options.maxFiles ?? 100;
+      const fileItems = filteredTree.filter(item => item.type === 'blob').slice(0, maxFiles);
+
+      // Log if we're truncating results
+      if (filteredTree.filter(item => item.type === 'blob').length > maxFiles) {
+        console.warn(`Repository contains more than ${maxFiles} files. Only fetching first ${maxFiles} files. Increase maxFiles option if needed.`);
+      }
 
       await Promise.all(
         fileItems.map(async (item) => {
           if (!item.sha || !item.path) return;
+
+          // Skip binary files
+          if (this.isBinaryFile(item.path)) {
+            console.log(`Skipping binary file: ${item.path}`);
+            skippedBinaryFiles.push(item.path);
+            return;
+          }
 
           try {
             const { data: blob } = await octokit.git.getBlob({
@@ -211,8 +334,12 @@ export class GitHubSyncService {
 
             const content = Buffer.from(blob.content, 'base64').toString('utf-8');
             files[item.path] = content;
-          } catch (error) {
+          } catch (error: any) {
             console.error(`Failed to fetch ${item.path}:`, error);
+            fileErrors.push({
+              path: item.path,
+              error: 'Failed to fetch file content',
+            });
           }
         })
       );
@@ -220,12 +347,13 @@ export class GitHubSyncService {
       return {
         success: true,
         files,
+        errors: fileErrors.length > 0 ? fileErrors : undefined,
+        skippedBinaryFiles: skippedBinaryFiles.length > 0 ? skippedBinaryFiles : undefined,
       };
     } catch (error: any) {
-      console.error('GitHub pull error:', error);
       return {
         success: false,
-        error: error.message,
+        error: this.sanitizeError(error, 'pullLatestChanges'),
       };
     }
   }
@@ -273,25 +401,32 @@ export class GitHubSyncService {
         repoId: repo.id,
       };
     } catch (error: any) {
-      console.error('GitHub create repository error:', error);
       return {
         success: false,
-        error: error.message,
+        error: this.sanitizeError(error, 'createRepository'),
       };
     }
   }
 
   /**
    * Create a new branch in repository
+   * Idempotent: returns success if branch already exists
    */
   async createBranch(
     accessToken: string,
     repoFullName: string,
     branchName: string,
     baseBranch: string = 'main'
-  ): Promise<{ success: boolean; branchSha?: string; error?: string }> {
+  ): Promise<{ success: boolean; branchSha?: string; error?: string; alreadyExists?: boolean }> {
+    // Validate repository name format
+    const validation = this.validateRepoFullName(repoFullName);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
+
     const octokit = new Octokit({ auth: accessToken });
-    const [owner, repo] = repoFullName.split('/');
+    const owner = validation.owner!;
+    const repo = validation.repo!;
 
     try {
       // Get base branch SHA
@@ -300,6 +435,28 @@ export class GitHubSyncService {
         repo,
         ref: `heads/${baseBranch}`,
       });
+
+      // Check if the target branch already exists
+      try {
+        const { data: existingBranch } = await octokit.git.getRef({
+          owner,
+          repo,
+          ref: `heads/${branchName}`,
+        });
+
+        // Branch already exists, return success with existing SHA
+        return {
+          success: true,
+          branchSha: existingBranch.object.sha,
+          alreadyExists: true,
+        };
+      } catch (checkError: any) {
+        // Branch doesn't exist (404), proceed to create it
+        if (checkError.status !== 404) {
+          // Some other error occurred while checking
+          throw checkError;
+        }
+      }
 
       // Create new branch
       await octokit.git.createRef({
@@ -312,12 +469,12 @@ export class GitHubSyncService {
       return {
         success: true,
         branchSha: refData.object.sha,
+        alreadyExists: false,
       };
     } catch (error: any) {
-      console.error('GitHub create branch error:', error);
       return {
         success: false,
-        error: error.message,
+        error: this.sanitizeError(error, 'createBranch'),
       };
     }
   }
@@ -327,7 +484,7 @@ export class GitHubSyncService {
    */
   async recordSyncHistory(
     repositoryId: string,
-    projectId: string,
+    projectId: string | null | undefined,
     userId: string,
     operation: 'push' | 'pull' | 'clone' | 'create_repo' | 'create_branch' | 'create_pr',
     metadata: {
@@ -340,11 +497,11 @@ export class GitHubSyncService {
       status: 'completed' | 'failed';
       errorMessage?: string;
     }
-  ): Promise<void> {
+  ): Promise<{ success: boolean; error?: string }> {
     try {
-      await supabase.from('github_sync_history').insert({
+      const { error } = await supabase.from('github_sync_history').insert({
         repository_id: repositoryId,
-        project_id: projectId,
+        project_id: projectId ?? null,
         user_id: userId,
         operation_type: operation,
         branch_name: metadata.branchName,
@@ -357,27 +514,50 @@ export class GitHubSyncService {
         error_message: metadata.errorMessage,
         completed_at: new Date().toISOString(),
       });
+      
+      if (error) {
+        console.error('Failed to record sync history:', error);
+        return { success: false, error: 'Failed to record sync history' };
+      }
+      
+      return { success: true };
     } catch (error) {
       console.error('Failed to record sync history:', error);
+      return { 
+        success: false, 
+        error: 'Failed to record sync history'
+      };
     }
   }
 
   /**
    * Get sync history for a repository
    */
-  async getSyncHistory(repositoryId: string, limit: number = 20): Promise<any[]> {
-    const { data, error } = await supabase
-      .from('github_sync_history')
-      .select('*')
-      .eq('repository_id', repositoryId)
-      .order('created_at', { ascending: false })
-      .limit(limit);
+  async getSyncHistory(
+    repositoryId: string, 
+    limit: number = 20
+  ): Promise<{ success: boolean; data?: any[]; error?: string }> {
+    try {
+      const { data, error } = await supabase
+        .from('github_sync_history')
+        .select('*')
+        .eq('repository_id', repositoryId)
+        .order('created_at', { ascending: false })
+        .limit(limit);
 
-    if (error) {
-      throw new Error(`Failed to fetch sync history: ${error.message}`);
+      if (error) {
+        console.error('Failed to fetch sync history:', error);
+        return { success: false, error: 'Failed to fetch sync history' };
+      }
+
+      return { success: true, data: data || [] };
+    } catch (error) {
+      console.error('Failed to fetch sync history:', error);
+      return {
+        success: false,
+        error: 'Failed to fetch sync history'
+      };
     }
-
-    return data || [];
   }
 }
 

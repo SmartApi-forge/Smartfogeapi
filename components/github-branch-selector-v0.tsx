@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Popover,
@@ -27,6 +27,7 @@ interface GitHubBranchSelectorV0Props {
   children: React.ReactNode
   project: Project
   isInitialSetup?: boolean // true for text projects after repo creation
+  hasUnsavedChanges?: boolean // true when local files differ from GitHub
 }
 
 interface Branch {
@@ -38,7 +39,8 @@ interface Branch {
 export function GitHubBranchSelectorV0({ 
   children, 
   project,
-  isInitialSetup = false 
+  isInitialSetup = false,
+  hasUnsavedChanges = false 
 }: GitHubBranchSelectorV0Props) {
   const { theme, resolvedTheme } = useTheme()
   const isDark = resolvedTheme === 'dark'
@@ -50,7 +52,7 @@ export function GitHubBranchSelectorV0({
   const [searchQuery, setSearchQuery] = useState("")
   const [isCreatingBranch, setIsCreatingBranch] = useState(false)
   const [newBranchName, setNewBranchName] = useState("")
-  const [hasLocalChanges, setHasLocalChanges] = useState(false)
+  const [hasLocalChanges, setHasLocalChanges] = useState(hasUnsavedChanges)
   // For cloned projects (github_mode=true or repo_url exists), always show Connected state
   const [isConnected, setIsConnected] = useState(
     project.github_mode || !!project.repo_url || !isInitialSetup
@@ -100,21 +102,7 @@ export function GitHubBranchSelectorV0({
     return "Unknown repository"
   }
 
-  // Fetch branches when dialog opens
-  useEffect(() => {
-    if (open && project.repo_url) {
-      fetchBranches()
-    }
-  }, [open, project.repo_url])
-
-  // Update active branch from project data
-  useEffect(() => {
-    if (repoInfo?.active_branch) {
-      setActiveBranch(repoInfo.active_branch)
-    }
-  }, [repoInfo])
-
-  const fetchBranches = async () => {
+  const fetchBranches = useCallback(async () => {
     if (!project.repo_url) return
     
     setLoading(true)
@@ -159,7 +147,26 @@ export function GitHubBranchSelectorV0({
     } finally {
       setLoading(false)
     }
-  }
+  }, [project.repo_url, trpcUtils.github.getBranches])
+
+  // Fetch branches when dialog opens
+  useEffect(() => {
+    if (open && project.repo_url) {
+      fetchBranches()
+    }
+  }, [open, project.repo_url, fetchBranches])
+
+  // Update active branch from project data
+  useEffect(() => {
+    if (repoInfo?.active_branch) {
+      setActiveBranch(repoInfo.active_branch)
+    }
+  }, [repoInfo])
+
+  // Sync hasLocalChanges with prop changes
+  useEffect(() => {
+    setHasLocalChanges(hasUnsavedChanges)
+  }, [hasUnsavedChanges])
 
   const handleSetActiveBranch = async () => {
     try {
@@ -173,9 +180,10 @@ export function GitHubBranchSelectorV0({
       if (repoInfo) {
         toast.loading("Pushing code to GitHub...", { id: "push" })
         
-        // Get current project files
-        const response = await fetch(`/api/projects/${project.id}/files`)
-        const files = await response.json()
+        // Get current project files via tRPC
+        const files = await trpcUtils.projects.getFiles.fetch({
+          projectId: project.id,
+        })
 
         await pushChangesMutation.mutateAsync({
           repositoryId: repoInfo.id,
@@ -191,10 +199,9 @@ export function GitHubBranchSelectorV0({
 
       setIsConnected(true)
       
-      // Reload to update project data
-      setTimeout(() => {
-        window.location.reload()
-      }, 500)
+      // Invalidate queries to refresh data
+      await trpcUtils.github.getProjectRepository.invalidate({ projectId: project.id })
+      await trpcUtils.projects.getOne.invalidate({ id: project.id })
     } catch (error: any) {
       toast.error(error.message || "Failed to set active branch", { id: "push" })
     }
@@ -203,8 +210,13 @@ export function GitHubBranchSelectorV0({
   const handleCreateBranch = async () => {
     if (!newBranchName.trim()) return
     
+    if (!project?.repo_url) {
+      toast.error("Repository URL is missing")
+      return
+    }
+    
     try {
-      const repoInfoData = extractRepoInfo(project.repo_url!)
+      const repoInfoData = extractRepoInfo(project.repo_url)
       if (!repoInfoData) {
         toast.error("Invalid repository URL")
         return
@@ -257,9 +269,10 @@ export function GitHubBranchSelectorV0({
 
       toast.loading("Pushing changes to GitHub...", { id: "push" })
 
-      // Get current project files
-      const response = await fetch(`/api/projects/${project.id}/files`)
-      const files = await response.json()
+      // Get current project files via tRPC
+      const files = await trpcUtils.projects.getFiles.fetch({
+        projectId: project.id,
+      })
 
       await pushChangesMutation.mutateAsync({
         repositoryId: repoInfo.id,
@@ -273,9 +286,9 @@ export function GitHubBranchSelectorV0({
       toast.success("Changes pushed successfully!", { id: "push" })
       setHasLocalChanges(false)
       
-      setTimeout(() => {
-        window.location.reload()
-      }, 1000)
+      // Invalidate queries to refresh data
+      await trpcUtils.github.getProjectRepository.invalidate({ projectId: project.id })
+      await trpcUtils.projects.getOne.invalidate({ id: project.id })
     } catch (error: any) {
       toast.error(error.message || "Failed to push changes", { id: "push" })
     }
@@ -298,9 +311,10 @@ export function GitHubBranchSelectorV0({
       if (result.files) {
         toast.success(`Pulled ${Object.keys(result.files).length} files`, { id: "pull" })
         
-        setTimeout(() => {
-          window.location.reload()
-        }, 1000)
+        // Invalidate queries to refresh data
+        await trpcUtils.github.getProjectRepository.invalidate({ projectId: project.id })
+        await trpcUtils.projects.getOne.invalidate({ id: project.id })
+        await trpcUtils.projects.getFiles.invalidate({ projectId: project.id })
       }
     } catch (error: any) {
       toast.error(error.message || "Failed to pull changes", { id: "pull" })
@@ -454,7 +468,7 @@ export function GitHubBranchSelectorV0({
                 <div className="w-2 h-2 rounded-full bg-green-500"></div>
                 <span className={`text-sm font-medium ${isDark ? 'text-white' : 'text-[#171717]'}`}>Connected to GitHub</span>
               </div>
-              <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Just now</span>
+              <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Active</span>
             </div>
 
             {/* Repository */}
