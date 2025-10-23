@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { FolderOpen, Plus, Search, X } from "lucide-react";
+import { FolderOpen, Plus, Search, X, Clock, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -69,7 +69,11 @@ export function ModernSidebar({
 
       title = title.charAt(0).toUpperCase() + title.slice(1);
 
-      // Instead of truncating, return the full title for better display
+      // Truncate if too long for better display
+      if (title.length > 50) {
+        title = title.substring(0, 50) + "...";
+      }
+
       return title;
     }
 
@@ -217,7 +221,7 @@ export function ModernSidebar({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+            className="fixed inset-0 bg-black/10 backdrop-blur-[1px] z-40"
             onClick={onClose}
             aria-hidden="true"
           />
@@ -247,26 +251,21 @@ export function ModernSidebar({
               opacity: { duration: 0.2 },
             }}
             className={cn(
-              "fixed left-0 top-0 bottom-0 w-80 z-50 flex flex-col overflow-hidden",
-              "bg-gradient-to-br from-slate-900/95 via-slate-800/95 to-slate-900/95",
-              "backdrop-blur-xl border-r border-slate-700/50",
-              "shadow-2xl shadow-black/20",
+              // Base positioning and size
+              "fixed left-0 top-0 bottom-0 z-50 flex flex-col overflow-hidden",
+              // Responsive width - smaller on mobile, larger on desktop
+              "w-full sm:w-80 md:w-80 lg:w-80 xl:w-80",
+              // Max width to prevent overflow on very small screens
+              "max-w-[90vw] sm:max-w-none",
+              // Background and styling
+              "bg-gradient-to-b from-[#1A1D21] to-[#0F1114]",
+              "backdrop-blur-xl border-r border-[#2A2D31]/80",
+              "shadow-[0_20px_50px_rgba(0,0,0,0.4)]",
               className,
             )}
             style={{
-              background: `
-                linear-gradient(135deg, 
-                  rgba(15, 23, 42, 0.95) 0%, 
-                  rgba(30, 41, 59, 0.95) 50%, 
-                  rgba(15, 23, 42, 0.95) 100%
-                )
-              `,
-              backdropFilter: "blur(20px)",
-              boxShadow: `
-                0 0 0 1px rgba(148, 163, 184, 0.1),
-                0 25px 50px -12px rgba(0, 0, 0, 0.4),
-                inset 0 1px 0 rgba(148, 163, 184, 0.1)
-              `,
+              boxShadow:
+                "0 0 0 1px rgba(255,255,255,0.05), 0 20px 50px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)",
             }}
             onClick={(e) => e.stopPropagation()}
             onMouseEnter={handleSidebarMouseEnter}
@@ -276,42 +275,52 @@ export function ModernSidebar({
             aria-labelledby="sidebar-title"
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-slate-700/50 bg-gradient-to-r from-slate-800/50 to-slate-700/30">
-              <div className="flex items-center gap-3">
-                <div>
-                  <h2
-                    id="sidebar-title"
-                    className="text-lg font-semibold text-white"
-                  >
-                    Smart API Forge
-                  </h2>
-                  <p className="text-xs text-slate-400">
-                    AI-Powered API Builder
-                  </p>
-                </div>
+            <div className="flex items-center justify-between p-4 border-b border-[#2A2D31]/60 bg-gradient-to-r from-[#1E2125] to-[#1A1D21]">
+              <div className="flex items-center">
+                <h2
+                  id="sidebar-title"
+                  className="text-lg font-medium text-gray-50 whitespace-nowrap drop-shadow-sm"
+                  style={{
+                    fontFamily: "'__flecha_df5a44', '__flecha_Fallback_df5a44'",
+                  }}
+                >
+                  My Projects
+                </h2>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onClose}
-                className="text-slate-400 hover:text-white hover:bg-slate-700/50 h-8 w-8 lg:hidden"
-                aria-label="Close sidebar"
-              >
-                <X className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleNavigationClick("/ask")}
+                  className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 border border-transparent hover:border-blue-400/30 transition-all duration-200 whitespace-nowrap"
+                  aria-label="Create new project"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  New
+                </Button>
+                {/* Close button for mobile */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onClose}
+                  className="text-gray-400 hover:text-gray-300 hover:bg-gray-500/20 sm:hidden"
+                  aria-label="Close sidebar"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             {/* Search */}
-            <div className="p-4 border-b border-slate-700/50">
+            <div className="p-4 border-b border-[#2A2D31]/60 bg-[#1A1D21]/50">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
                   ref={searchInputRef}
                   type="text"
-                  placeholder="Search projects..."
+                  placeholder="Navigate your workspace..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 bg-slate-800/50 border-slate-600/50 text-white placeholder-slate-400 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+                  className="w-full bg-[#2A2D31]/50 border-[#3A3D41] text-white placeholder-gray-400 focus:border-[#3A3D41] focus:ring-0 focus:outline-none focus:shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none focus-visible:border-[#3A3D41] !ring-0 !outline-none text-sm"
                   onKeyDown={(e) => {
                     if (e.key === "Escape") {
                       onClose();
@@ -323,96 +332,80 @@ export function ModernSidebar({
 
             {/* Content */}
             <div className="flex-1 flex flex-col min-h-0">
-              <div className="p-4 flex-shrink-0">
-                {/* Create New Project Button */}
-                <motion.button
-                  onClick={() => handleNavigationClick("/ask")}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-slate-800/50 text-slate-200 font-medium transition-all duration-200 hover:bg-slate-700/50 border border-slate-700/30 hover:border-slate-600/50 group"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <Plus className="h-5 w-5" />
-                  <span>Create New API</span>
-                </motion.button>
-              </div>
-
-              <ScrollArea
-                className="flex-1 px-4"
-                style={{ height: "calc(100vh - 240px)" }}
-              >
-                <div className="space-y-3 pb-16" style={{ minHeight: "400px" }}>
+              <ScrollArea className="flex-1 h-0">
+                <div className="p-3">
                   {loading ? (
+                    // Loading skeletons
                     <div className="space-y-3">
-                      {[...Array(6)].map((_, i) => (
-                        <div key={i} className="p-3 rounded-lg bg-slate-800/30">
-                          <Skeleton className="h-4 w-full mb-2 bg-slate-700/50" />
-                          <Skeleton className="h-3 w-3/4 bg-slate-700/50" />
+                      {[...Array(8)].map((_, i) => (
+                        <div key={i} className="p-3 rounded-lg">
+                          <Skeleton className="h-4 w-full mb-2 bg-gray-600/40" />
+                          <Skeleton className="h-3 w-3/4 bg-gray-600/40" />
                         </div>
                       ))}
                     </div>
                   ) : error ? (
+                    // Error state
                     <div className="flex flex-col items-center justify-center py-8 text-center">
-                      <p className="text-sm text-slate-400 mb-3">{error}</p>
+                      <p className="text-sm text-gray-300 mb-3">{error}</p>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={fetchProjects}
-                        className="border-slate-600 text-slate-300 hover:bg-slate-700/50"
+                        className="text-blue-400 border-[#444444] hover:bg-blue-500/20 hover:border-blue-400"
                       >
                         Try Again
                       </Button>
                     </div>
                   ) : filteredProjects.length === 0 ? (
+                    // Empty state
                     <div className="flex flex-col items-center justify-center py-8 text-center">
-                      <FolderOpen className="h-12 w-12 text-slate-500 mb-3" />
-                      <p className="text-sm text-slate-400 mb-1">
+                      <FolderOpen className="h-8 w-8 text-gray-400 mb-2" />
+                      <p className="text-sm text-gray-300 mb-3">
                         {searchQuery ? "No projects found" : "No projects yet"}
                       </p>
-                      <p className="text-xs text-slate-500">
-                        {searchQuery
-                          ? "Try a different search term"
-                          : "Create your first API to get started"}
-                      </p>
+                      {!searchQuery && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleNavigationClick("/ask")}
+                          className="text-blue-400 border-[#444444] hover:bg-blue-500/20 hover:border-blue-400"
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Create your first project
+                        </Button>
+                      )}
                     </div>
                   ) : (
+                    // Projects list
                     <div className="space-y-2">
-                      {filteredProjects.map((project) => {
-                        const statusInfo = getStatusInfo(project.status);
-
-                        return (
-                          <motion.button
-                            key={project.id}
-                            onClick={() => handleProjectClick(project)}
-                            className="w-full p-3 rounded-lg bg-slate-800/30 hover:bg-slate-700/50 border border-slate-700/30 hover:border-slate-600/50 transition-all duration-200 text-left group cursor-pointer"
-                            whileHover={{
-                              scale: 1.02,
-                              backgroundColor: "rgba(51, 65, 85, 0.6)",
-                              borderColor: "rgba(71, 85, 105, 0.6)",
-                            }}
-                            whileTap={{
-                              scale: 0.98,
-                              backgroundColor: "rgba(30, 41, 59, 0.8)",
-                            }}
-                            transition={{
-                              type: "spring",
-                              stiffness: 400,
-                              damping: 25,
-                            }}
-                          >
-                            <div className="flex items-start justify-between mb-2">
-                              <h3 className="font-medium text-slate-200 text-sm leading-relaxed group-hover:text-white transition-colors duration-200 break-words">
+                      {filteredProjects.map((project) => (
+                        <motion.div
+                          key={project.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="group cursor-pointer"
+                          onClick={() => handleProjectClick(project)}
+                        >
+                          <div className="px-3 py-3 sm:py-4 rounded-lg transition-all duration-200 ease-in-out hover:bg-[#2A2D31]/60 hover:shadow-sm border border-transparent hover:border-[#444444]/50 group-hover:scale-[1.01]">
+                            <div className="mb-2">
+                              <h3 className="font-medium text-gray-100 text-sm leading-relaxed group-hover:text-blue-400 transition-colors duration-200 line-clamp-2 break-words">
                                 {getProjectTitle(project)}
                               </h3>
                             </div>
 
                             <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2 text-xs text-slate-400 group-hover:text-slate-300 transition-colors duration-200">
-                                <span>{formatDate(project.created_at)}</span>
+                              <div className="flex items-center gap-1.5 text-xs text-gray-400 group-hover:text-blue-400 transition-colors duration-200">
+                                <Clock className="h-3 w-3 flex-shrink-0" />
+                                <span className="font-medium truncate">
+                                  {formatDate(project.created_at)}
+                                </span>
                               </div>
+                              <ChevronRight className="h-3 w-3 text-gray-500 group-hover:text-blue-400 transition-colors duration-200 flex-shrink-0" />
                             </div>
-                          </motion.button>
-                        );
-                      })}
+                          </div>
+                        </motion.div>
+                      ))}
                     </div>
                   )}
                 </div>

@@ -155,17 +155,17 @@ export function DashboardHeader({
 
   return (
     <>
-      <header className="w-full px-4 md:px-8 py-3">
+      <header className="w-full px-4 md:px-8 py-3 relative z-50">
         <div className="relative flex items-center justify-between">
           {/* Mobile: Hamburger + Brand */}
-          <div className="flex items-center gap-3 md:hidden">
+          <div className="flex items-center gap-3 md:hidden relative z-50">
             <CustomHamburgerButton onClick={() => setMobileMenuOpen(true)} />
             <span className="text-white font-neue-500 text-base">
               Smart API Forge
             </span>
           </div>
           {/* Left side - Hamburger Menu button */}
-          <div className="hidden md:block">
+          <div className="hidden md:block relative z-50">
             <div
               onMouseEnter={handleHamburgerHover}
               onMouseLeave={handleHamburgerLeave}
