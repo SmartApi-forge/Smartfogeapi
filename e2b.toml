@@ -1,17 +1,17 @@
 # This is a config for E2B sandbox template.
-# You can use template ID (ckskh5feot2y94v5z07d) or template name (smart-forge-fullstack) to create a sandbox:
+# You can use template ID (qol4m59jq6av3h13gt3h) or template name (smartforge-api-sandbox-v1) to create a sandbox:
 
 # Python SDK
 # from e2b import Sandbox, AsyncSandbox
-# sandbox = Sandbox.create("smart-forge-fullstack") # Sync sandbox
-# sandbox = await AsyncSandbox.create("smart-forge-fullstack") # Async sandbox
+# sandbox = Sandbox("smartforge-api-sandbox-v1") # Sync sandbox
+# sandbox = await AsyncSandbox.create("smartforge-api-sandbox-v1") # Async sandbox
 
 # JS SDK
 # import { Sandbox } from 'e2b'
-# const sandbox = await Sandbox.create('smart-forge-fullstack')
+# const sandbox = await Sandbox.create('smartforge-api-sandbox-v1')
 
-team_id = "b660529a-e319-48aa-be6d-3cbd73c07878"
-start_cmd = "compile_fullstack.sh"
-dockerfile = "e2b-fullstack.Dockerfile"
-template_name = "smart-forge-fullstack"
-template_id = "ckskh5feot2y94v5z07d"
+team_id = "2d4e0ab4-6730-490a-b7d1-01e7ede65814"
+start_cmd = "/bin/true"
+dockerfile = "e2b.Dockerfile"
+template_name = "smartforge-api-sandbox-v1"
+template_id = "qol4m59jq6av3h13gt3h"
