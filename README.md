@@ -75,10 +75,12 @@ SmartAPIForge is an **API-first platform** that revolutionizes backend developme
 - **Database Schemas** - Supabase/Prisma migrations included
 
 ### 🚀 Developer Experience
-- **Live Preview** - Real-time sandbox execution
+- **Live Preview** - Real-time sandbox execution with iframe preview
+- **Integrated Terminal** - Built-in terminal using Daytona PTY for each sandbox
 - **GitHub Integration** - Clone, sync, and push repositories
 - **Version Control** - Track all API iterations
 - **Collaborative Editing** - Multi-user support
+- **Resizable Panels** - Adjust preview and terminal sizes as needed
 
 ### 🔒 Enterprise Security
 - **Firecracker Isolation** - VM-level sandbox security
@@ -189,6 +191,8 @@ Git >= 2.40.0
    ```bash
    cp env.example .env.local
    ```
+   📖 **See [SETUP.md](SETUP.md) for detailed step-by-step environment setup guide**
+   
    Edit `.env.local` with your configuration (see [Environment Configuration](#-environment-configuration))
 
 4. **Initialize Database**

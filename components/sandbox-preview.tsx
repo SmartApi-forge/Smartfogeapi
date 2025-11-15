@@ -1,17 +1,20 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { Loader2, RefreshCw, ExternalLink, AlertCircle, Monitor, RotateCw, Eye, Code2 } from 'lucide-react';
+import { Loader2, RefreshCw, ExternalLink, AlertCircle, Monitor, RotateCw, Eye, Code2, Terminal } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useSandboxManager } from '@/hooks/use-sandbox-manager';
+import { DaytonaTerminal } from './daytona-terminal';
 
 interface SandboxPreviewProps {
   sandboxUrl: string;
   projectName?: string;
   projectId?: string;
+  sandboxId?: string; // Optional: Sandbox ID for terminal access
   hideHeader?: boolean; // If true, don't render the internal header (parent will handle it)
   path?: string; // Path to render in the sandbox
   onRefresh?: () => void; // Callback to refresh
+  showTerminal?: boolean; // Optional: Control terminal visibility from parent
 }
 
 /**
@@ -19,12 +22,80 @@ interface SandboxPreviewProps {
  * Similar to v0.app's preview functionality
  * Includes automatic sandbox keepAlive and restart capabilities
  */
-export function SandboxPreview({ sandboxUrl, projectName, projectId, hideHeader = false, path: externalPath, onRefresh }: SandboxPreviewProps) {
+export function SandboxPreview({ sandboxUrl, projectName, projectId, sandboxId, hideHeader = false, path: externalPath, onRefresh, showTerminal: externalShowTerminal }: SandboxPreviewProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
   const [key, setKey] = useState(0); // For forcing iframe refresh
   const [internalPath, setInternalPath] = useState('/');
   const [currentSandboxUrl, setCurrentSandboxUrl] = useState(sandboxUrl);
+  const [internalShowTerminal, setInternalShowTerminal] = useState(false); // Hidden by default
+  const [terminalHeight, setTerminalHeight] = useState(200); // Default 200px - smaller
+  const [isResizing, setIsResizing] = useState(false);
+  
+  // Use external control if provided, otherwise use internal state
+  const showTerminal = externalShowTerminal !== undefined ? externalShowTerminal : internalShowTerminal;
+  const setShowTerminal = externalShowTerminal !== undefined ? (() => {}) : setInternalShowTerminal;
+  
+  // Handle terminal resizing
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+  
+  useEffect(() => {
+    if (!isResizing) return;
+    
+    let animationFrameId: number;
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      e.preventDefault();
+      
+      // Use requestAnimationFrame for smooth 60fps updates
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+      
+      animationFrameId = requestAnimationFrame(() => {
+        const container = document.querySelector('.sandbox-preview-container');
+        if (!container) return;
+        
+        const rect = container.getBoundingClientRect();
+        const newHeight = rect.bottom - e.clientY;
+        
+        // Min 150px, max 85% of container height
+        const minHeight = 150;
+        const maxHeight = rect.height * 0.85;
+        const clampedHeight = Math.max(minHeight, Math.min(newHeight, maxHeight));
+        
+        setTerminalHeight(clampedHeight);
+      });
+    };
+    
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+    
+    // Add to document for global capture
+    document.addEventListener('mousemove', handleMouseMove, { passive: false });
+    document.addEventListener('mouseup', handleMouseUp);
+    
+    // Prevent text selection during drag
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'ns-resize';
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [isResizing]);
 
   // Use external path if provided, otherwise use internal state
   const path = externalPath !== undefined ? externalPath : internalPath;
@@ -137,10 +208,18 @@ export function SandboxPreview({ sandboxUrl, projectName, projectId, hideHeader 
   }
 
   return (
-    <div className="h-full flex flex-col bg-muted/30 dark:bg-[#1D1D1D]">
+    <div className="sandbox-preview-container h-full flex flex-col bg-muted/30 dark:bg-[#1D1D1D]">
       {/* Preview header with URL bar - only shown if hideHeader is false */}
       {!hideHeader && (
         <div className="bg-muted/30 dark:bg-[#1D1D1D] border-b border-border dark:border-[#333433] px-3 py-2.5 flex items-center gap-2">
+          {/* Terminal toggle button */}
+          <button
+            onClick={() => setShowTerminal(!showTerminal)}
+            className="p-1.5 rounded hover:bg-muted dark:hover:bg-gray-700 transition-colors"
+            title={showTerminal ? 'Hide terminal' : 'Show terminal'}
+          >
+            <Terminal className={`h-4 w-4 ${showTerminal ? 'text-green-500' : 'text-gray-500'}`} />
+          </button>
           <div className="flex items-center gap-2 flex-1 min-w-0">
             {/* URL Bar with controls - v0.app style */}
             <div className="flex items-center gap-1.5 bg-[#f2f2f2] dark:bg-[#0E100F] border border-border dark:border-[#333433] rounded-lg px-2.5 py-1.5 flex-1 min-w-0">
@@ -191,8 +270,17 @@ export function SandboxPreview({ sandboxUrl, projectName, projectId, hideHeader 
         </div>
       )}
 
-      {/* Preview iframe container */}
-      <div className="flex-1 relative bg-white dark:bg-gray-900">
+      {/* Preview and Terminal container */}
+      <div className="flex-1 relative overflow-hidden">
+        {/* Preview panel */}
+        <div 
+          className="absolute inset-0 bg-white dark:bg-gray-900"
+          style={{
+            bottom: showTerminal && projectId ? `${terminalHeight}px` : '0',
+            transition: isResizing ? 'none' : 'bottom 0.3s ease-in-out',
+            pointerEvents: isResizing ? 'none' : 'auto', // Prevent iframe interaction during resize
+          }}
+        >
         {isLoading && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -250,21 +338,60 @@ export function SandboxPreview({ sandboxUrl, projectName, projectId, hideHeader 
             }
           }}
         />
-      </div>
+        </div>
 
-      {/* Status bar at bottom */}
-      <div className="bg-muted/30 dark:bg-[#1D1D1D] border-t border-border dark:border-[#333433] px-4 py-1 flex items-center justify-between text-xs text-muted-foreground">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span className="truncate">{currentUrl}</span>
-        </div>
-        <div className="flex items-center gap-2 ml-2">
-          {!sandbox.isAlive && projectId && (
-            <span className="text-yellow-500">● Offline</span>
-          )}
-          <span className={`flex items-center gap-1 ${error ? 'text-destructive' : isLoading ? 'text-yellow-500' : 'text-green-500'}`}>
-            {error ? 'Error' : isLoading ? 'Loading...' : '● Ready'}
-          </span>
-        </div>
+        {/* Slide-up Terminal Drawer */}
+        {showTerminal && projectId && (
+          <div 
+            className="absolute left-0 right-0 border-t-2 border-border dark:border-[#333433] bg-[#0E100F] shadow-2xl"
+            style={{
+              bottom: 0,
+              height: `${terminalHeight}px`,
+              transition: 'none', // Remove all transitions for instant response
+              zIndex: 100,
+            }}
+          >
+            {/* Resize handle - larger hit area for better UX */}
+            <div
+              onMouseDown={handleMouseDown}
+              className={`absolute -top-2 left-0 right-0 h-4 cursor-ns-resize flex items-center justify-center group ${
+                isResizing ? 'bg-blue-500/20' : 'hover:bg-blue-500/10'
+              }`}
+              title="Drag to resize terminal"
+            >
+              {/* Visual handle indicator */}
+              <div className={`w-20 h-1 rounded-full transition-all duration-200 ${
+                isResizing 
+                  ? 'bg-blue-500 w-32 h-1.5 shadow-lg shadow-blue-500/50' 
+                  : 'bg-gray-500 group-hover:bg-blue-400 group-hover:w-24'
+              }`} />
+            </div>
+            
+            {sandboxId ? (
+              <DaytonaTerminal
+                sandboxId={sandboxId}
+                projectId={projectId}
+                workingDirectory="workspace/project"
+                className="h-full"
+              />
+            ) : (
+              <div className="h-full flex items-center justify-center text-gray-400">
+                <div className="text-center space-y-4 p-8">
+                  <AlertCircle className="h-12 w-12 mx-auto text-yellow-500" />
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-gray-300">Terminal Not Available</p>
+                    <p className="text-xs text-gray-500 max-w-md">
+                      This project doesn't have a sandbox ID. To use the terminal, re-import this repository from GitHub.
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      (New projects will automatically have terminal access)
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

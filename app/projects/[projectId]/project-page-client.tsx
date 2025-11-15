@@ -38,10 +38,16 @@ import {
   RotateCw,
   MoreVertical,
   Maximize,
-  X
+  X,
+  Terminal,
+  FilePlus,
+  FolderPlus,
+  ChevronsUpDown,
+  Trash2
 } from "lucide-react";
 import { SimpleHeader } from "@/components/simple-header";
 import { Highlight, themes } from "prism-react-renderer";
+import Editor from "@monaco-editor/react";
 import { useTheme } from "next-themes";
 import { api } from "@/lib/trpc-client";
 import { useGenerationStream } from "../../../hooks/use-generation-stream";
@@ -92,6 +98,10 @@ interface Project {
   prompt?: string;
   advanced?: boolean;
   sandbox_url?: string;
+  metadata?: {
+    sandboxId?: string;
+    [key: string]: any;
+  };
 }
 
 interface ProjectPageClientProps {
@@ -328,7 +338,15 @@ function TreeItem({
   expanded, 
   toggle, 
   select, 
-  selectedId 
+  selectedId,
+  onSelectFolder,
+  creatingInFolder,
+  newItemType,
+  onNewItemNameChange,
+  onNewItemConfirm,
+  onNewItemCancel,
+  newItemName,
+  onContextMenu
 }: {
   node: TreeNode;
   depth?: number;
@@ -336,9 +354,18 @@ function TreeItem({
   toggle: (id: string) => void;
   select: (id: string) => void;
   selectedId?: string | null;
+  onSelectFolder?: (folderId: string) => void;
+  creatingInFolder?: string | null;
+  newItemType?: 'file' | 'folder';
+  onNewItemNameChange?: (name: string) => void;
+  onNewItemConfirm?: () => void;
+  onNewItemCancel?: () => void;
+  newItemName?: string;
+  onContextMenu?: (e: React.MouseEvent, fileId: string) => void;
 }) {
   const isExpanded = expanded.has(node.id);
   const isSelected = selectedId === node.id;
+  const isCreatingHere = creatingInFolder === node.id;
 
   return (
     <div>
@@ -350,8 +377,15 @@ function TreeItem({
         onClick={() => {
           if (node.type === "folder") {
             toggle(node.id);
+            onSelectFolder?.(node.id);
           } else {
             select(node.id);
+          }
+        }}
+        onContextMenu={(e) => {
+          if (node.type === 'file') {
+            e.preventDefault();
+            onContextMenu?.(e, node.id);
           }
         }}
       >
@@ -368,9 +402,44 @@ function TreeItem({
         <span className="truncate min-w-0 font-sans text-[14px] font-normal">{node.name}</span>
       </div>
       
-      {node.type === "folder" && isExpanded && node.children && (
+      {node.type === "folder" && isExpanded && (
         <div>
-          {node.children.map((child) => (
+          {/* Show inline new item input if creating in this folder */}
+          {isCreatingHere && (
+            <div 
+              className="flex items-center gap-1.5 px-1.5 sm:px-2 py-2 sm:py-1 min-w-0"
+              style={{ paddingLeft: `${(depth + 1) * 8 + 6}px` }}
+            >
+              {newItemType === 'folder' ? (
+                <FolderClosed className="size-3.5 sm:size-4 flex-shrink-0" style={{ color: '#8AADF4' }} />
+              ) : (
+                <File className="size-3.5 sm:size-4 flex-shrink-0 text-gray-500" />
+              )}
+              <input
+                type="text"
+                value={newItemName}
+                onChange={(e) => onNewItemNameChange?.(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    onNewItemConfirm?.();
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    onNewItemCancel?.();
+                  }
+                }}
+                onBlur={(e) => {
+                  // Don't cancel on blur - handled by click outside listener
+                }}
+                placeholder={newItemType === 'folder' ? 'Folder name...' : 'File name...'}
+                className="flex-1 min-w-0 max-w-full bg-transparent border-b border-blue-500 outline-none text-[14px] font-sans"
+                autoFocus
+              />
+            </div>
+          )}
+          
+          {/* Show children */}
+          {node.children?.map((child) => (
             <TreeItem
               key={child.id}
               node={child}
@@ -379,6 +448,14 @@ function TreeItem({
               toggle={toggle}
               select={select}
               selectedId={selectedId}
+              onSelectFolder={onSelectFolder}
+              creatingInFolder={creatingInFolder}
+              newItemType={newItemType}
+              onNewItemNameChange={onNewItemNameChange}
+              onNewItemConfirm={onNewItemConfirm}
+              onNewItemCancel={onNewItemCancel}
+              newItemName={newItemName}
+              onContextMenu={onContextMenu}
             />
           ))}
         </div>
@@ -391,12 +468,20 @@ function CodeViewer({
   filename, 
   fileTree,
   codeTheme,
+  projectId,
+  sandboxId,
+  onFileSaved,
 }: { 
   filename: string | null;
   fileTree: TreeNode[];
   codeTheme: any;
+  projectId: string;
+  sandboxId?: string;
+  onFileSaved?: (filePath: string, content: string) => void;
 }) {
   const [copySuccess, setCopySuccess] = useState(false);
+  const [editorContent, setEditorContent] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   const selectedFile = useMemo(() => {
     const findFile = (nodes: TreeNode[], id: string): TreeNode | null => {
@@ -412,11 +497,59 @@ function CodeViewer({
     return filename ? findFile(fileTree, filename) : null;
   }, [filename, fileTree]);
 
+  // Track if content has changed
+  const hasUnsavedChanges = useMemo(() => {
+    return editorContent !== (selectedFile?.content || '');
+  }, [editorContent, selectedFile?.content]);
+
+  // Update editor content when file changes
+  useEffect(() => {
+    if (selectedFile?.content !== undefined) {
+      setEditorContent(selectedFile.content);
+    }
+  }, [selectedFile]);
+
+
+  const handleSave = async () => {
+    if (!filename || !sandboxId) return;
+    
+    setIsSaving(true);
+    try {
+      const response = await fetch('/api/sandbox/file/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sandboxId,
+          projectId,
+          filePath: filename,
+          content: editorContent,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save file');
+      }
+
+      console.log(`✅ File saved: ${filename}`);
+      // Update the file content in the tree
+      if (selectedFile) {
+        selectedFile.content = editorContent;
+      }
+      // Notify parent to update manually created files
+      onFileSaved?.(filename, editorContent);
+    } catch (error) {
+      console.error('Error saving file:', error);
+      alert('Failed to save file. Check console for details.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleCopyCode = async () => {
-    if (!selectedFile?.content) return;
+    if (!editorContent) return;
     
     try {
-      await navigator.clipboard.writeText(selectedFile.content);
+      await navigator.clipboard.writeText(editorContent);
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
     } catch (err) {
@@ -425,9 +558,9 @@ function CodeViewer({
   };
 
   const handleDownload = () => {
-    if (!selectedFile?.content || !selectedFile?.name) return;
+    if (!editorContent || !selectedFile?.name) return;
 
-    const blob = new Blob([selectedFile.content], { type: 'text/plain' });
+    const blob = new Blob([editorContent], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -437,6 +570,7 @@ function CodeViewer({
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
+
 
   if (!selectedFile || selectedFile.type === 'folder') {
     return (
@@ -459,7 +593,6 @@ function CodeViewer({
             {getFileIcon(selectedFile.name)}
           </div>
           <div className="flex items-center gap-2 min-w-0 flex-1 py-1">
-            {/* Show full file path instead of just name - use GeistSans */}
             <span className="font-sans font-medium truncate text-[12px] sm:text-[13px] text-foreground">{filename || selectedFile.name}</span>
             <span className="font-sans text-muted-foreground flex-shrink-0 hidden md:inline text-[10px] sm:text-[11px] whitespace-nowrap opacity-70">
               • {selectedFile.language || 'text'}
@@ -467,8 +600,28 @@ function CodeViewer({
           </div>
         </div>
         
-        {/* Action buttons - ALWAYS visible on ALL screen sizes */}
+        {/* Action buttons */}
         <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+          <button
+            onClick={handleSave}
+            disabled={isSaving || !hasUnsavedChanges}
+            className={`flex items-center justify-center gap-1 px-2 py-2 sm:py-1.5 rounded text-xs transition-colors focus:outline-none focus:ring-1 focus:ring-primary ${
+              hasUnsavedChanges && !isSaving
+                ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                : 'bg-muted text-muted-foreground cursor-not-allowed opacity-50'
+            }`}
+            title={hasUnsavedChanges ? 'Save file' : 'No changes to save'}
+            aria-label="Save file"
+          >
+            {isSaving ? (
+              <Loader2 className="size-4 sm:size-3.5 animate-spin flex-shrink-0" />
+            ) : (
+              <Check className="size-4 sm:size-3.5 flex-shrink-0" />
+            )}
+            <span className="hidden lg:inline text-[11px] whitespace-nowrap">
+              {isSaving ? 'Saving...' : 'Save'}
+            </span>
+          </button>
           <button
             onClick={handleCopyCode}
             className="flex items-center justify-center gap-1 px-2 py-2 sm:py-1.5 rounded text-xs hover:bg-muted dark:hover:bg-[#262726] active:bg-muted/70 dark:active:bg-[#262726]/70 transition-colors focus:outline-none focus:ring-1 focus:ring-primary w-8 h-8 sm:w-auto sm:h-auto"
@@ -500,67 +653,32 @@ function CodeViewer({
         </div>
       </div>
 
-            {/* Code display container - proper overflow handling for mobile/tablet */}
+            {/* Monaco Editor - editable with syntax highlighting */}
             <div 
-              className="flex-1 overflow-y-auto overflow-x-auto md:overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent bg-white dark:bg-[#1D1D1D] overscroll-contain" 
+              className="flex-1 bg-white dark:bg-[#1D1D1D]" 
               style={{ 
                 minHeight: 0,
-                scrollBehavior: 'smooth',
                 width: '100%',
-                WebkitOverflowScrolling: 'touch'
               }}
             >
-        <div>
-          <Highlight
-            theme={codeTheme}
-            code={selectedFile.content || '// No content available'}
+          <Editor
+            height="100%"
             language={selectedFile.language || 'text'}
-          >
-            {({ className, style, tokens, getLineProps, getTokenProps }) => (
-              <pre 
-                className={`${className} font-mono p-2 sm:p-3 overflow-x-visible md:overflow-x-auto`} 
-                style={{
-                  ...style,
-                  margin: 0,
-                  background: 'transparent',
-                  fontSize: '13px',
-                  lineHeight: '20px',
-                  fontWeight: '400',
-                  maxWidth: '100%',
-                }}
-              >
-                {tokens.map((line, i) => (
-                  <div 
-                    key={i} 
-                    {...getLineProps({ line })}
-                    className="flex hover:bg-muted/20 transition-colors"
-                    style={{ minHeight: '1.25rem' }}
-                  >
-                    <span 
-                      className="inline-block w-7 sm:w-10 text-right mr-1.5 sm:mr-3 text-muted-foreground/50 select-none flex-shrink-0 font-mono"
-                      style={{ fontSize: '13px', lineHeight: '20px' }}
-                    >
-                      {i + 1}
-                    </span>
-                    <span 
-                      className="flex-1 min-w-0 md:whitespace-pre md:break-normal" 
-                      style={{
-                        wordBreak: 'break-word',
-                        overflowWrap: 'break-word',
-                        whiteSpace: 'pre-wrap',
-                        maxWidth: '100%',
-                      }}
-                    >
-                      {line.map((token, key) => (
-                        <span key={key} {...getTokenProps({ token })} />
-                      ))}
-                    </span>
-                  </div>
-                ))}
-              </pre>
-            )}
-          </Highlight>
-        </div>
+            value={editorContent}
+            onChange={(value) => setEditorContent(value || '')}
+            theme={codeTheme === themes.vsDark ? 'vs-dark' : 'light'}
+            options={{
+              fontSize: 13,
+              lineHeight: 20,
+              fontFamily: 'var(--font-geist-mono), "Geist Mono", monospace',
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+              wordWrap: 'on',
+              automaticLayout: true,
+              tabSize: 2,
+              insertSpaces: true,
+            }}
+          />
       </div>
     </div>
   );
@@ -600,6 +718,12 @@ export function ProjectPageClient({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isVersionDropdownOpen, setIsVersionDropdownOpen] = useState(false);
+  const [showTerminal, setShowTerminal] = useState(false); // Terminal hidden by default
+  const [creatingNewItem, setCreatingNewItem] = useState<{type: 'file' | 'folder', parentId: string | null} | null>(null);
+  const [newItemName, setNewItemName] = useState('');
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [manuallyCreatedFiles, setManuallyCreatedFiles] = useState<Record<string, string>>({});
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; fileId: string } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const versionDropdownRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1094,31 +1218,49 @@ export function ProjectPageClient({
 
   // Build file tree from selected version or streaming files
   const fileTree = useMemo(() => {
+    let baseFiles: Record<string, any> = {};
+    
     // Priority 1: Use streaming files only while currently generating
     if (streamState.isStreaming && streamState.generatedFiles.length > 0) {
-      const streamingFilesObj: Record<string, any> = {};
       streamState.generatedFiles.forEach(file => {
-        streamingFilesObj[file.filename] = file.content;
+        baseFiles[file.filename] = file.content;
       });
-      return buildTreeFromPaths(streamingFilesObj);
     }
-    
     // Priority 2: Load from selected version if available
-    if (selectedVersionId && versions.length > 0) {
+    else if (selectedVersionId && versions.length > 0) {
       const selectedVersion = versions.find(v => v.id === selectedVersionId);
       if (selectedVersion?.files) {
-        return buildTreeFromPaths(selectedVersion.files);
+        baseFiles = { ...selectedVersion.files };
       }
     }
-    
     // Priority 3: If streaming is active but no files yet, show empty tree
-    if (streamState.isStreaming) {
-      return [];
+    else if (streamState.isStreaming) {
+      baseFiles = {};
+    }
+    // Priority 4: Use project messages
+    else {
+      const tree = generateFileTreeFromProject(currentProject, sortedMessages, streamState.generatedFiles);
+      // Convert tree back to flat files for merging
+      const flattenTree = (nodes: TreeNode[], prefix = ''): Record<string, any> => {
+        const files: Record<string, any> = {};
+        nodes.forEach(node => {
+          const path = prefix ? `${prefix}/${node.name}` : node.name;
+          if (node.type === 'file' && node.content !== undefined) {
+            files[path] = node.content;
+          } else if (node.children) {
+            Object.assign(files, flattenTree(node.children, path));
+          }
+        });
+        return files;
+      };
+      baseFiles = flattenTree(tree);
     }
     
-    // Priority 4: Fallback to project-based tree generation from messages
-    return generateFileTreeFromProject(currentProject, sortedMessages, streamState.generatedFiles);
-  }, [selectedVersionId, versions, streamState.generatedFiles, streamState.isStreaming, currentProject, sortedMessages]);
+    // Merge with manually created files
+    const allFiles = { ...baseFiles, ...manuallyCreatedFiles };
+    
+    return buildTreeFromPaths(allFiles);
+  }, [selectedVersionId, versions, streamState.generatedFiles, streamState.isStreaming, currentProject, sortedMessages, manuallyCreatedFiles]);
 
   // When switching versions, ensure the selected file exists in that version.
   // If not, select the first file of the chosen version.
@@ -1372,6 +1514,190 @@ export function ProjectPageClient({
     } catch (error) {
       console.error('❌ Error downloading ZIP:', error);
       alert('Error creating ZIP file. Please check the console for details.');
+    }
+  };
+
+  // Handle starting new file/folder creation
+  const handleNewFile = () => {
+    setCreatingNewItem({ type: 'file', parentId: selectedFolderId });
+    setNewItemName('');
+    // Auto-expand the selected folder if any
+    if (selectedFolderId) {
+      setExpanded(prev => new Set(prev).add(selectedFolderId));
+    }
+  };
+
+  const handleNewFolder = () => {
+    setCreatingNewItem({ type: 'folder', parentId: selectedFolderId });
+    setNewItemName('');
+    // Auto-expand the selected folder if any
+    if (selectedFolderId) {
+      setExpanded(prev => new Set(prev).add(selectedFolderId));
+    }
+  };
+
+  const handleCollapseAll = () => {
+    setExpanded(new Set());
+  };
+
+  // Handle confirming new item creation
+  const handleNewItemConfirm = async () => {
+    if (!newItemName.trim() || !creatingNewItem) return;
+
+    const parentPath = creatingNewItem.parentId || '';
+    const filePath = parentPath ? `${parentPath}/${newItemName}` : newItemName;
+
+    if (creatingNewItem.type === 'file') {
+      // Create file in sandbox
+      try {
+        const response = await fetch('/api/sandbox/file/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sandboxId: currentProject?.metadata?.sandboxId,
+            projectId,
+            filePath,
+            content: '',
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to create file');
+        }
+
+        const result = await response.json();
+        console.log(`✅ File created: ${filePath}`);
+
+        // Add file to local state immediately so it appears in tree
+        setManuallyCreatedFiles(prev => ({
+          ...prev,
+          [filePath]: '' // Empty content initially
+        }));
+
+        // Switch to code view and select the new file
+        setViewMode('code');
+        setSelected(filePath);
+        
+        // Expand parent folders
+        const pathParts = filePath.split('/');
+        const newExpanded = new Set(expanded);
+        for (let i = 0; i < pathParts.length - 1; i++) {
+          const folderPath = pathParts.slice(0, i + 1).join('/');
+          newExpanded.add(folderPath);
+        }
+        setExpanded(newExpanded);
+      } catch (error) {
+        console.error('Error creating file:', error);
+        alert(`Failed to create file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        // Don't reset state on error so user can retry
+        return;
+      }
+    } else {
+      // For folders, create directory using mkdir command
+      try {
+        const response = await fetch('/api/sandbox/file/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sandboxId: currentProject?.metadata?.sandboxId,
+            projectId,
+            filePath: `${filePath}/.gitkeep`, // Create a hidden file to ensure directory exists
+            content: '',
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to create folder');
+        }
+
+        console.log(`✅ Folder created: ${filePath}`);
+        
+        // Expand the new folder
+        setExpanded(prev => new Set(prev).add(filePath));
+      } catch (error) {
+        console.error('Error creating folder:', error);
+        alert(`Failed to create folder: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return;
+      }
+    }
+
+    // Reset state
+    setCreatingNewItem(null);
+    setNewItemName('');
+  };
+
+  const handleNewItemCancel = () => {
+    setCreatingNewItem(null);
+    setNewItemName('');
+  };
+
+  // Click outside to cancel file creation
+  const fileCreationRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      // Cancel file creation if clicking outside the tree container
+      if (creatingNewItem && fileCreationRef.current && !fileCreationRef.current.contains(event.target as Node)) {
+        // Make sure we're not clicking on the new file/folder buttons
+        const target = event.target as HTMLElement;
+        const isToolbarButton = target.closest('[title="New File"]') || target.closest('[title="New Folder"]');
+        if (!isToolbarButton) {
+          handleNewItemCancel();
+        }
+      }
+    };
+
+    if (creatingNewItem) {
+      // Use 'mousedown' to capture the click before any other handlers
+      document.addEventListener('mousedown', handleClickOutside, true);
+      return () => document.removeEventListener('mousedown', handleClickOutside, true);
+    }
+  }, [creatingNewItem]);
+
+  // Close context menu on click
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    if (contextMenu) {
+      document.addEventListener('click', handleClick);
+      return () => document.removeEventListener('click', handleClick);
+    }
+  }, [contextMenu]);
+
+  // Handle file deletion
+  const handleDeleteFile = async (fileId: string) => {
+    if (!confirm(`Are you sure you want to delete ${fileId}?`)) return;
+
+    try {
+      // Remove from manually created files
+      setManuallyCreatedFiles(prev => {
+        const newFiles = { ...prev };
+        delete newFiles[fileId];
+        return newFiles;
+      });
+
+      // If it's the selected file, clear selection
+      if (selected === fileId) {
+        setSelected(null);
+      }
+
+      // Delete from sandbox if sandboxId exists
+      if (currentProject?.metadata?.sandboxId) {
+        await fetch('/api/sandbox/file/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sandboxId: currentProject.metadata.sandboxId,
+            projectId,
+            filePath: fileId,
+          }),
+        });
+      }
+
+      console.log(`🗑️ File deleted: ${fileId}`);
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      alert('Failed to delete file. Check console for details.');
     }
   };
 
@@ -1682,6 +2008,24 @@ export function ProjectPageClient({
                       <Code2 className="h-3.5 w-3.5" />
                     </motion.button>
                   </div>
+                  
+                  {/* Terminal toggle - shown in preview mode */}
+                  {viewMode === 'preview' && (
+                    <motion.button
+                      onClick={() => setShowTerminal(!showTerminal)}
+                      className={`px-2.5 py-1.5 text-xs font-medium transition-all duration-200 rounded-md border border-border/50 dark:border-[#333433] ${
+                        showTerminal
+                          ? 'bg-muted/50 dark:bg-[#1D1D1D] text-foreground'
+                          : 'bg-background dark:bg-[#0E100F] text-muted-foreground hover:text-foreground'
+                      }`}
+                      title={showTerminal ? 'Hide terminal' : 'Show terminal'}
+                      whileTap={{ scale: 0.95 }}
+                      whileHover={{ scale: 1.05 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <Terminal className={`h-3.5 w-3.5 ${showTerminal ? 'text-green-500' : ''}`} />
+                    </motion.button>
+                  )}
                 </div>
                 
             {/* Path bar and menu container - only shown in preview mode */}
@@ -1741,9 +2085,6 @@ export function ProjectPageClient({
                   </div>
                 </>
               )}
-
-              {/* Spacer in code mode to push menu to the right */}
-              {viewMode === 'code' && <div className="flex-1" />}
 
               {/* Version Dropdown - shown in both modes */}
               {versions.length > 0 && (
@@ -1851,16 +2192,57 @@ export function ProjectPageClient({
           </div>
 
           {/* Container for file explorer and code/preview area */}
-          <div className="flex-1 min-h-0 overflow-hidden flex border-x border-b border-border dark:border-[#333433] rounded-b-lg bg-muted/30 dark:bg-[#1D1D1D] shadow-xl backdrop-blur-sm" key={refreshKey}>
+          <div className="flex-1 min-h-0 overflow-hidden flex border-x border-b border-border dark:border-[#333433] rounded-b-lg bg-muted/30 dark:bg-[#1D1D1D] shadow-xl backdrop-blur-sm" key={refreshKey} style={{ position: 'relative' }}>
             {/* File explorer sidebar - NO header, just files - hidden in preview mode */}
-            <aside className={`
-              w-56 sm:w-36 md:w-40 lg:w-44 xl:w-48 2xl:w-52 border-r border-border dark:border-[#333433] flex-shrink-0 transition-all duration-300
-              ${viewMode === 'preview' ? 'hidden' : ''}
-              ${isMobileExplorerOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}
-              sm:relative absolute sm:z-auto z-40 h-full bg-[#FAFAFA] dark:bg-[#1D1D1D]
-            `}>
-              {/* File tree container - NO header, starts immediately */}
-              <div className="p-1.5 sm:p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent bg-[#FAFAFA] dark:bg-[#1D1D1D] h-full">
+            <aside
+              className={`
+                border-r border-border dark:border-[#333433] flex-shrink-0 flex flex-col overflow-hidden
+                ${viewMode === 'preview' ? 'hidden' : ''}
+                ${isMobileExplorerOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}
+                sm:relative absolute sm:z-auto z-40 h-full bg-[#FAFAFA] dark:bg-[#1D1D1D]
+              `}
+              style={{
+                width: viewMode === 'code' ? 'clamp(144px, 15vw, 208px)' : '0',
+                minWidth: viewMode === 'code' ? 'clamp(144px, 15vw, 208px)' : '0',
+                maxWidth: viewMode === 'code' ? 'clamp(144px, 15vw, 208px)' : '0',
+              }}
+            >
+              {/* File Explorer Toolbar - VS Code style */}
+              <div className="flex items-center justify-between px-2 py-1.5 border-b border-border dark:border-[#333433] bg-[#F5F5F5] dark:bg-[#252526]">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Explorer</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={handleNewFile}
+                    disabled={!currentProject?.metadata?.sandboxId}
+                    className="p-1 hover:bg-muted/50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="New File"
+                  >
+                    <FilePlus className="h-4 w-4 text-foreground" />
+                  </button>
+                  <button
+                    onClick={handleNewFolder}
+                    disabled={!currentProject?.metadata?.sandboxId}
+                    className="p-1 hover:bg-muted/50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="New Folder"
+                  >
+                    <FolderPlus className="h-4 w-4 text-foreground" />
+                  </button>
+                  <button
+                    onClick={handleCollapseAll}
+                    className="p-1 hover:bg-muted/50 rounded transition-colors"
+                    title="Collapse All"
+                  >
+                    <ChevronsUpDown className="h-4 w-4 text-foreground" />
+                  </button>
+                </div>
+              </div>
+
+              {/* File tree container - attach ref here for click-outside detection */}
+              <div 
+                ref={fileCreationRef}
+                className="p-1.5 sm:p-2 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent bg-[#FAFAFA] dark:bg-[#1D1D1D]" 
+                style={{ height: 'calc(100% - 40px)' }}
+              >
                 {/* Close button for mobile - positioned at top right */}
                 <button
                   onClick={() => setIsMobileExplorerOpen(false)}
@@ -1869,6 +2251,39 @@ export function ProjectPageClient({
                 >
                   ×
                 </button>
+                
+                {/* Show inline creator at root level if no folder selected */}
+                {creatingNewItem && !creatingNewItem.parentId && (
+                  <div className="flex items-center gap-1.5 px-1.5 sm:px-2 py-2 sm:py-1 min-w-0" style={{ paddingLeft: '6px' }}>
+                    {creatingNewItem.type === 'folder' ? (
+                      <FolderClosed className="size-3.5 sm:size-4 flex-shrink-0" style={{ color: '#8AADF4' }} />
+                    ) : (
+                      <File className="size-3.5 sm:size-4 flex-shrink-0 text-gray-500" />
+                    )}
+                    <input
+                      type="text"
+                      value={newItemName}
+                      onChange={(e) => setNewItemName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleNewItemConfirm();
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault();
+                          handleNewItemCancel();
+                        }
+                      }}
+                      onBlur={(e) => {
+                        // Don't cancel if clicking inside the tree (handled by click outside listener)
+                        // This prevents the input from closing when clicking the icons
+                      }}
+                      placeholder={creatingNewItem.type === 'folder' ? 'Folder name...' : 'File name...'}
+                      className="flex-1 min-w-0 max-w-full bg-transparent border-b border-blue-500 outline-none text-[14px] font-sans"
+                      autoFocus
+                    />
+                  </div>
+                )}
+                
                 {fileTree.map((node) => (
                   <TreeItem
                     key={node.id}
@@ -1877,6 +2292,17 @@ export function ProjectPageClient({
                     toggle={toggle}
                     select={select}
                     selectedId={selected}
+                    onSelectFolder={setSelectedFolderId}
+                    creatingInFolder={creatingNewItem?.parentId || null}
+                    newItemType={creatingNewItem?.type}
+                    onNewItemNameChange={setNewItemName}
+                    onNewItemConfirm={handleNewItemConfirm}
+                    onNewItemCancel={handleNewItemCancel}
+                    newItemName={newItemName}
+                    onContextMenu={(e, fileId) => {
+                      e.preventDefault();
+                      setContextMenu({ x: e.clientX, y: e.clientY, fileId });
+                    }}
                   />
                 ))}
               </div>
@@ -1909,8 +2335,10 @@ export function ProjectPageClient({
                       }
                       projectName={currentProject.name}
                       projectId={projectId}
+                      sandboxId={currentProject.metadata?.sandboxId}
                       hideHeader={true}
                       path={previewPath}
+                      showTerminal={showTerminal}
                     />
                   </motion.div>
                 ) : (
@@ -1937,6 +2365,14 @@ export function ProjectPageClient({
                         filename={selected} 
                         fileTree={fileTree} 
                         codeTheme={codeTheme}
+                        projectId={projectId}
+                        sandboxId={currentProject?.metadata?.sandboxId}
+                        onFileSaved={(filePath, content) => {
+                          setManuallyCreatedFiles(prev => ({
+                            ...prev,
+                            [filePath]: content
+                          }));
+                        }}
                       />
                     )}
                   </motion.div>
@@ -2153,8 +2589,10 @@ export function ProjectPageClient({
                   ''
                 }
                 projectId={projectId}
+                sandboxId={currentProject.metadata?.sandboxId}
                 hideHeader={true}
                 path={previewPath}
+                showTerminal={showTerminal}
                 onRefresh={() => setRefreshKey(prev => prev + 1)}
                 key={`fullscreen-${refreshKey}`}
               />
@@ -2162,6 +2600,29 @@ export function ProjectPageClient({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          className="fixed z-[200] bg-card dark:bg-[#1D1D1D] border border-border dark:border-[#333433] rounded-lg shadow-lg overflow-hidden"
+          style={{
+            left: `${contextMenu.x}px`,
+            top: `${contextMenu.y}px`,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => {
+              handleDeleteFile(contextMenu.fileId);
+              setContextMenu(null);
+            }}
+            className="w-full px-4 py-2.5 text-left text-sm font-sans hover:bg-red-500/10 text-red-600 dark:text-red-400 transition-colors flex items-center gap-2 min-w-[150px]"
+          >
+            <Trash2 className="h-4 w-4" />
+            <span>Delete</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
