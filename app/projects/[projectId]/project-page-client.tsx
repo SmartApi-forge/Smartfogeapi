@@ -789,7 +789,7 @@ export function ProjectPageClient({
   const streamingMessages = useMemo(() => {
     const msgs: any[] = [];
     const fileStatusMap = new Map<string, { generating: any; complete: any }>();
-    let validationStatus: { start: any; complete: any } = { start: null, complete: null };
+    const validationStatus: { start: any; complete: any } = { start: null, complete: null };
     
     // Show immediate feedback even with no events yet
     if (streamState.isStreaming && streamState.events.length === 0 && streamState.status === 'generating') {
@@ -983,7 +983,7 @@ export function ProjectPageClient({
       : sortedMessages;
 
     // Combine database messages, streaming messages, and persisted generation events
-    let combined = [...filteredDbMessages, ...streamingMessages, ...persistedEventMessages];
+    const combined = [...filteredDbMessages, ...streamingMessages, ...persistedEventMessages];
     
     // Sort by timestamp
     combined.sort((a, b) => 
