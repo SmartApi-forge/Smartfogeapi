@@ -17,12 +17,33 @@ import type { Sandbox } from '@daytonaio/sdk';
 // Export Sandbox type for use in other files
 export type { Sandbox };
 
-// Initialize Daytona client with configuration
-export const daytona = new Daytona({
-  apiKey: process.env.DAYTONA_API_KEY!,
-  apiUrl: process.env.DAYTONA_API_URL || 'https://api.daytona.works',
-  target: process.env.DAYTONA_TARGET || 'us',
-});
+// Lazily initialize Daytona client so Next.js build doesn't execute SDK code
+// during module load (which can throw if the SDK expects extra config).
+let _daytona: Daytona | null = null;
+
+function getDaytonaClient(): Daytona {
+  if (_daytona) return _daytona;
+
+  const apiKey = process.env.DAYTONA_API_KEY;
+  if (!apiKey) {
+    throw new Error('DAYTONA_API_KEY is not set');
+  }
+
+  const config: any = {
+    apiKey,
+    apiUrl: process.env.DAYTONA_API_URL || 'https://api.daytona.works',
+    target: process.env.DAYTONA_TARGET || 'us',
+  };
+
+  // If the SDK ever requires an organization ID for certain key types,
+  // allow it to be provided via env without forcing it for normal keys.
+  if (process.env.DAYTONA_ORGANIZATION_ID) {
+    (config as any).organizationId = process.env.DAYTONA_ORGANIZATION_ID;
+  }
+
+  _daytona = new Daytona(config);
+  return _daytona;
+}
 
 // Resource allocation for Daytona workspaces
 export interface WorkspaceResources {
@@ -53,6 +74,8 @@ export interface SandboxConfig {
  * @returns Created sandbox instance
  */
 export async function createWorkspace(config: SandboxConfig = {}): Promise<Sandbox> {
+  const daytona = getDaytonaClient();
+
   const sandbox = await daytona.create({
     // Use Node.js 22 with Debian (full tooling support)
     image: config.image || 'node:22-bookworm',
@@ -77,6 +100,8 @@ export async function createWorkspace(config: SandboxConfig = {}): Promise<Sandb
  * @returns Sandbox instance
  */
 export async function getWorkspace(sandboxId: string): Promise<Sandbox> {
+  const daytona = getDaytonaClient();
+
   // Note: Daytona SDK might use different method names
   // Try multiple approaches for compatibility
   try {
@@ -114,6 +139,8 @@ export async function getWorkspace(sandboxId: string): Promise<Sandbox> {
  * @param sandboxId Sandbox ID or Sandbox instance
  */
 export async function deleteWorkspace(sandboxId: string | Sandbox): Promise<void> {
+  const daytona = getDaytonaClient();
+
   if (typeof sandboxId === 'string') {
     const sandbox = await daytona.getSandbox(sandboxId);
     await sandbox.delete();
@@ -128,6 +155,8 @@ export async function deleteWorkspace(sandboxId: string | Sandbox): Promise<void
  * @param sandboxId Sandbox ID or Sandbox instance
  */
 export async function stopWorkspace(sandboxId: string | Sandbox): Promise<void> {
+  const daytona = getDaytonaClient();
+
   if (typeof sandboxId === 'string') {
     const sandbox = await daytona.getSandbox(sandboxId);
     await sandbox.stop();
@@ -142,6 +171,8 @@ export async function stopWorkspace(sandboxId: string | Sandbox): Promise<void> 
  * @param sandboxId Sandbox ID
  */
 export async function startWorkspace(sandboxId: string): Promise<Sandbox> {
+  const daytona = getDaytonaClient();
+
   const sandbox = await daytona.getSandbox(sandboxId);
   await sandbox.start();
   console.log(`▶️ Started Daytona workspace: ${sandboxId}`);
@@ -152,5 +183,6 @@ export async function startWorkspace(sandboxId: string): Promise<Sandbox> {
  * List all sandboxes for debugging
  */
 export async function listWorkspaces(): Promise<any[]> {
+  const daytona = getDaytonaClient();
   return await daytona.listSandboxes();
 }
