@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Sandbox } from 'e2b';
+import { stopWorkspace, getWorkspace } from '@/src/lib/daytona-client';
 import { createRouteHandlerClient } from '@/lib/supabase-route-handler';
 
 /**
- * Pause E2B sandbox to preserve state beyond timeout
- * Uses E2B's auto-pause when connections close
- * On Hobby Plan: Paused sandboxes can be resumed later with connect()
+ * Pause Daytona sandbox to preserve state
+ * Stops the workspace to free resources while preserving filesystem
  */
 export async function POST(
   request: NextRequest,
@@ -36,14 +35,10 @@ export async function POST(
     }
 
     try {
-      // Connect to existing sandbox to verify it exists
-      const sandbox = await Sandbox.connect(sandboxId);
-      console.log(`📦 Connected to sandbox ${sandboxId}`);
-
-      // E2B auto-pauses sandboxes when there are no active connections
-      // We just need to verify it exists and update metadata
-      // The sandbox will auto-pause after this connection closes
-      console.log(`⏸️ Sandbox ${sandboxId} verified and will auto-pause`);
+      // Verify sandbox exists and stop it
+      await getWorkspace(sandboxId);
+      await stopWorkspace(sandboxId);
+      console.log(`⏸️ Sandbox ${sandboxId} stopped successfully`);
 
       // Update metadata to track paused state
       await supabase

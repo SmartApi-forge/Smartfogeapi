@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Sandbox } from 'e2b';
+import { createWorkspace, deleteWorkspace } from '@/src/lib/daytona-client';
+import type { Sandbox } from '@/src/lib/daytona-client';
 import { createRouteHandlerClient } from '@/lib/supabase-route-handler';
 
 /**
  * Enhanced sandbox restart with full repository restoration
- * - Creates new E2B sandbox when old one expires
+ * - Creates new Daytona workspace when old one expires
  * - Clones GitHub repository
  * - Installs dependencies
  * - Starts dev server
@@ -69,13 +70,13 @@ export async function POST(
     
     const config = frameworkConfig[framework] || frameworkConfig.unknown;
 
-    // Create new sandbox with extended timeout
-    const templateId = process.env.E2B_FULLSTACK_TEMPLATE_ID || 'ckskh5feot2y94v5z07d';
-    const sandbox = await Sandbox.create(templateId, {
-      timeoutMs: 3600000, // 1 hour timeout
+    // Create new Daytona workspace
+    const sandbox = await createWorkspace({
+      resources: { cpu: 4, memory: 8, disk: 10 },
+      public: true,
     });
 
-    console.log(`✅ Created new sandbox ${sandbox.sandboxId} for project ${projectId}`);
+    console.log(`✅ Created new sandbox ${sandbox.id} for project ${projectId}`);
 
     try {
       // Import GitHub service
@@ -144,7 +145,7 @@ export async function POST(
           sandbox_url: sandboxUrl,
           metadata: {
             ...metadata,
-            sandboxId: sandbox.sandboxId,
+            sandboxId: sandbox.id,
             sandboxUrl,
             framework,
             port: config.port,
@@ -160,7 +161,7 @@ export async function POST(
 
       return NextResponse.json({
         success: true,
-        sandboxId: sandbox.sandboxId,
+        sandboxId: sandbox.id,
         sandboxUrl,
         framework,
         port: config.port,
@@ -168,11 +169,11 @@ export async function POST(
       });
 
     } catch (restoreError: any) {
-      // If restoration fails, kill the sandbox and return error
+      // If restoration fails, delete the sandbox and return error
       console.error('❌ Sandbox restoration failed:', restoreError);
       
       try {
-        await sandbox.kill();
+        await deleteWorkspace(sandbox);
       } catch (killError) {
         console.error('Failed to cleanup sandbox:', killError);
       }

@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Sandbox } from 'e2b';
+import { startWorkspace } from '@/src/lib/daytona-client';
 import { createRouteHandlerClient } from '@/lib/supabase-route-handler';
 
 /**
- * Resume paused E2B sandbox
- * Restores both filesystem and running processes from paused state
- * Much faster than full restart (no npm install needed!)
+ * Resume paused Daytona sandbox
+ * Starts a stopped workspace to restore it to active state
  */
 export async function POST(
   request: NextRequest,
@@ -41,14 +40,13 @@ export async function POST(
     try {
       console.log(`🔄 Attempting to resume paused sandbox ${sandboxId}...`);
 
-      // Try to connect to paused sandbox
-      // E2B automatically resumes paused sandboxes on connect()
-      const sandbox = await Sandbox.connect(sandboxId);
+      // Start the stopped workspace
+      const sandbox = await startWorkspace(sandboxId);
       console.log(`✅ Sandbox ${sandboxId} resumed successfully`);
 
-      // Get the new URL (port might have changed)
+      // Get the new URL
       const port = metadata?.port || 3000;
-      const newUrl = `https://${port}-${sandboxId}.e2b.app`;
+      const newUrl = `https://${sandboxId}-${port}.daytona.works`;
 
       // Update metadata to mark as active again
       await supabase

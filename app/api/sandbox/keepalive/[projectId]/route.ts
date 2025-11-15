@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Sandbox } from 'e2b';
+import { getWorkspace } from '@/src/lib/daytona-client';
 import { createRouteHandlerClient } from '@/lib/supabase-route-handler';
 
 /**
- * Keep E2B sandbox alive while user is viewing the project
- * Extends sandbox lifetime by sending keepAlive signal
+ * Keep Daytona sandbox alive while user is viewing the project
+ * Checks if sandbox is still active
  */
 export async function POST(
   request: NextRequest,
@@ -35,9 +35,8 @@ export async function POST(
     }
 
     // Try to connect to existing sandbox to check if it's still alive
-    // E2B sandboxes stay alive while they have active connections
     try {
-      const sandbox = await Sandbox.connect(sandboxId);
+      const sandbox = await getWorkspace(sandboxId);
       // Connection successful - sandbox is alive
       console.log(`✅ Sandbox ${sandboxId} is alive for project ${projectId}`);
       
