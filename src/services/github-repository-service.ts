@@ -4,7 +4,7 @@
  */
 
 import { Octokit } from '@octokit/rest';
-import { Sandbox } from 'e2b';
+import type { Sandbox } from '../lib/daytona-client';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -104,7 +104,7 @@ export class GitHubRepositoryService {
   }
 
   /**
-   * Clone repository to E2B sandbox
+   * Clone repository to Daytona sandbox using git operations
    */
   async cloneToSandbox(
     repoUrl: string,
@@ -112,19 +112,20 @@ export class GitHubRepositoryService {
     sandbox: Sandbox
   ): Promise<{ success: boolean; path: string; error?: string }> {
     try {
-      // Clone repository with authentication
-      const authUrl = repoUrl.replace('https://github.com/', `https://${accessToken}@github.com/`);
-      const cloneCommand = `git clone ${authUrl} /home/user/repo`;
-
-      const result = await sandbox.commands.run(cloneCommand);
-
-      if (result.exitCode !== 0) {
-        throw new Error(`Git clone failed: ${result.stderr || result.stdout}`);
-      }
+      // Clone repository with authentication using Daytona's git API
+      // Daytona path: workspace/repo (relative to sandbox home)
+      await sandbox.git.clone(
+        repoUrl,
+        'workspace/repo',
+        undefined, // branch (optional)
+        undefined, // depth (optional)
+        'git', // username for GitHub  
+        accessToken // personal access token
+      );
 
       return {
         success: true,
-        path: '/home/user/repo',
+        path: 'workspace/repo', // Daytona uses relative paths from home
       };
     } catch (error: any) {
       console.error('Repository clone error:', error);
@@ -139,21 +140,27 @@ export class GitHubRepositoryService {
   /**
    * Detect framework from repository contents
    */
-  async detectFramework(sandbox: Sandbox, repoPath: string = '/home/user/repo'): Promise<FrameworkDetection> {
+  async detectFramework(sandbox: Sandbox, repoPath: string = 'workspace/repo'): Promise<FrameworkDetection> {
     try {
+      console.log('🔍 Starting framework detection...');
+      
       // PRIORITY 1: Check for React/Node.js projects first (package.json)
-      const packageJsonResult = await sandbox.commands.run(`cat ${repoPath}/package.json 2>/dev/null || echo "not_found"`);
+      // Daytona: Use fs.downloadFile to read package.json
+      console.log(`📄 Attempting to read: ${repoPath}/package.json`);
+      const packageJsonContent = await sandbox.fs.downloadFile(`${repoPath}/package.json`);
+      const packageJsonText = packageJsonContent.toString('utf-8');
 
-      if (!packageJsonResult.stdout.includes('not_found')) {
-        const packageJson = JSON.parse(packageJsonResult.stdout);
+      if (packageJsonText && packageJsonText.trim() !== '') {
+        const packageJson = JSON.parse(packageJsonText);
         
-        // Detect package manager
+        // Detect package manager using Daytona fs.findFiles
         let packageManager: 'npm' | 'yarn' | 'pnpm' = 'npm';
-        const lockFileCheck = await sandbox.commands.run(`cd ${repoPath} && ls -1 | grep -E "yarn.lock|pnpm-lock.yaml|package-lock.json"`);
+        const files = await sandbox.fs.findFiles(repoPath, '*lock*');
+        const fileNames = files;
         
-        if (lockFileCheck.stdout.includes('pnpm-lock.yaml')) {
+        if (fileNames.includes('pnpm-lock.yaml')) {
           packageManager = 'pnpm';
-        } else if (lockFileCheck.stdout.includes('yarn.lock')) {
+        } else if (fileNames.includes('yarn.lock')) {
           packageManager = 'yarn';
         }
 
@@ -216,15 +223,20 @@ export class GitHubRepositoryService {
       }
 
       // PRIORITY 2: Check for Python projects (secondary to React/Node.js)
-      const requirementsCheck = await sandbox.commands.run(`test -f ${repoPath}/requirements.txt && echo "found" || echo "not_found"`);
-      const pyprojectCheck = await sandbox.commands.run(`test -f ${repoPath}/pyproject.toml && echo "found" || echo "not_found"`);
+      // Use Daytona fs.findFiles to check for Python files
+      const reqFiles = await sandbox.fs.findFiles(repoPath, 'requirements.txt');
+      const pyFiles = await sandbox.fs.findFiles(repoPath, 'pyproject.toml');
+      const hasRequirements = reqFiles.length > 0;
+      const hasPyproject = pyFiles.length > 0;
 
-      if (requirementsCheck.stdout.includes('found') || pyprojectCheck.stdout.includes('found')) {
-        const packageManager = pyprojectCheck.stdout.includes('found') ? 'poetry' : 'pip';
+      if (hasRequirements || hasPyproject) {
+        const packageManager = hasPyproject ? 'poetry' : 'pip';
         
-        // Check for FastAPI
-        const fastapiCheck = await sandbox.commands.run(`grep -l "FastAPI\\|from fastapi" ${repoPath}/*.py 2>/dev/null || echo "not_found"`);
-        if (!fastapiCheck.stdout.includes('not_found')) {
+        // Check for FastAPI - search in Python files using process.executeCommand
+        const fastapiCheck = await sandbox.process.executeCommand(
+          `grep -l "FastAPI\\|from fastapi" ${repoPath}/*.py 2>/dev/null || echo "not_found"`
+        );
+        if (!fastapiCheck.result.includes('not_found')) {
           return {
             framework: 'fastapi',
             packageManager,
@@ -234,8 +246,10 @@ export class GitHubRepositoryService {
         }
         
         // Check for Flask
-        const flaskCheck = await sandbox.commands.run(`grep -l "Flask\\|from flask" ${repoPath}/*.py 2>/dev/null || echo "not_found"`);
-        if (!flaskCheck.stdout.includes('not_found')) {
+        const flaskCheck = await sandbox.process.executeCommand(
+          `grep -l "Flask\\|from flask" ${repoPath}/*.py 2>/dev/null || echo "not_found"`
+        );
+        if (!flaskCheck.result.includes('not_found')) {
           return {
             framework: 'flask',
             packageManager,
@@ -244,9 +258,10 @@ export class GitHubRepositoryService {
           };
         }
         
-        // Check for Django
-        const djangoCheck = await sandbox.commands.run(`test -f ${repoPath}/manage.py && echo "found" || echo "not_found"`);
-        if (djangoCheck.stdout.includes('found')) {
+        // Check for Django - check if manage.py exists
+        const djangoFiles = await sandbox.fs.findFiles(repoPath, 'manage.py');
+        const hasDjango = djangoFiles.length > 0;
+        if (hasDjango) {
           return {
             framework: 'django',
             packageManager,
@@ -256,9 +271,13 @@ export class GitHubRepositoryService {
         }
         
         // Generic Python project - try to find main entry point
-        const mainPyCheck = await sandbox.commands.run(`test -f ${repoPath}/main.py && echo "main.py" || test -f ${repoPath}/app.py && echo "app.py" || echo "not_found"`);
-        if (!mainPyCheck.stdout.includes('not_found')) {
-          const entryPoint = mainPyCheck.stdout.trim();
+        const mainPyFiles = await sandbox.fs.findFiles(repoPath, 'main.py');
+        const appPyFiles = await sandbox.fs.findFiles(repoPath, 'app.py');
+        const hasMainPy = mainPyFiles.length > 0;
+        const hasAppPy = appPyFiles.length > 0;
+        
+        if (hasMainPy || hasAppPy) {
+          const entryPoint = hasMainPy ? 'main.py' : 'app.py';
           return {
             framework: 'python',
             packageManager,
@@ -287,7 +306,7 @@ export class GitHubRepositoryService {
   async installDependencies(
     sandbox: Sandbox,
     packageManager: string = 'npm',
-    repoPath: string = '/home/user/repo'
+    repoPath: string = 'workspace/repo'
   ): Promise<{ success: boolean; output: string; error?: string; fallbackUsed?: boolean }> {
     try {
       let installCommand: string;
@@ -313,36 +332,37 @@ export class GitHubRepositoryService {
 
       console.log(`📦 Running: ${installCommand}`);
       
-      // Wrap in try-catch because E2B throws CommandExitError on non-zero exit
+      // Use Daytona process.executeCommand with increased memory
       let result: any;
       try {
-        result = await sandbox.commands.run(`cd ${repoPath} && ${installCommand}`, {
-          timeoutMs: 600000, // 10 minutes timeout (Next.js 15 can take long)
-        });
+        result = await sandbox.process.executeCommand(
+          installCommand,
+          repoPath,
+          { NODE_OPTIONS: '--max-old-space-size=6144' }, // 6GB Node.js memory (within 8GB workspace)
+          600 // 10 minutes timeout in seconds
+        );
 
         // If successful, return immediately
         if (result.exitCode === 0) {
           console.log('✅ Dependencies installed successfully');
           return {
             success: true,
-            output: result.stdout,
+            output: result.result,
           };
         }
       } catch (cmdError: any) {
         console.error('❌ Command failed with exception:', cmdError.message);
-        console.error('📄 Command stdout:', cmdError.stdout || 'No stdout');
-        console.error('📄 Command stderr:', cmdError.stderr || 'No stderr');
+        console.error('📄 Command output:', cmdError.result || 'No output');
         
         // Extract output from the error if available
         result = {
           exitCode: cmdError.exitCode || 1,
-          stdout: cmdError.stdout || '',
-          stderr: cmdError.stderr || cmdError.message || 'Command failed',
+          result: cmdError.result || '',
         };
       }
 
       // If failed, log the error details
-      const errorDetails = result.stderr || result.stdout || 'Unknown error';
+      const errorDetails = result.result || 'Unknown error';
       console.error('❌ Installation failed:', errorDetails);
 
       // Try fallback for npm if available
@@ -350,26 +370,29 @@ export class GitHubRepositoryService {
         console.log(`🔄 Retrying with fallback: ${fallbackCommand}`);
         
         try {
-          const fallbackResult = await sandbox.commands.run(`cd ${repoPath} && ${fallbackCommand}`, {
-            timeoutMs: 600000, // 10 minutes timeout
-          });
+          const fallbackResult = await sandbox.process.executeCommand(
+            fallbackCommand,
+            repoPath,
+            { NODE_OPTIONS: '--max-old-space-size=6144' },
+            600 // 10 minutes
+          );
 
           if (fallbackResult.exitCode === 0) {
             console.log('✅ Dependencies installed successfully with --legacy-peer-deps');
             return {
               success: true,
-              output: fallbackResult.stdout,
+              output: fallbackResult.result,
               fallbackUsed: true,
             };
           }
 
           // Fallback completed but failed
-          const fallbackError = fallbackResult.stderr || fallbackResult.stdout || 'Unknown error';
+          const fallbackError = fallbackResult.result || 'Unknown error';
           console.error('❌ Fallback also failed:', fallbackError);
           
           return {
             success: false,
-            output: result.stdout + '\n\n--- Fallback attempt ---\n' + fallbackResult.stdout,
+            output: result.result + '\n\n--- Fallback attempt ---\n' + fallbackResult.result,
             error: `Primary: ${errorDetails}\n\nFallback (--legacy-peer-deps): ${fallbackError}`,
           };
         } catch (fallbackError: any) {
@@ -377,7 +400,7 @@ export class GitHubRepositoryService {
           
           return {
             success: false,
-            output: result.stdout + '\n\n--- Fallback attempt ---\n' + (fallbackError.stdout || ''),
+            output: result.result + '\n\n--- Fallback attempt ---\n' + (fallbackError.result || ''),
             error: `Primary: ${errorDetails}\n\nFallback exception: ${fallbackError.message}`,
           };
         }
@@ -386,7 +409,7 @@ export class GitHubRepositoryService {
       // No fallback available or not npm
       return {
         success: false,
-        output: result.stdout || '',
+        output: result.result || '',
         error: errorDetails,
       };
     } catch (error: any) {
@@ -400,12 +423,12 @@ export class GitHubRepositoryService {
   }
 
   /**
-   * Start preview server in sandbox using helper script
+   * Start preview server in Daytona sandbox
    */
   async startPreviewServer(
     sandbox: Sandbox,
     framework: FrameworkDetection,
-    repoPath: string = '/home/user/repo',
+    repoPath: string = 'workspace/repo',
     skipInstall: boolean = false
   ): Promise<{ success: boolean; url?: string; port?: number; error?: string; installOutput?: string }> {
     try {
@@ -437,79 +460,109 @@ export class GitHubRepositoryService {
         console.log('⏭️  Skipping dependency installation (already done)');
       }
 
-      // Step 2: Start the dev server in background (longer timeout for first build)
-      // Note: Next.js 15 + Tailwind v4 can take 10-15 minutes for first build
-      // The compile script itself waits 10 minutes (600s), so we give 20 mins total
-      const startCommand = `source /usr/local/bin/compile_fullstack.sh && start_server_background "${repoPath}" ${port} /tmp/server.log`;
+      // Step 2: Start the dev server in background using Daytona sessions
+      const sessionId = `dev-server-${Date.now()}`;
+      const packageManager = framework.packageManager || 'npm';
       
-      const result = await sandbox.commands.run(startCommand, {
-        timeoutMs: 1200000, // 20 minutes timeout for Next.js 15 first build + server startup
-      });
-
-      // Check if start was successful
-      if (result.exitCode === 0) {
-        console.log('✅ Preview server started successfully');
-        
-        // Get the E2B sandbox URL (not localhost!)
-        const sandboxUrl = `https://${sandbox.getHost(port)}`;
-        console.log(`📡 Preview URL: ${sandboxUrl}`);
-        
-        return {
-          success: true,
-          port,
-          url: sandboxUrl,
-        };
-      } else {
-        // Get server logs for debugging
-        const logs = await sandbox.commands.run('cat /tmp/server.log 2>/dev/null | tail -100 || echo "No logs available"');
-        
-        // Combine all error information
-        const errorParts = [];
-        
-        if (result.stderr && result.stderr.trim()) {
-          errorParts.push(`Start command stderr: ${result.stderr.trim()}`);
-        }
-        
-        if (result.stdout && result.stdout.trim()) {
-          errorParts.push(`Start command stdout: ${result.stdout.trim()}`);
-        }
-        
-        if (logs.stdout && logs.stdout.trim() !== 'No logs available') {
-          errorParts.push(`Server logs (last 100 lines): ${logs.stdout.trim()}`);
-        }
-        
-        const errorMessage = errorParts.length > 0 
-          ? errorParts.join('\n\n')
-          : `Server failed with exit code ${result.exitCode}`;
-        
-        console.error('❌ Preview server failed to start:');
-        console.error(errorMessage);
-        
-        return {
-          success: false,
-          error: errorMessage,
-        };
+      // Determine start command based on package manager
+      let startCmd: string;
+      switch (packageManager) {
+        case 'pnpm':
+          startCmd = 'pnpm run dev';
+          break;
+        case 'yarn':
+          startCmd = 'yarn dev';
+          break;
+        case 'pip':
+        case 'poetry':
+          startCmd = framework.startCommand || 'python main.py';
+          break;
+        default:
+          startCmd = 'npm run dev';
       }
+      
+      // Create session for background process
+      await sandbox.process.createSession(sessionId);
+      
+      console.log(`🚀 Starting dev server in ${repoPath} with command: ${startCmd}`);
+      console.log(`📍 Working directory: ${repoPath}`);
+      
+      // Start server in background from the repository directory
+      // Use full command with cd to ensure we're in the right directory
+      const fullCommand = `cd ${repoPath} && ${startCmd}`;
+      console.log(`📝 Full command: ${fullCommand}`);
+      
+      const command = await sandbox.process.executeSessionCommand(sessionId, {
+        command: fullCommand,
+        runAsync: true, // Don't wait for completion
+      });
+      
+      console.log(`✅ Command started with ID: ${command.cmdId}`);
+
+      console.log(`⏳ Waiting for dev server to start...`);
+      
+      // Wait longer for Next.js apps (30 seconds)
+      // They need time to compile and start
+      await new Promise(resolve => setTimeout(resolve, 30000));
+      
+      // Check if process is still running
+      console.log(`🔍 Checking if server process is running...`);
+      const checkProcess = await sandbox.process.executeCommand(
+        `ps aux | grep -E "${startCmd.split(' ')[0]}" | grep -v grep || echo "no_process"`
+      );
+      
+      if (checkProcess.result.includes('no_process')) {
+        console.error('❌ Dev server process not found');
+      } else {
+        console.log('✅ Dev server process is running');
+        console.log('Process info:', checkProcess.result.substring(0, 200));
+      }
+      
+      // Get session command logs for debugging
+      try {
+        console.log(`📜 Getting command logs for command ID: ${command.cmdId}`);
+        const logs = await sandbox.process.getSessionCommandLogs(sessionId, command.cmdId);
+        console.log('📝 STDOUT:', logs.stdout?.substring(0, 500));
+        console.log('🔴 STDERR:', logs.stderr?.substring(0, 500));
+        
+        // Check for common errors
+        if (logs.stderr && logs.stderr.includes('EADDRINUSE')) {
+          console.error('⚠️ Port already in use!');
+        }
+        if (logs.stderr && logs.stderr.includes('Cannot find module')) {
+          console.error('⚠️ Missing dependencies!');
+        }
+      } catch (logError) {
+        console.error('Could not get session logs:', logError);
+      }
+      
+      // Get Daytona preview URL using SDK method
+      console.log(`🔗 Getting preview link for port ${port}...`);
+      const previewLink = await sandbox.getPreviewLink(port);
+      console.log(`📡 Preview URL: ${previewLink.url}`);
+      
+      // Check if port is actually listening
+      const portCheck = await sandbox.process.executeCommand(
+        `netstat -tuln | grep :${port} || ss -tuln | grep :${port} || echo "port_not_listening"`
+      );
+      
+      if (portCheck.result.includes('port_not_listening')) {
+        console.warn(`⚠️ Port ${port} is not listening yet`);
+      } else {
+        console.log(`✅ Port ${port} is listening`);
+      }
+      
+      return {
+        success: true,
+        port,
+        url: previewLink.url,
+      };
     } catch (error: any) {
       console.error('Preview server start error:', error);
       
-      // Try to get logs for debugging
-      let serverLogs = '';
-      try {
-        const logs = await sandbox.commands.run('cat /tmp/server.log 2>/dev/null | tail -100 || echo "No logs available"');
-        serverLogs = logs.stdout;
-        console.error('Server logs:', serverLogs);
-      } catch (logError) {
-        console.error('Could not retrieve server logs');
-      }
-      
-      const errorMessage = error.message + (serverLogs && serverLogs !== 'No logs available' 
-        ? `\n\nServer logs:\n${serverLogs}` 
-        : '');
-      
       return {
         success: false,
-        error: errorMessage,
+        error: error.message || 'Failed to start preview server',
       };
     }
   }
