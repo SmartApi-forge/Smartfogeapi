@@ -2699,6 +2699,11 @@ const savedResult = await step.run("save-repository-files", async () => {
           framework: frameworkInfo.framework || 'unknown',
           github_repo_id: githubRepoId,
           repo_url: repoUrl, // Store repo URL for easier access
+          metadata: {
+            sandboxId: cloneResult.sandboxId, // Save sandboxId for terminal access
+            repoFullName,
+            framework: frameworkInfo.framework,
+          },
         };
         
         // Always add sandbox_url (we always generate it now)
