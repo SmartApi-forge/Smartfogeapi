@@ -8,6 +8,7 @@ import { apiGenerationRouter } from '../../modules/api-generation/router';
 import { projectsRouter } from '../../modules/projects/router';
 import { generationEventsRouter } from '../../modules/generation-events/router';
 import { versionsRouter } from '../../modules/versions/router';
+import { invitationsRouter } from '../../modules/invitations/router';
 import { githubRouter } from './github';
 import { codeModificationsRouter } from './code-modifications';
 
@@ -20,6 +21,7 @@ export const appRouter = createTRPCRouter({
   projects: projectsRouter,
   generationEvents: generationEventsRouter,
   versions: versionsRouter,
+  invitations: invitationsRouter,
   github: githubRouter,
   codeModifications: codeModificationsRouter,
 });
