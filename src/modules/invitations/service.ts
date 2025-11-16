@@ -139,7 +139,17 @@ export class InvitationService {
 
     // Get email from auth.users
     const { data: authUser } = await supabase.auth.admin.getUserById(userId);
-    const inviterName = inviterProfile?.full_name || authUser?.user?.email || 'A user';
+    
+    // Use full_name if available and not empty, otherwise extract name from email
+    let inviterName = inviterProfile?.full_name;
+    if (!inviterName || inviterName.trim() === '') {
+      const email = authUser?.user?.email || '';
+      // Extract name from email (before @) and capitalize it
+      inviterName = email.split('@')[0]
+        .split(/[._-]/)
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ') || 'A collaborator';
+    }
 
     // Generate unique token
     const token = this.generateToken();
@@ -166,13 +176,13 @@ export class InvitationService {
       });
     }
 
-    // Send email using Resend or fallback
+    // Send email using Gmail SMTP or fallback
     let emailSent = false;
     let emailError: string | undefined;
     
     try {
-      // Check if Resend is configured
-      if (process.env.RESEND_API_KEY) {
+      // Check if Gmail SMTP is configured
+      if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
         await sendInvitationEmail({
           to: input.email,
           projectName: project.name,
@@ -180,11 +190,11 @@ export class InvitationService {
           inviteToken: token,
           accessLevel: input.accessLevel,
         });
-        console.log(`✅ Email sent to ${input.email} via Resend`);
+        console.log(`✅ Email sent to ${input.email} via Gmail SMTP`);
         emailSent = true;
       } else {
         // Development mode - just log
-        console.log('⚠️  RESEND_API_KEY not found - email not sent');
+        console.log('⚠️  Gmail SMTP not configured - email not sent');
         await sendInvitationEmailFallback({
           to: input.email,
           projectName: project.name,

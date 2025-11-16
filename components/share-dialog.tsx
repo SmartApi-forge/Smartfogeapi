@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -44,6 +44,9 @@ export function ShareDialog({
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
   const [showMigrationError, setShowMigrationError] = useState(false);
+  const [previousAccessLevel, setPreviousAccessLevel] = useState<string | null>(null);
+  const visibilityToastId = useRef<string | number | null>(null);
+  const [selectOpen, setSelectOpen] = useState(false);
 
   // Fetch existing invitations
   const { data: invitations = [] } = api.invitations.getProjectInvitations.useQuery(
@@ -173,7 +176,7 @@ export function ShareDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-[500px] bg-white dark:bg-[#1D1D1D] border-border dark:border-[#333433]">
+      <DialogContent className="sm:max-w-[450px] bg-white dark:bg-[#1D1D1D] border-border dark:border-[#333433]">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">Share</DialogTitle>
           <p className="text-sm text-muted-foreground mt-1">
@@ -181,7 +184,7 @@ export function ShareDialog({
           </p>
         </DialogHeader>
 
-        <div className="space-y-6 mt-4">
+        <div className="space-y-4 mt-3">
           {/* Migration Error Alert */}
           {showMigrationError && (
             <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
@@ -239,7 +242,7 @@ export function ShareDialog({
           )}
 
           {/* Project Access Section */}
-          <div className="space-y-3 border-t border-border dark:border-[#333433] pt-6">
+          <div className="space-y-3 border-t border-border dark:border-[#333433] pt-4">
             <h3 className="text-sm font-medium">Project access</h3>
             
             <div className="flex items-center justify-between py-2">
@@ -252,7 +255,48 @@ export function ShareDialog({
                   </span>
                 </div>
               </div>
-              <Select value={accessLevel} onValueChange={(value: any) => setAccessLevel(value)}>
+              <Select 
+                value={accessLevel} 
+                open={selectOpen}
+                onOpenChange={setSelectOpen}
+                onValueChange={(value: any) => {
+                // Close dropdown immediately
+                setSelectOpen(false);
+                
+                setPreviousAccessLevel(accessLevel);
+                setAccessLevel(value);
+                
+                // Dismiss previous visibility toast if exists
+                if (visibilityToastId.current !== null) {
+                  toast.dismiss(visibilityToastId.current);
+                }
+                
+                // Show visibility notification
+                const visibilityMessages = {
+                  public: "Your project is now public. Anyone with the invite link can access it.",
+                  workspace: "Your project is now workspace-only. Only users in the same workspace can access it.",
+                  personal: "Your project is now personal. Only you can access this project.",
+                  business: "Your project is now business-only. Only users in your organization can access it."
+                };
+                
+                // Store the toast ID so we can dismiss it later
+                visibilityToastId.current = toast.success("Visibility updated", {
+                  description: visibilityMessages[value as keyof typeof visibilityMessages],
+                  duration: 4000,
+                });
+                
+                // Persist visibility to database
+                api.projects.updateVisibility.mutate(
+                  { projectId, visibility: value },
+                  {
+                    onError: (error) => {
+                      console.error('Failed to update visibility:', error);
+                      setAccessLevel(previousAccessLevel || 'public');
+                      toast.error('Failed to update visibility');
+                    }
+                  }
+                );
+              }}>
                 <SelectTrigger className="w-[140px] bg-background dark:bg-[#0E100F]">
                   <SelectValue />
                 </SelectTrigger>
@@ -349,7 +393,7 @@ export function ShareDialog({
           </div>
 
           {/* Upgrade Section */}
-          <div className="border-t border-border dark:border-[#333433] pt-6">
+          <div className="border-t border-border dark:border-[#333433] pt-4">
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="text-sm font-medium">Upgrade to Pro</h3>

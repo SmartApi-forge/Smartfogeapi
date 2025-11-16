@@ -1,7 +1,15 @@
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 
-// Initialize Resend only if API key is available
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+// Initialize Gmail SMTP transporter
+const transporter = process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD
+  ? nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_APP_PASSWORD,
+      },
+    })
+  : null;
 
 interface SendInvitationEmailParams {
   to: string;
@@ -20,16 +28,12 @@ export async function sendInvitationEmail({
 }: SendInvitationEmailParams) {
   const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/invite/${inviteToken}`;
 
-  if (!resend) {
-    throw new Error('Resend is not initialized. Please set RESEND_API_KEY environment variable.');
+  if (!transporter) {
+    throw new Error('Gmail SMTP is not configured. Please set GMAIL_USER and GMAIL_APP_PASSWORD environment variables.');
   }
 
   try {
-    const { data, error } = await resend.emails.send({
-      from: 'SmartAPIForge <onboarding@resend.dev>', // Change to your verified domain in production
-      to: [to],
-      subject: `You've been invited to collaborate on ${projectName}`,
-      html: `
+    const htmlContent = `
         <!DOCTYPE html>
         <html>
           <head>
@@ -83,15 +87,17 @@ export async function sendInvitationEmail({
             </div>
           </body>
         </html>
-      `,
+      `;
+
+    const info = await transporter.sendMail({
+      from: `"SmartAPIForge" <${process.env.GMAIL_USER}>`,
+      to: to,
+      subject: `You've been invited to collaborate on ${projectName}`,
+      html: htmlContent,
     });
 
-    if (error) {
-      console.error('Failed to send email:', error);
-      throw new Error(`Failed to send email: ${error.message}`);
-    }
-
-    return { success: true, messageId: data?.id };
+    console.log('Email sent successfully:', info.messageId);
+    return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error('Email service error:', error);
     throw error;

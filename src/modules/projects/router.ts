@@ -104,4 +104,28 @@ export const projectsRouter = createTRPCRouter({
         })
       }
     }),
+
+  /**
+   * Update project visibility
+   */
+  updateVisibility: protectedProcedure
+    .input(z.object({
+      projectId: z.string(),
+      visibility: z.enum(['public', 'workspace', 'personal', 'business']),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        return await ProjectService.updateVisibility(input.projectId, ctx.user.id, input.visibility)
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error
+        }
+        
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update project visibility',
+          cause: error
+        })
+      }
+    }),
 })

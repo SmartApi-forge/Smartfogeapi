@@ -247,4 +247,65 @@ export class ProjectService {
       })
     }
   }
+
+  /**
+   * Update project visibility
+   */
+  static async updateVisibility(
+    projectId: string,
+    userId: string,
+    visibility: 'public' | 'workspace' | 'personal' | 'business'
+  ): Promise<{ success: boolean; visibility: string }> {
+    try {
+      // Verify project ownership
+      const { data: project, error: projectError } = await supabase
+        .from('projects')
+        .select('id, user_id')
+        .eq('id', projectId)
+        .single()
+
+      if (projectError || !project) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Project not found'
+        })
+      }
+
+      if (project.user_id !== userId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the project owner can change visibility'
+        })
+      }
+
+      // Update visibility
+      const { error: updateError } = await supabase
+        .from('projects')
+        .update({
+          visibility,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', projectId)
+
+      if (updateError) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update project visibility'
+        })
+      }
+
+      return { success: true, visibility }
+    } catch (error) {
+      console.error('Error updating project visibility:', error)
+      
+      if (error instanceof TRPCError) {
+        throw error
+      }
+      
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to update project visibility'
+      })
+    }
+  }
 }

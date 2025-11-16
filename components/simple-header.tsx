@@ -7,6 +7,7 @@ import { Settings5Line } from "./settings-5-line"
 import { GitHubSetupDialog } from "@/components/github-setup-dialog"
 import { GitHubBranchSelectorV0 } from "@/components/github-branch-selector-v0"
 import { ShareDialog } from "@/components/share-dialog"
+import { PublishDialog } from "@/components/publish-dialog"
 import { useTheme } from "next-themes"
 import { useState, useEffect } from "react"
 import { createBrowserClient } from "@/lib/supabase/client"
@@ -142,13 +143,20 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
           )}
           
           {/* Publish button - Theme-aware with icon */}
-          <button 
-            aria-label="Publish project"
-            className={`transition-all duration-300 h-8 px-3 rounded-md flex items-center justify-center gap-1.5 ${isDark ? 'bg-white hover:bg-gray-200 text-black' : 'bg-black hover:bg-gray-900 text-white'}`}
-          >
-            <Globe className="h-[16px] w-[16px]" />
-            <span className="text-xs font-medium transition-colors duration-300">Publish</span>
-          </button>
+          {project?.id && (
+            <PublishDialog
+              projectId={project.id}
+              projectName={project.name}
+            >
+              <button 
+                aria-label="Publish project"
+                className={`transition-all duration-300 h-8 px-3 rounded-md flex items-center justify-center gap-1.5 ${isDark ? 'bg-white hover:bg-gray-200 text-black' : 'bg-black hover:bg-gray-900 text-white'}`}
+              >
+                <Globe className="h-[16px] w-[16px]" />
+                <span className="text-xs font-medium transition-colors duration-300">Publish</span>
+              </button>
+            </PublishDialog>
+          )}
         </div>
       </div>
       </header>
