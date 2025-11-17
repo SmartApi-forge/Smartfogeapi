@@ -1,13 +1,15 @@
 import { inngest } from "./client";
 import OpenAI from 'openai';
 import type { Sandbox } from '../lib/daytona-client';
-import { daytona, createWorkspace, getWorkspace, deleteWorkspace } from '../lib/daytona-client';
+import { daytona, createWorkspace, getWorkspace, deleteWorkspace, ensureSandboxRunning } from '../lib/daytona-client';
 import { Octokit } from '@octokit/rest';
 import { createClient } from '@supabase/supabase-js';
 import { AgentState, AIResult } from './types';
 import { streamingService } from '../services/streaming-service';
 import { VersionManager } from '../services/version-manager';
 import { ContextBuilder } from '../services/context-builder';
+import { SmartContextBuilder } from '../services/smart-context-builder';
+import { EmbeddingService } from '../services/embedding-service';
 import { SANDBOX_DEFAULT_TIMEOUT_MS, getSandboxTimeout } from '../config/sandbox';
 
 // Import default resources configuration
@@ -1865,9 +1867,37 @@ export const iterateAPI = inngest.createFunction(
         return version.id;
       });
       
-      // Step 2: Build context from parent version + conversation
-      const context = await step.run("build-context", async () => {
-        return await ContextBuilder.buildContext(projectId, 20);
+      // Step 2: Check if this is a GitHub cloned project
+      const projectInfo = await step.run("check-project-type", async () => {
+        const { data: project } = await supabase
+          .from('projects')
+          .select('github_repo_id, repo_url, metadata')
+          .eq('id', projectId)
+          .single();
+        
+        const isGitHubProject = !!(project?.github_repo_id || project?.repo_url);
+        const repoFullName = (project?.metadata as any)?.repoFullName || 'Unknown';
+        
+        console.log(`📋 Project Type: ${isGitHubProject ? 'GitHub Cloned' : 'New Generated'}`);
+        if (isGitHubProject) {
+          console.log(`   Repo: ${repoFullName}`);
+        }
+        
+        return { isGitHubProject, repoFullName };
+      });
+      
+      // Step 3: Build smart context using semantic search
+      const context = await step.run("build-smart-context", async () => {
+        return await SmartContextBuilder.buildSmartContext(
+          projectId,
+          prompt,
+          {
+            messageLimit: 20,
+            maxFiles: 15,
+            includeTests: false,
+            isGitHubProject: projectInfo.isGitHubProject, // Pass this flag
+          }
+        );
       });
       
       // Step 3: Generate code with context
@@ -1880,8 +1910,21 @@ export const iterateAPI = inngest.createFunction(
           versionId,
         });
         
-        // Build enhanced prompt with context
-        const enhancedPrompt = ContextBuilder.formatForPrompt(context, prompt);
+        // Build enhanced prompt with smart context
+        const enhancedPrompt = SmartContextBuilder.formatForPrompt(context, prompt);
+        
+        // Extract list of relevant files that should be considered for modification
+        const relevantFilePaths = Object.keys(context.relevantFiles || {});
+        const explicitFileInstructions = relevantFilePaths.length > 0
+          ? `\n\n🎯 TARGET FILES FOR MODIFICATION:\nThe following files are semantically relevant to the user's request. If the request involves modifying/editing code, you MUST modify these EXISTING files rather than creating new ones with different names or paths:\n${relevantFilePaths.map((p, i) => `${i + 1}. ${p}`).join('\n')}\n\nDO NOT create new files like "hero-section.tsx" or "HeroComponent.tsx" if "HeroSection.tsx" already exists above. MODIFY THE EXISTING FILE PATH EXACTLY AS SHOWN.`
+          : '';
+        
+        const isModifyCommand = commandType === 'MODIFY_FILE' || commandType === 'REFACTOR_CODE';
+        
+        // GitHub projects get ULTRA strict modification-only instructions
+        const githubProjectWarning = projectInfo.isGitHubProject
+          ? `\n\n🚨 GITHUB PROJECT - ULTRA STRICT MODE 🚨\nThis is a CLONED GitHub project (${projectInfo.repoFullName}). You are ABSOLUTELY FORBIDDEN from creating new files unless the user EXPLICITLY says "create a new file called X".\n\nYou MUST ONLY modify existing files listed in the "Relevant Files" section. Any attempt to create new files will break the user's application.\n\nIF YOU CREATE A NEW FILE INSTEAD OF MODIFYING AN EXISTING ONE, YOU HAVE FAILED.`
+          : '';
         
         const completion = await openaiClient.chat.completions.create({
           model: "gpt-4o",
@@ -1889,26 +1932,37 @@ export const iterateAPI = inngest.createFunction(
           messages: [
             {
               role: "system",
-              content: `You are an expert code iteration assistant. You help users modify and improve existing codebases.
+              content: `You are an expert code iteration assistant. You help users modify and improve existing codebases.${githubProjectWarning}
 
 IMPORTANT INSTRUCTIONS:
-1. You are working on an EXISTING codebase. The user wants to ${commandType === 'CREATE_FILE' ? 'add new features' : commandType === 'MODIFY_FILE' ? 'modify existing files' : commandType === 'DELETE_FILE' ? 'remove features' : commandType === 'REFACTOR_CODE' ? 'refactor code' : 'enhance the API'}.
-2. PRESERVE ALL EXISTING FILES that are not being modified.
-3. Only output the files that are NEW or MODIFIED.
-4. Maintain the same coding style and patterns from the existing code.
-5. Ensure backward compatibility unless explicitly asked to break it.
+1. You are working on an EXISTING codebase. The user wants to ${commandType === 'CREATE_FILE' ? 'add new features' : commandType === 'MODIFY_FILE' ? 'modify existing files' : commandType === 'DELETE_FILE' ? 'remove features' : commandType === 'REFACTOR_CODE' ? 'refactor code' : 'make changes'}.
+2. ${isModifyCommand || projectInfo.isGitHubProject ? '⚠️ CRITICAL: When modifying/refactoring code, you MUST use the EXACT file paths from the "Relevant Files" section below. DO NOT create new files with similar names. MODIFY THE EXISTING FILES.' : 'For new features, create new files as needed.'}
+3. ${projectInfo.isGitHubProject ? '🚨 FOR GITHUB PROJECTS: You can ONLY add files to "modifiedFiles", NEVER to "newFiles". The "newFiles" object MUST be empty {} unless the user explicitly says "create a new file".' : 'ONLY output files that are NEW or MODIFIED. Do NOT output unchanged files.'}
+4. For MODIFIED files, output the COMPLETE file content with your changes applied.
+5. Use the EXACT file paths provided in the context. DO NOT change file names, casing, or directory structure.
+6. Maintain the same coding style and patterns from the existing code.
+7. Ensure backward compatibility unless explicitly asked to break it.
+8. DO NOT generate OpenAPI specs, API documentation, or unrelated files.${explicitFileInstructions}
 
 Current codebase context:
 ${context.summary}
 
 You MUST respond with valid JSON in this exact structure:
 {
-  "openApiSpec": { /* OpenAPI 3.0 spec */ },
-  "implementationCode": {
-    "filename.ext": "file content..."
+  "modifiedFiles": {
+    "path/to/file.ext": "complete file content with changes..."
   },
-  "requirements": ["List of changes made"],
-  "description": "Brief summary of changes"
+  "newFiles": {
+    "path/to/newfile.ext": "complete new file content..."
+  },
+  "deletedFiles": ["path/to/deleted/file.ext"],
+  "changes": [
+    {
+      "file": "path/to/file.ext",
+      "description": "What was changed and why"
+    }
+  ],
+  "description": "Brief summary of all changes"
 }`,
             },
             { role: "user", content: enhancedPrompt }
@@ -1960,28 +2014,168 @@ You MUST respond with valid JSON in this exact structure:
         try {
           // Handle potential markdown-wrapped JSON
           let jsonStr = rawOutput || '';
-          const markdownMatch = rawOutput?.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-          if (markdownMatch) {
-            jsonStr = markdownMatch[1];
+          
+          // Prefer an explicit ```json ... ``` code block if present
+          const jsonBlockMatch = rawOutput?.match(/```json\s*([\s\S]*?)\s*```/i);
+          if (jsonBlockMatch) {
+            jsonStr = jsonBlockMatch[1];
+          } else {
+            // Fallback: try to extract the first top-level JSON object
+            const firstBrace = jsonStr.indexOf('{');
+            const lastBrace = jsonStr.lastIndexOf('}');
+            if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+              jsonStr = jsonStr.slice(firstBrace, lastBrace + 1);
+            }
           }
           
+          jsonStr = jsonStr.trim();
           const parsed = JSON.parse(jsonStr);
           
           // Merge with parent version files
           const parentFiles = context.previousFiles || {};
-          const newFiles = parsed.implementationCode || {};
+          let modifiedFiles: Record<string, string> = parsed.modifiedFiles || {};
+          let newFiles: Record<string, string> = parsed.newFiles || {};
+          let deletedFiles: string[] = parsed.deletedFiles || [];
+
+          // If this is a modify/refactor command and the AI created new TS/TSX files,
+          // try to map them onto an existing relevant component instead of introducing
+          // entirely new components that are not referenced anywhere.
+          if ((commandType === 'MODIFY_FILE' || commandType === 'REFACTOR_CODE') && Object.keys(newFiles).length > 0) {
+            const relevantFilesMap: Record<string, any> = (context as any).relevantFiles || {};
+            const relevantPaths = Object.keys(relevantFilesMap);
+            const componentCandidates = relevantPaths.filter(p => p.endsWith('.tsx') || p.endsWith('.jsx') || p.endsWith('.ts') || p.endsWith('.js'));
+
+            if (componentCandidates.length === 1) {
+              const targetPath = componentCandidates[0];
+              const newEntries = { ...newFiles };
+
+              for (const [newPath, content] of Object.entries(newEntries)) {
+                const text = typeof content === 'string' ? content : JSON.stringify(content);
+                const looksLikeComponent = /React|export default function|function\s+\w+\s*\(/.test(text);
+
+                if (looksLikeComponent) {
+                  // Treat this "new" component as a modification of the existing target file
+                  modifiedFiles[targetPath] = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+                  delete newFiles[newPath];
+                  deletedFiles = [...deletedFiles, newPath];
+                }
+              }
+            }
+          }
+
+          // Reconcile "new" files that actually correspond to existing files
+          // e.g. AI creates components/landing/hero-section.tsx when
+          // components/landing/HeroSection.tsx already exists.
+          const reconciledModified: Record<string, string> = { ...modifiedFiles };
+          const reconciledNew: Record<string, string> = {};
+          const aliasDeletions: string[] = [];
+
+          const normalizePath = (p: string): string => {
+            const parts = p.split('/');
+            const file = parts.pop() || '';
+            const lastDot = file.lastIndexOf('.');
+            const name = lastDot === -1 ? file : file.slice(0, lastDot);
+            const ext = lastDot === -1 ? '' : file.slice(lastDot);
+            const normalizedName = name.toLowerCase().replace(/[-_]/g, '');
+            return [...parts, normalizedName + ext.toLowerCase()].join('/');
+          };
+
+          for (const [newPath, content] of Object.entries(newFiles)) {
+            // If AI put file in "newFiles" but it already exists with exact same path,
+            // it should be treated as a modification
+            if (parentFiles[newPath]) {
+              reconciledModified[newPath] = content as string;
+              continue;
+            }
+
+            // Check if this "new" file is actually an alias of an existing file
+            // (e.g., hero-section.tsx vs HeroSection.tsx)
+            const norm = normalizePath(newPath);
+            const candidate = Object.keys(parentFiles).find(
+              (p) => p !== newPath && normalizePath(p) === norm
+            );
+
+            if (candidate) {
+              // Treat as modification of the existing file path instead of a brand new file
+              reconciledModified[candidate] = content as string;
+              aliasDeletions.push(newPath);
+            } else {
+              // Truly new file that doesn't exist in parent
+              reconciledNew[newPath] = content as string;
+            }
+          }
+
+          modifiedFiles = reconciledModified;
+          newFiles = reconciledNew;
           
-          // Add OpenAPI spec to files if it exists
-          if (parsed.openApiSpec) {
-            newFiles['openapi.json'] = JSON.stringify(parsed.openApiSpec, null, 2);
+          // 🚨 GITHUB PROJECT SAFETY CHECK: Prevent creating new files unless explicitly requested
+          if (projectInfo.isGitHubProject && Object.keys(newFiles).length > 0) {
+            console.warn(`⚠️ GitHub project detected! AI attempted to create ${Object.keys(newFiles).length} new files:`);
+            console.warn(Object.keys(newFiles));
+            
+            // Check if user prompt explicitly mentions creating new files
+            const explicitCreate = /create\s+(?:a\s+)?new\s+file|add\s+(?:a\s+)?new\s+file|new\s+file\s+called/i.test(prompt);
+            
+            if (!explicitCreate) {
+              console.warn('⚠️ User did NOT explicitly request new files. Moving all to modifiedFiles for safety.');
+              
+              // Move all "new" files to modified files
+              for (const [path, content] of Object.entries(newFiles)) {
+                modifiedFiles[path] = content as string;
+              }
+              newFiles = {}; // Clear new files
+              
+              // Emit warning to user
+              await streamingService.emit(projectId, {
+                type: 'warning',
+                message: `Note: Modified existing files instead of creating new ones (GitHub project mode)`,
+                versionId,
+              });
+            } else {
+              console.log('✓ User explicitly requested new file creation. Allowing.');
+            }
           }
           
-          // Combine parent files with new/modified files
-          const combinedFiles = { ...parentFiles, ...newFiles };
+          // Combine all file changes
+          const allChanges = { ...modifiedFiles, ...newFiles };
+          
+          // 📊 Log final file categorization for debugging
+          console.log(`📋 Final file changes:`);
+          console.log(`   ✓ Modified files (${Object.keys(modifiedFiles).length}):`, Object.keys(modifiedFiles));
+          console.log(`   + New files (${Object.keys(newFiles).length}):`, Object.keys(newFiles));
+          console.log(`   - Deleted files (${deletedFiles.length}):`, deletedFiles);
+          
+          // Emit summary to user interface
+          if (projectInfo.isGitHubProject) {
+            const summary = [
+              `📋 GitHub Project - File Changes:`,
+              Object.keys(modifiedFiles).length > 0 ? `   ✓ Modified: ${Object.keys(modifiedFiles).join(', ')}` : null,
+              Object.keys(newFiles).length > 0 ? `   + New: ${Object.keys(newFiles).join(', ')}` : null,
+              deletedFiles.length > 0 ? `   - Deleted: ${deletedFiles.join(', ')}` : null,
+            ].filter(Boolean).join('\n');
+            
+            await streamingService.emit(projectId, {
+              type: 'info',
+              message: summary,
+              versionId,
+            });
+          }
+          
+          // Remove deleted files from parent (including aliases we collapsed)
+          const updatedParentFiles = { ...parentFiles };
+          for (const deletedFile of deletedFiles) {
+            delete updatedParentFiles[deletedFile];
+          }
+          for (const alias of aliasDeletions) {
+            delete updatedParentFiles[alias];
+          }
+          
+          // Combine with modified/new files
+          const combinedFiles = { ...updatedParentFiles, ...allChanges };
           
           // Stream individual files to frontend
-          if (Object.keys(newFiles).length > 0) {
-            for (const [filename, content] of Object.entries(newFiles)) {
+          if (Object.keys(allChanges).length > 0) {
+            for (const [filename, content] of Object.entries(allChanges)) {
               // Emit file generating event
               await streamingService.emit(projectId, {
                 type: 'file:generating',
@@ -2042,7 +2236,200 @@ You MUST respond with valid JSON in this exact structure:
         }
       });
       
-      // Step 4: Update version with generated files
+      // Step 4: Apply changes to sandbox and restart dev server
+      const sandboxUpdateResult = await step.run("apply-changes-to-sandbox", async () => {
+        try {
+          // Get project to find sandbox_id
+          const { data: project } = await supabase
+            .from('projects')
+            .select('metadata, sandbox_url')
+            .eq('id', projectId)
+            .single();
+          
+          const metadata = project?.metadata as any || {};
+          const sandboxId = metadata?.sandboxId;
+          
+          if (!sandboxId) {
+            console.warn('⚠️ No sandbox ID found in project metadata - skipping live update');
+            return {
+              success: false,
+              skipped: true,
+              reason: 'No sandbox ID in project metadata',
+            };
+          }
+          
+          // Derive repo path and server configuration from metadata with safe fallbacks
+          const repoPath = metadata.repoPath || 'workspace/repo';
+          const port = metadata.port || 3000;
+          const packageManager = metadata.packageManager || 'npm';
+          const startCommand = metadata.startCommand || (
+            packageManager === 'pnpm'
+              ? 'pnpm run dev'
+              : packageManager === 'yarn'
+                ? 'yarn dev'
+                : 'npm run dev'
+          );
+          
+          await streamingService.emit(projectId, {
+            type: 'step:start',
+            step: 'Applying Changes',
+            message: 'Applying changes to sandbox...',
+            versionId,
+          });
+          
+          // Get the sandbox and ensure it's running (restart if stopped)
+          const sandbox = await ensureSandboxRunning(sandboxId);
+          
+          if (!('state' in apiResult) || !apiResult.state?.data) {
+            throw new Error('Invalid API result structure');
+          }
+          
+          // Get the changes from the combined files
+          // We need to determine which files were modified vs new by comparing with parent
+          const parentFiles = context.previousFiles || {};
+          const currentFiles = apiResult.state.data.files || {};
+          
+          const modifiedFiles: Record<string, string> = {};
+          const newFiles: Record<string, string> = {};
+          
+          // Categorize files as modified or new (only when content actually changes)
+          for (const [filePath, content] of Object.entries(currentFiles)) {
+            const parentContent = parentFiles[filePath];
+            if (parentContent === undefined) {
+              // Truly new file
+              newFiles[filePath] = content as string;
+            } else if (parentContent !== content) {
+              // File existed before and content changed
+              modifiedFiles[filePath] = content as string;
+            }
+          }
+
+          console.log('Sandbox update - modified files:', Object.keys(modifiedFiles));
+          console.log('Sandbox update - new files:', Object.keys(newFiles));
+          
+          // Find deleted files (existed in parent but not in current)
+          const deletedFiles: string[] = [];
+          for (const filePath of Object.keys(parentFiles)) {
+            if (!currentFiles[filePath]) {
+              deletedFiles.push(filePath);
+            }
+          }
+          
+          let filesApplied = 0;
+          let filesDeleted = 0;
+          
+          // Apply modified files
+          for (const [filePath, content] of Object.entries(modifiedFiles)) {
+            const fullPath = `${repoPath}/${filePath}`;
+            await sandbox.fs.uploadFile(Buffer.from(content as string, 'utf-8'), fullPath);
+            filesApplied++;
+            console.log(`✓ Modified: ${filePath}`);
+          }
+          
+          // Apply new files
+          for (const [filePath, content] of Object.entries(newFiles)) {
+            const fullPath = `${repoPath}/${filePath}`;
+            await sandbox.fs.uploadFile(Buffer.from(content as string, 'utf-8'), fullPath);
+            filesApplied++;
+            console.log(`✓ Created: ${filePath}`);
+          }
+          
+          // Delete files
+          for (const filePath of deletedFiles) {
+            const fullPath = `${repoPath}/${filePath}`;
+            try {
+              await sandbox.process.executeCommand(`rm -f "${fullPath}"`);
+              filesDeleted++;
+              console.log(`✓ Deleted: ${filePath}`);
+            } catch (error) {
+              console.warn(`Could not delete ${filePath}:`, error);
+            }
+          }
+          
+          await streamingService.emit(projectId, {
+            type: 'step:complete',
+            step: 'Applying Changes',
+            message: `Applied ${filesApplied} files, deleted ${filesDeleted} files`,
+            versionId,
+          });
+          
+          // Restart dev server
+          await streamingService.emit(projectId, {
+            type: 'step:start',
+            step: 'Restarting Server',
+            message: 'Restarting development server...',
+            versionId,
+          });
+          
+          // Kill existing dev server process (best-effort)
+          await sandbox.process.executeCommand('pkill -f "npm.*start" || pkill -f "node" || true', repoPath);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // Restart dev server using the same start command and port as initial preview
+          const startCmd = `HOST=0.0.0.0 PORT=${port} ${startCommand} > server.log 2>&1 & echo $!`;
+          console.log('Restarting dev server with command:', startCmd, 'in', repoPath);
+          const startResult = await sandbox.process.executeCommand(
+            startCmd,
+            repoPath,
+            {},
+            10
+          );
+          
+          // Wait for server to start
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          
+          // Verify server is running
+          const healthCheck = await sandbox.process.executeCommand(
+            `curl -f -m 5 http://localhost:${port}/health 2>/dev/null || curl -f -m 5 http://localhost:${port}/ 2>/dev/null || echo "server_not_ready"`,
+            undefined,
+            {},
+            10
+          );
+          
+          const serverReady = !healthCheck.result?.includes('server_not_ready');
+          if (!serverReady) {
+            // Log last lines from server.log to help debug 502s
+            try {
+              const logs = await sandbox.process.executeCommand('tail -80 server.log 2>/dev/null || echo "no_server_log"', repoPath);
+              console.log('Dev server logs after restart:', logs.result);
+            } catch (logError) {
+              console.log('Failed to read server.log after restart:', logError);
+            }
+          }
+          
+          await streamingService.emit(projectId, {
+            type: 'step:complete',
+            step: 'Restarting Server',
+            message: serverReady ? 'Server restarted successfully!' : 'Server restarted (may need a moment to fully load)',
+            versionId,
+          });
+          
+          return {
+            success: true,
+            filesApplied,
+            filesDeleted,
+            serverRestarted: true,
+            serverReady,
+          };
+        } catch (error) {
+          console.error('Failed to apply changes to sandbox:', error);
+          
+          await streamingService.emit(projectId, {
+            type: 'step:complete',
+            step: 'Applying Changes',
+            message: `Changes applied to version but sandbox update failed: ${(error as Error).message}`,
+            versionId,
+          });
+          
+          return {
+            success: false,
+            error: (error as Error).message,
+            skipped: false,
+          };
+        }
+      });
+      
+      // Step 5: Update version with generated files
       await step.run("update-version", async () => {
         if (!('state' in apiResult) || !apiResult.state?.data) {
           throw new Error('Invalid API result structure');
@@ -2058,7 +2445,7 @@ You MUST respond with valid JSON in this exact structure:
         });
       });
       
-      // Step 5: Update message with version_id
+      // Step 6: Update message with version_id
       await step.run("link-message-to-version", async () => {
         await supabase
           .from('messages')
@@ -2066,7 +2453,7 @@ You MUST respond with valid JSON in this exact structure:
           .eq('id', messageId);
       });
       
-      // Step 6: Emit completion event
+      // Step 7: Emit completion event
       await step.run("emit-complete", async () => {
         if (!('state' in apiResult) || !apiResult.state?.data) {
           throw new Error('Invalid API result structure');
@@ -2183,9 +2570,12 @@ export const cloneAndPreviewRepository = inngest.createFunction(
           const { githubRepositoryService } = await import('../services/github-repository-service');
           
           // Create Daytona workspace for repository cloning and preview
+          // Set auto-stop to 30 minutes to save costs
+          // Keep-alive hook only pings when user is viewing the project
           sandbox = await createWorkspace({
             resources: DEFAULT_RESOURCES,
             public: true, // Public preview URLs needed
+            autoStopInterval: 30, // 30 minutes before auto-stop (cost-effective)
           });
           
           // Store sandbox ID for later cleanup if needed
@@ -2382,6 +2772,63 @@ export const cloneAndPreviewRepository = inngest.createFunction(
           });
           
           return filesMap;
+      });
+      
+      // Step 4.5: Generate embeddings for files (background task)
+      await step.run("generate-embeddings", async () => {
+        try {
+          await streamingService.emit(projectId, {
+            type: 'step:start',
+            step: 'Generating Embeddings',
+            message: 'Generating embeddings for semantic search...',
+          });
+          
+          const filesForEmbedding = Object.entries(repoFiles).map(([path, content]) => ({
+            projectId,
+            versionId: undefined, // No version yet since this is initial clone
+            filePath: path,
+            content: typeof content === 'string' ? content : JSON.stringify(content),
+            language: detectLanguage(path),
+            imports: extractImports(content),
+            exports: extractExports(content),
+          }));
+          
+          console.log(`🔄 Starting embedding generation for ${filesForEmbedding.length} files`);
+          
+          const embeddingResults = await EmbeddingService.embedFiles(
+            filesForEmbedding,
+            {
+              onProgress: (completed, total, filePath) => {
+                const progress = Math.round((completed / total) * 100);
+                // Emit progress updates every 10%
+                if (completed % Math.ceil(total / 10) === 0 || completed === total) {
+                  streamingService.emit(projectId, {
+                    type: 'step:progress',
+                    step: 'Generating Embeddings',
+                    message: `Embedded ${completed}/${total} files (${progress}%)...`,
+                    progress,
+                  }).catch(err => console.error('Failed to emit progress:', err));
+                }
+              },
+            }
+          );
+          
+          console.log(`✓ Successfully generated ${embeddingResults.length} embeddings`);
+          
+          await streamingService.emit(projectId, {
+            type: 'step:complete',
+            step: 'Generating Embeddings',
+            message: `Generated embeddings for ${embeddingResults.length} files`,
+          });
+        } catch (error) {
+          console.error('Failed to generate embeddings:', error);
+          // Don't fail the whole workflow if embeddings fail
+          await streamingService.emit(projectId, {
+            type: 'step:complete',
+            step: 'Generating Embeddings',
+            message: 'Embeddings generation skipped (will use fallback)',
+          });
+        }
       });
       
       // Step 5: Install dependencies (separate step with proper timeout)
@@ -2807,6 +3254,86 @@ const savedResult = await step.run("save-repository-files", async () => {
     }
   }
 );
+
+// Helper functions for embedding generation
+function detectLanguage(filePath: string): string {
+  const ext = filePath.split('.').pop()?.toLowerCase();
+  const langMap: Record<string, string> = {
+    ts: 'typescript',
+    tsx: 'typescript',
+    js: 'javascript',
+    jsx: 'javascript',
+    py: 'python',
+    go: 'go',
+    rs: 'rust',
+    java: 'java',
+    cpp: 'cpp',
+    c: 'c',
+    rb: 'ruby',
+    php: 'php',
+    swift: 'swift',
+    kt: 'kotlin',
+    cs: 'csharp',
+  };
+  return langMap[ext || ''] || 'unknown';
+}
+
+function extractImports(content: string | any): string[] {
+  if (typeof content !== 'string') return [];
+  
+  const imports: string[] = [];
+  
+  try {
+    // Match ES6 imports
+    const es6Pattern = /import\s+.*?\s+from\s+['"](.+?)['"]/g;
+    let match;
+    while ((match = es6Pattern.exec(content)) !== null) {
+      imports.push(match[1]);
+    }
+    
+    // Match require()
+    const requirePattern = /require\(['"](.+?)['"]\)/g;
+    while ((match = requirePattern.exec(content)) !== null) {
+      imports.push(match[1]);
+    }
+    
+    // Match Python imports
+    const pythonPattern = /(?:from\s+(\S+)\s+)?import\s+(.+)/g;
+    while ((match = pythonPattern.exec(content)) !== null) {
+      if (match[1]) imports.push(match[1]);
+    }
+  } catch (error) {
+    console.error('Error extracting imports:', error);
+  }
+  
+  return [...new Set(imports)];
+}
+
+function extractExports(content: string | any): string[] {
+  if (typeof content !== 'string') return [];
+  
+  const exports: string[] = [];
+  
+  try {
+    // Match ES6 exports
+    const exportPattern = /export\s+(?:default\s+)?(?:const|let|var|function|class)\s+(\w+)/g;
+    let match;
+    while ((match = exportPattern.exec(content)) !== null) {
+      exports.push(match[1]);
+    }
+    
+    // Match export { name }
+    const namedExportPattern = /export\s+{([^}]+)}/g;
+    while ((match = namedExportPattern.exec(content)) !== null) {
+      const names = match[1].split(',').map(n => n.trim().split(' ')[0]);
+      exports.push(...names);
+    }
+  } catch (error) {
+    console.error('Error extracting exports:', error);
+  }
+  
+  return [...new Set(exports)];
+}
 
 export const deployAPI = inngest.createFunction(
   { id: "deploy-api" },

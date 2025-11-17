@@ -65,6 +65,7 @@ export interface SandboxConfig {
   image?: string;
   public?: boolean;
   envVars?: Record<string, string>;
+  autoStopInterval?: number; // Minutes until auto-stop (0 = disabled, default = 15)
 }
 
 /**
@@ -88,9 +89,14 @@ export async function createWorkspace(config: SandboxConfig = {}): Promise<Sandb
     
     // Environment variables for the sandbox
     envVars: config.envVars || {},
+    
+    // Auto-stop interval: 30 minutes by default for cost efficiency
+    // Only keeps running when user is actively viewing the project
+    // Set to 0 to disable auto-stop (not recommended - costly!)
+    autoStopInterval: config.autoStopInterval !== undefined ? config.autoStopInterval : 30,
   });
 
-  console.log(`✅ Created Daytona workspace: ${sandbox.id} with ${config.resources?.cpu || DEFAULT_RESOURCES.cpu} vCPU, ${config.resources?.memory || DEFAULT_RESOURCES.memory}GB RAM`);
+  console.log(`✅ Created Daytona workspace: ${sandbox.id} with ${config.resources?.cpu || DEFAULT_RESOURCES.cpu} vCPU, ${config.resources?.memory || DEFAULT_RESOURCES.memory}GB RAM, auto-stop: ${config.autoStopInterval !== undefined ? config.autoStopInterval : 30}min`);
   return sandbox;
 }
 
@@ -139,10 +145,9 @@ export async function getWorkspace(sandboxId: string): Promise<Sandbox> {
  * @param sandboxId Sandbox ID or Sandbox instance
  */
 export async function deleteWorkspace(sandboxId: string | Sandbox): Promise<void> {
-  const daytona = getDaytonaClient();
-
+  // Use shared getWorkspace helper to avoid relying on specific SDK methods
   if (typeof sandboxId === 'string') {
-    const sandbox = await daytona.getSandbox(sandboxId);
+    const sandbox = await getWorkspace(sandboxId);
     await sandbox.delete();
   } else {
     await sandboxId.delete();
@@ -155,10 +160,8 @@ export async function deleteWorkspace(sandboxId: string | Sandbox): Promise<void
  * @param sandboxId Sandbox ID or Sandbox instance
  */
 export async function stopWorkspace(sandboxId: string | Sandbox): Promise<void> {
-  const daytona = getDaytonaClient();
-
   if (typeof sandboxId === 'string') {
-    const sandbox = await daytona.getSandbox(sandboxId);
+    const sandbox = await getWorkspace(sandboxId);
     await sandbox.stop();
   } else {
     await sandboxId.stop();
@@ -171,12 +174,59 @@ export async function stopWorkspace(sandboxId: string | Sandbox): Promise<void> 
  * @param sandboxId Sandbox ID
  */
 export async function startWorkspace(sandboxId: string): Promise<Sandbox> {
-  const daytona = getDaytonaClient();
-
-  const sandbox = await daytona.getSandbox(sandboxId);
+  const sandbox = await getWorkspace(sandboxId);
   await sandbox.start();
   console.log(`▶️ Started Daytona workspace: ${sandboxId}`);
   return sandbox;
+}
+
+/**
+ * Check if a sandbox is running and start it if stopped
+ * @param sandboxId Sandbox ID
+ * @returns Sandbox instance (started if it was stopped)
+ */
+export async function ensureSandboxRunning(sandboxId: string): Promise<Sandbox> {
+  try {
+    const sandbox = await getWorkspace(sandboxId);
+    
+    // Check if sandbox is stopped and restart if needed
+    // Note: Sandbox status might be available via sandbox.status or similar
+    // If SDK doesn't provide status, we can try to make an API call and catch errors
+    try {
+      // Try to ping the sandbox by listing files (lightweight operation)
+      await sandbox.fs.listDir('/');
+      console.log(`✅ Sandbox ${sandboxId} is running`);
+      return sandbox;
+    } catch (error) {
+      // If ping fails, try to start the sandbox
+      console.log(`⏸️ Sandbox ${sandboxId} appears stopped, attempting to start...`);
+      await sandbox.start();
+      console.log(`▶️ Successfully restarted sandbox ${sandboxId}`);
+      return sandbox;
+    }
+  } catch (error) {
+    console.error(`Failed to ensure sandbox ${sandboxId} is running:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Keep a sandbox alive by making periodic API calls
+ * This resets the auto-stop timer
+ * @param sandboxId Sandbox ID
+ */
+export async function keepSandboxAlive(sandboxId: string): Promise<void> {
+  try {
+    const sandbox = await getWorkspace(sandboxId);
+    
+    // Make a lightweight API call to reset the auto-stop timer
+    // Just listing the root directory is enough
+    await sandbox.fs.listDir('/');
+    console.log(`💓 Keep-alive ping sent to sandbox ${sandboxId}`);
+  } catch (error) {
+    console.error(`Failed to keep sandbox ${sandboxId} alive:`, error);
+    // Don't throw - keep-alive is not critical
+  }
 }
 
 /**

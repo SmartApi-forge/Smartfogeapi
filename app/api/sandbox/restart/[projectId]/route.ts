@@ -151,6 +151,7 @@ export async function POST(
             port: config.port,
             packageManager: config.packageManager,
             startCommand: config.startCommand,
+            repoPath, // Persist repository path for future sandbox updates
             lastRestarted: new Date().toISOString(),
             lastSuccessfulRestore: new Date().toISOString(),
           },

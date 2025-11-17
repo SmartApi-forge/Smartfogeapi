@@ -1383,6 +1383,58 @@ export function ProjectPageClient({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [allMessages]);
 
+  /**
+   * Handle file click from version cards or activity feed
+   * Switches to code view, finds file in tree, expands parents, and selects it
+   */
+  const handleFileClick = (filename: string) => {
+    console.log('📁 File clicked:', filename);
+    
+    // 1. Switch to code view
+    setViewMode('code');
+    if (isMobileScreen) {
+      setMobileView('code');
+    }
+    
+    // 2. Find the file in the tree
+    const findFileInTree = (nodes: TreeNode[], targetPath: string): TreeNode | null => {
+      for (const node of nodes) {
+        // Match by full path (node.id) or by filename
+        if (node.type === 'file' && (node.id === targetPath || node.name === targetPath || node.id.endsWith(targetPath))) {
+          return node;
+        }
+        if (node.children) {
+          const found = findFileInTree(node.children, targetPath);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    
+    const fileNode = findFileInTree(fileTree, filename);
+    
+    if (fileNode) {
+      console.log('✅ Found file in tree:', fileNode.id);
+      
+      // 3. Expand all parent folders
+      const pathParts = fileNode.id.split('/');
+      const newExpanded = new Set(expanded);
+      for (let i = 0; i < pathParts.length - 1; i++) {
+        const folderPath = pathParts.slice(0, i + 1).join('/');
+        newExpanded.add(`folder-${folderPath}`);
+      }
+      setExpanded(newExpanded);
+      
+      // 4. Select the file
+      setSelected(fileNode.id);
+      
+      console.log('✅ Navigated to file successfully');
+    } else {
+      console.warn('❌ File not found in tree:', filename);
+      console.log('Available files:', fileTree.map(n => ({ id: n.id, name: n.name, type: n.type })));
+    }
+  };
+
   const toggle = (id: string) => {
     setExpanded((prev) => {
       const newSet = new Set(prev);
@@ -1834,6 +1886,7 @@ export function ProjectPageClient({
                           previousVersion={
                             versions.find(v => v.id === message.versionData.parent_version_id)
                           }
+                          onFileClick={handleFileClick}
                         />
                         {message.versionData.description && (
                           <div className="flex gap-2 sm:gap-3 items-start pr-2 sm:pr-4">

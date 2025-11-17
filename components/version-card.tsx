@@ -11,6 +11,7 @@ interface VersionCardProps {
   isActive: boolean;
   onClick: () => void;
   previousVersion?: Version;
+  onFileClick?: (filename: string) => void;
 }
 
 /**
@@ -18,7 +19,7 @@ interface VersionCardProps {
  * Displays a single version with collapsible file list
  * Shows version number, name, and file changes
  */
-export function VersionCard({ version, isActive, onClick, previousVersion }: VersionCardProps) {
+export function VersionCard({ version, isActive, onClick, previousVersion, onFileClick }: VersionCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const files = Object.keys(version.files || {});
@@ -115,14 +116,22 @@ export function VersionCard({ version, isActive, onClick, previousVersion }: Ver
                 return (
                   <div
                     key={filename}
-                    className="flex items-center gap-2 py-1 hover:bg-muted/50 rounded px-2 -mx-2 transition-colors"
+                    className="flex items-center gap-2 py-1 rounded px-2 -mx-2"
                   >
                     <FileTypeIcon 
                       filename={filename} 
                       size={16}
                     />
                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <span className="text-sm text-foreground truncate">{name}</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onFileClick?.(filename);
+                        }}
+                        className="text-sm text-foreground truncate hover:underline cursor-pointer text-left"
+                      >
+                        {name}
+                      </button>
                       <span className="text-xs text-muted-foreground truncate">{fullPath}</span>
                     </div>
                   </div>

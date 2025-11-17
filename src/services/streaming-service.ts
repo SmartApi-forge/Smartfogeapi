@@ -108,11 +108,11 @@ class StreamingService {
       // Save progress events for persistence
       const relevantEvents: Record<string, { icon: string; messageFormatter: (event: any) => string }> = {
         'project:created': {
-          icon: 'in-progress',
+          icon: 'processing',
           messageFormatter: (e) => 'Project created'
         },
         'step:start': {
-          icon: 'in-progress',
+          icon: 'processing',
           messageFormatter: (e) => e.message || e.step
         },
         'step:complete': {
@@ -124,7 +124,7 @@ class StreamingService {
           messageFormatter: (e) => `✓ Created ${e.filename}`
         },
         'validation:start': {
-          icon: 'in-progress',
+          icon: 'processing',
           messageFormatter: (e) => e.stage || 'Validating...'
         },
         'validation:complete': { 
