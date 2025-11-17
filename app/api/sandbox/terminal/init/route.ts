@@ -14,6 +14,16 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createRouteHandlerClient();
 
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
     // Verify user has access to this project
     const { data: project, error: projectError } = await supabase
       .from('projects')
@@ -26,6 +36,26 @@ export async function POST(request: NextRequest) {
         { error: 'Project not found' },
         { status: 404 }
       );
+    }
+
+    // Check if user is owner OR collaborator
+    const isOwner = project.user_id === user.id;
+    
+    if (!isOwner) {
+      // Check if user is a collaborator
+      const { data: collaborator, error: collabError } = await supabase
+        .from('project_collaborators')
+        .select('id')
+        .eq('project_id', projectId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (collabError || !collaborator) {
+        return NextResponse.json(
+          { error: 'You do not have access to this project' },
+          { status: 403 }
+        );
+      }
     }
 
     // Verify sandbox ID matches project metadata

@@ -1,6 +1,7 @@
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { appRouter } from '@/src/trpc/routers/_app';
 import { createTRPCContext } from '@/lib/trpc';
+import type { FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';
 
 async function handler(req: Request) {
   return fetchRequestHandler({

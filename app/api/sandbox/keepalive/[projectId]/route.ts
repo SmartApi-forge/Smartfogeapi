@@ -16,15 +16,42 @@ export async function POST(
     // Create Supabase client with user's session
     const supabase = await createRouteHandlerClient();
 
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     // Get project with sandbox info from metadata
     const { data: project, error } = await supabase
       .from('projects')
-      .select('metadata, sandbox_url')
+      .select('metadata, sandbox_url, user_id')
       .eq('id', projectId)
       .single();
 
     if (error || !project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
+
+    // Check if user is owner OR collaborator
+    const isOwner = project.user_id === user.id;
+    
+    if (!isOwner) {
+      // Check if user is a collaborator
+      const { data: collaborator, error: collabError } = await supabase
+        .from('project_collaborators')
+        .select('id')
+        .eq('project_id', projectId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (collabError || !collaborator) {
+        return NextResponse.json(
+          { error: 'You do not have access to this project' },
+          { status: 403 }
+        );
+      }
     }
 
     const metadata = project.metadata as any;

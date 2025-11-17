@@ -268,6 +268,26 @@ export class InvitationService {
   static async getInvitationByToken(input: GetInvitationByTokenInput) {
     console.log('[InvitationService] Looking up invitation by token:', input.token);
     
+    // First, check if ANY invitation exists with this token (regardless of status)
+    const { data: anyInvitation } = await supabase
+      .from('project_invitations')
+      .select('id, status, expires_at')
+      .eq('token', input.token)
+      .maybeSingle();
+    
+    if (anyInvitation) {
+      console.log('[InvitationService] Found invitation with status:', anyInvitation.status);
+      if (anyInvitation.status !== 'pending') {
+        console.log('[InvitationService] Invitation is not pending, status is:', anyInvitation.status);
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `This invitation has already been ${anyInvitation.status}`,
+        });
+      }
+    } else {
+      console.log('[InvitationService] No invitation found in database for this token');
+    }
+    
     const { data: invitation, error } = await supabase
       .from('project_invitations')
       .select(`
@@ -276,14 +296,24 @@ export class InvitationService {
           id,
           name,
           description
-        ),
-        profiles:created_by (
-          full_name
         )
       `)
       .eq('token', input.token)
       .eq('status', 'pending')
       .maybeSingle();
+    
+    // Fetch creator profile separately if invitation exists
+    if (invitation && invitation.created_by) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', invitation.created_by)
+        .single();
+      
+      if (profile) {
+        invitation.profiles = profile;
+      }
+    }
 
     if (error) {
       console.error('[InvitationService] Database error:', error);
@@ -295,10 +325,10 @@ export class InvitationService {
     }
     
     if (!invitation) {
-      console.log('[InvitationService] No invitation found for token');
+      console.log('[InvitationService] No pending invitation found for token');
       throw new TRPCError({
         code: 'NOT_FOUND',
-        message: 'Invitation not found or has expired',
+        message: 'Invitation not found or has already been used',
       });
     }
     
@@ -460,47 +490,57 @@ export class InvitationService {
       }
     }
 
-    // Get all collaborators with their profile info
-    const { data: collaborators, error } = await supabase
+    // Get all collaborators
+    const { data: collaborators, error: collabError } = await supabase
       .from('project_collaborators')
-      .select(`
-        *,
-        profiles:user_id (
-          id,
-          full_name,
-          avatar_url
-        )
-      `)
+      .select('*')
       .eq('project_id', input.projectId)
       .order('created_at', { ascending: true });
 
-    if (error) {
+    if (collabError) {
+      console.error('[InvitationService] Error fetching collaborators:', collabError);
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to fetch collaborators',
-        cause: error,
+        cause: collabError,
       });
+    }
+
+    // Fetch profiles for all collaborators
+    const collabsWithProfiles = [];
+    if (collaborators && collaborators.length > 0) {
+      for (const collab of collaborators) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id, full_name, avatar_url')
+          .eq('id', collab.user_id)
+          .single();
+        
+        if (profile) {
+          collabsWithProfiles.push({
+            ...collab,
+            profiles: profile,
+          });
+        }
+      }
     }
 
     // Get project owner info
     const { data: ownerProfile } = await supabase
       .from('profiles')
-      .select('id, full_name, avatar_url')
+      .select('id, full_name, email, avatar_url')
       .eq('id', project.user_id)
       .single();
-
-    // Get owner's email from auth
-    const { data: ownerAuth } = await supabase.auth.admin.getUserById(project.user_id);
 
     return {
       owner: {
         id: project.user_id,
         full_name: ownerProfile?.full_name || 'Owner',
-        email: ownerAuth?.user?.email || '',
+        email: ownerProfile?.email || '',
         avatar_url: ownerProfile?.avatar_url,
         role: 'owner' as const,
       },
-      collaborators: collaborators || [],
+      collaborators: collabsWithProfiles,
     };
   }
 

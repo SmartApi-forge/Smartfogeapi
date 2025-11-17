@@ -47,8 +47,23 @@ export default function InvitePage() {
     error,
   } = api.invitations.getInvitationByToken.useQuery(
     { token },
-    { enabled: !!token && !isCheckingAuth }
+    { 
+      enabled: !!token && !isCheckingAuth,
+      retry: 1,
+      onError: (err) => {
+        console.error('[InvitePage] Query error:', err);
+        console.error('[InvitePage] Error details:', JSON.stringify(err, null, 2));
+      },
+      onSuccess: (data) => {
+        console.log('[InvitePage] Successfully fetched invitation:', data?.id);
+      }
+    }
   );
+
+  // Log state changes
+  useEffect(() => {
+    console.log('[InvitePage] State:', { token, isCheckingAuth, isLoading, hasError: !!error, hasInvitation: !!invitation });
+  }, [token, isCheckingAuth, isLoading, error, invitation]);
 
   // Mutations
   const acceptMutation = api.invitations.acceptInvitation.useMutation({
@@ -108,9 +123,14 @@ export default function InvitePage() {
                 <span className="text-3xl">❌</span>
               </div>
               <h2 className="text-2xl font-semibold mb-2">Invalid Invitation</h2>
-              <p className="text-muted-foreground text-center mb-6">
+              <p className="text-muted-foreground text-center mb-6 px-4">
                 {error.message || "This invitation link is invalid or has expired."}
               </p>
+              {process.env.NODE_ENV === 'development' && (
+                <p className="text-xs text-muted-foreground mb-4 px-4 text-center">
+                  Token: {token}
+                </p>
+              )}
               <Button onClick={handleDialogClose} variant="outline">
                 Go to Home
               </Button>

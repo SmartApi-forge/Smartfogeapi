@@ -99,7 +99,7 @@ export function useDaytonaTerminal({
         fetch(`/api/sandbox/terminal/cleanup`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId, sandboxId }),
+          body: JSON.stringify({ sessionId, sandboxId, projectId }),
         }).catch(console.error);
       }
     };
@@ -138,6 +138,7 @@ export function useDaytonaTerminal({
         body: JSON.stringify({
           sessionId,
           sandboxId,
+          projectId,
           command,
           workingDirectory,
         }),

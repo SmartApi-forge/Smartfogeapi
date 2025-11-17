@@ -78,13 +78,20 @@ export const invitationsRouter = createTRPCRouter({
    */
   getInvitationByToken: baseProcedure
     .input(GetInvitationByTokenSchema)
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      console.log('[invitationsRouter] getInvitationByToken called with token:', input.token);
+      console.log('[invitationsRouter] Context user:', ctx.user ? 'authenticated' : 'not authenticated');
       try {
-        return await InvitationService.getInvitationByToken(input);
+        const result = await InvitationService.getInvitationByToken(input);
+        console.log('[invitationsRouter] Successfully fetched invitation:', result.id);
+        return result;
       } catch (error) {
+        console.error('[invitationsRouter] Error fetching invitation:', error);
         if (error instanceof TRPCError) {
+          console.error('[invitationsRouter] TRPCError code:', error.code, 'message:', error.message);
           throw error;
         }
+        console.error('[invitationsRouter] Non-TRPC error:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch invitation',

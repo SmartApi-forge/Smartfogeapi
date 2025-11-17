@@ -1,13 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createRouteHandlerClient } from '@/lib/supabase-route-handler';
 
 export async function POST(request: NextRequest) {
   try {
-    const { sessionId, sandboxId } = await request.json();
+    const { sessionId, sandboxId, projectId } = await request.json();
 
-    if (!sessionId || !sandboxId) {
+    if (!sessionId || !sandboxId || !projectId) {
       return NextResponse.json(
         { error: 'Missing required parameters' },
         { status: 400 }
+      );
+    }
+
+    const supabase = await createRouteHandlerClient();
+
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    // Verify user has access to this project
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('id, user_id, metadata')
+      .eq('id', projectId)
+      .single();
+
+    if (projectError || !project) {
+      return NextResponse.json(
+        { error: 'Project not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check if user is owner OR collaborator
+    const isOwner = project.user_id === user.id;
+    
+    if (!isOwner) {
+      // Check if user is a collaborator
+      const { data: collaborator, error: collabError } = await supabase
+        .from('project_collaborators')
+        .select('id')
+        .eq('project_id', projectId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (collabError || !collaborator) {
+        return NextResponse.json(
+          { error: 'You do not have access to this project' },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Verify sandbox ID matches project metadata
+    if (project.metadata?.sandboxId !== sandboxId) {
+      return NextResponse.json(
+        { error: 'Sandbox ID mismatch' },
+        { status: 403 }
       );
     }
 
