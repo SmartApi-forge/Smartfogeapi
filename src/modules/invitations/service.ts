@@ -10,6 +10,7 @@ import type {
   AcceptInvitationInput,
   DeclineInvitationInput,
   DeleteInvitationInput,
+  GetProjectCollaboratorsInput,
 } from './types';
 
 // Environment validation
@@ -189,6 +190,7 @@ export class InvitationService {
           inviterName,
           inviteToken: token,
           accessLevel: input.accessLevel,
+          projectId: input.projectId,
         });
         console.log(`✅ Email sent to ${input.email} via Gmail SMTP`);
         emailSent = true;
@@ -419,6 +421,87 @@ export class InvitationService {
     }
 
     return { success: true };
+  }
+
+  /**
+   * Get project collaborators
+   */
+  static async getProjectCollaborators(input: GetProjectCollaboratorsInput, userId: string) {
+    // Verify user has access to the project (owner or collaborator)
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('id, user_id')
+      .eq('id', input.projectId)
+      .single();
+
+    if (projectError || !project) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Project not found',
+      });
+    }
+
+    const isOwner = project.user_id === userId;
+    
+    if (!isOwner) {
+      // Check if user is a collaborator
+      const { data: collaborator } = await supabase
+        .from('project_collaborators')
+        .select('id')
+        .eq('project_id', input.projectId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (!collaborator) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'You do not have permission to view collaborators for this project',
+        });
+      }
+    }
+
+    // Get all collaborators with their profile info
+    const { data: collaborators, error } = await supabase
+      .from('project_collaborators')
+      .select(`
+        *,
+        profiles:user_id (
+          id,
+          full_name,
+          avatar_url
+        )
+      `)
+      .eq('project_id', input.projectId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch collaborators',
+        cause: error,
+      });
+    }
+
+    // Get project owner info
+    const { data: ownerProfile } = await supabase
+      .from('profiles')
+      .select('id, full_name, avatar_url')
+      .eq('id', project.user_id)
+      .single();
+
+    // Get owner's email from auth
+    const { data: ownerAuth } = await supabase.auth.admin.getUserById(project.user_id);
+
+    return {
+      owner: {
+        id: project.user_id,
+        full_name: ownerProfile?.full_name || 'Owner',
+        email: ownerAuth?.user?.email || '',
+        avatar_url: ownerProfile?.avatar_url,
+        role: 'owner' as const,
+      },
+      collaborators: collaborators || [],
+    };
   }
 
   /**

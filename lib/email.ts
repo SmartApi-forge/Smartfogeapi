@@ -17,6 +17,7 @@ interface SendInvitationEmailParams {
   inviterName: string;
   inviteToken: string;
   accessLevel: string;
+  projectId: string;
 }
 
 export async function sendInvitationEmail({
@@ -25,8 +26,11 @@ export async function sendInvitationEmail({
   inviterName,
   inviteToken,
   accessLevel,
+  projectId,
 }: SendInvitationEmailParams) {
-  const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/invite/${inviteToken}`;
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const inviteUrl = `${baseUrl}/invite/${inviteToken}`;
+  const projectUrl = `${baseUrl}/projects/${projectId}`;
 
   if (!transporter) {
     throw new Error('Gmail SMTP is not configured. Please set GMAIL_USER and GMAIL_APP_PASSWORD environment variables.');
@@ -71,6 +75,14 @@ export async function sendInvitationEmail({
                   Accept Invitation
                 </a>
               </div>
+              
+              <p style="font-size: 14px; color: #666; margin: 20px 0 10px 0;">
+                <strong>Sandbox URL:</strong><br>
+                <a href="${projectUrl}" style="color: #667eea; word-break: break-all;">${projectUrl}</a>
+              </p>
+              <p style="font-size: 12px; color: #999; margin-bottom: 30px;">
+                After accepting the invitation, you can access the project directly using the sandbox URL above. You'll need to log in first if you haven't already.
+              </p>
               
               <p style="font-size: 12px; color: #999; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
                 Or copy and paste this link into your browser:<br>

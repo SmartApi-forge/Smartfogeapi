@@ -54,6 +54,12 @@ export function ShareDialog({
     { enabled: open }
   );
 
+  // Fetch project collaborators
+  const { data: collaboratorsData } = api.invitations.getProjectCollaborators.useQuery(
+    { projectId },
+    { enabled: open }
+  );
+
   // Mutations
   const createInviteLinkMutation = api.invitations.createInviteLink.useMutation({
     onSuccess: (data) => {
@@ -226,11 +232,55 @@ export function ShareDialog({
             </div>
 
             {/* Collaborators List */}
-            <div className="flex items-center gap-2 py-2">
-              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-500 text-white text-sm font-medium">
-                K
-              </div>
-              <span className="text-sm text-foreground">You (Owner)</span>
+            <div className="space-y-2">
+              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">People with access</h3>
+              
+              {/* Owner */}
+              {collaboratorsData?.owner && (
+                <div className="flex items-center gap-2 py-2">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm font-medium">
+                    {collaboratorsData.owner.full_name?.charAt(0).toUpperCase() || 'O'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-foreground truncate">
+                        {collaboratorsData.owner.full_name || 'Owner'}
+                      </span>
+                      <span className="text-xs text-muted-foreground">(Owner)</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground truncate block">
+                      {collaboratorsData.owner.email}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Collaborators */}
+              {collaboratorsData?.collaborators?.map((collab: any) => {
+                const profile = collab.profiles;
+                return (
+                  <div key={collab.id} className="flex items-center gap-2 py-2">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-500 text-white text-sm font-medium">
+                      {profile?.full_name?.charAt(0).toUpperCase() || 'U'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-foreground truncate">
+                          {profile?.full_name || 'User'}
+                        </span>
+                        <span className="text-xs text-muted-foreground capitalize">({collab.access_level})</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Show count if there are collaborators */}
+              {collaboratorsData && collaboratorsData.collaborators.length > 0 && (
+                <p className="text-xs text-muted-foreground pt-1">
+                  {collaboratorsData.collaborators.length} collaborator{collaboratorsData.collaborators.length !== 1 ? 's' : ''}
+                </p>
+              )}
             </div>
           </div>
           ) : (

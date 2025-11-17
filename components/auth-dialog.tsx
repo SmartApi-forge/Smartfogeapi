@@ -57,6 +57,7 @@ export default function AuthDialog() {
   const [error, setError] = useState<string | null>(null)
 
   const auth = searchParams?.get("auth")
+  const redirectUrl = searchParams?.get("redirect")
   const open = Boolean(auth)
 
   const title = useMemo(() => {
@@ -150,14 +151,17 @@ export default function AuthDialog() {
                       email: data.user.email || email
                     }))
                     
-                    console.log('Auth data set, redirecting to dashboard...')
+                    console.log('Auth data set, redirecting...')
                     
                     // Close dialog first, then redirect
                     close()
                     
+                    // Check if there's a redirect URL, otherwise go to /ask
+                    const destination = redirectUrl || '/ask'
+                    
                     // Use window.location for a hard redirect to ensure it works
                     setTimeout(() => {
-                      window.location.href = '/ask'
+                      window.location.href = destination
                     }, 100)
                   } else {
                     throw new Error('Sign in failed - no user data received')

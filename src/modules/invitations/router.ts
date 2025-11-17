@@ -9,6 +9,7 @@ import {
   AcceptInvitationSchema,
   DeclineInvitationSchema,
   DeleteInvitationSchema,
+  GetProjectCollaboratorsSchema,
 } from './types';
 
 export const invitationsRouter = createTRPCRouter({
@@ -147,6 +148,26 @@ export const invitationsRouter = createTRPCRouter({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to delete invitation',
+          cause: error,
+        });
+      }
+    }),
+
+  /**
+   * Get project collaborators
+   */
+  getProjectCollaborators: protectedProcedure
+    .input(GetProjectCollaboratorsSchema)
+    .query(async ({ input, ctx }) => {
+      try {
+        return await InvitationService.getProjectCollaborators(input, ctx.user.id);
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch collaborators',
           cause: error,
         });
       }

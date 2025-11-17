@@ -32,18 +32,45 @@ export class ProjectService {
    */
   static async getOne(input: GetProjectInput, userId: string): Promise<Project> {
     try {
+      // First check if user is the owner
       const { data: project, error } = await supabase
         .from('projects')
         .select('*')
         .eq('id', input.id)
-        .eq('user_id', userId)
-        .single()
+        .maybeSingle()
 
-      if (error || !project) {
+      if (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch project'
+        })
+      }
+
+      if (!project) {
         throw new TRPCError({
           code: 'NOT_FOUND',
           message: 'Project not found'
         })
+      }
+
+      // Check if user is owner OR collaborator
+      const isOwner = project.user_id === userId
+      
+      if (!isOwner) {
+        // Check if user is a collaborator
+        const { data: collaborator, error: collabError } = await supabase
+          .from('project_collaborators')
+          .select('id')
+          .eq('project_id', input.id)
+          .eq('user_id', userId)
+          .maybeSingle()
+
+        if (collabError || !collaborator) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'You do not have access to this project'
+          })
+        }
       }
 
       // FALLBACK FIX: If project status is 'generating' but workflow completed, fix it

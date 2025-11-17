@@ -33,6 +33,10 @@ export const DeleteInvitationSchema = z.object({
   invitationId: z.string().uuid(),
 });
 
+export const GetProjectCollaboratorsSchema = z.object({
+  projectId: z.string().uuid(),
+});
+
 // Type exports
 export type CreateInviteLinkInput = z.infer<typeof CreateInviteLinkSchema>;
 export type SendEmailInviteInput = z.infer<typeof SendEmailInviteSchema>;
@@ -41,3 +45,4 @@ export type GetInvitationByTokenInput = z.infer<typeof GetInvitationByTokenSchem
 export type AcceptInvitationInput = z.infer<typeof AcceptInvitationSchema>;
 export type DeclineInvitationInput = z.infer<typeof DeclineInvitationSchema>;
 export type DeleteInvitationInput = z.infer<typeof DeleteInvitationSchema>;
+export type GetProjectCollaboratorsInput = z.infer<typeof GetProjectCollaboratorsSchema>;

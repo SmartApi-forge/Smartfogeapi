@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { api } from "@/lib/trpc-client";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,6 +20,25 @@ export default function InvitePage() {
   const params = useParams();
   const token = params?.token as string;
   const [isDialogOpen, setIsDialogOpen] = useState(true);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // Check authentication on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        // Store the current URL to redirect back after login
+        const currentUrl = window.location.pathname;
+        router.push(`/?auth=login&redirect=${encodeURIComponent(currentUrl)}`);
+        return;
+      }
+      
+      setIsCheckingAuth(false);
+    };
+    
+    checkAuth();
+  }, [router]);
 
   // Fetch invitation details
   const {
@@ -27,7 +47,7 @@ export default function InvitePage() {
     error,
   } = api.invitations.getInvitationByToken.useQuery(
     { token },
-    { enabled: !!token }
+    { enabled: !!token && !isCheckingAuth }
   );
 
   // Mutations
@@ -77,7 +97,7 @@ export default function InvitePage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-4">
       <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
         <DialogContent className="sm:max-w-[500px] bg-white dark:bg-[#1D1D1D] border-border dark:border-[#333433]">
-          {isLoading ? (
+          {isCheckingAuth || isLoading ? (
             <div className="flex flex-col items-center justify-center py-12">
               <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
               <p className="text-muted-foreground">Loading invitation...</p>

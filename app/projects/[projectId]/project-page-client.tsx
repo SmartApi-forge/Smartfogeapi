@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Folder, 
@@ -689,14 +691,34 @@ export function ProjectPageClient({
   initialMessages, 
   project 
 }: ProjectPageClientProps) {
+  const router = useRouter();
   const { theme, resolvedTheme } = useTheme();
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["src"]));
   const [selected, setSelected] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isMobileExplorerOpen, setIsMobileExplorerOpen] = useState(false);
   const [mobileView, setMobileView] = useState<'chat' | 'code'>('chat');
   const [isChatPanelCollapsed, setIsChatPanelCollapsed] = useState(false);
+
+  // Check authentication
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        // Store the current URL to redirect back after login
+        const currentUrl = window.location.pathname;
+        router.push(`/?auth=login&redirect=${encodeURIComponent(currentUrl)}`);
+        return;
+      }
+      
+      setIsCheckingAuth(false);
+    };
+    
+    checkAuth();
+  }, [router, supabase.auth]);
   const [isMobileScreen, setIsMobileScreen] = useState(() => {
     // Check if we're on the client side and detect mobile on initial render
     if (typeof window !== 'undefined') {
@@ -1700,6 +1722,18 @@ export function ProjectPageClient({
       alert('Failed to delete file. Check console for details.');
     }
   };
+
+  // Show loading indicator while checking auth
+  if (isCheckingAuth) {
+    return (
+      <div className="h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Loading project...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
