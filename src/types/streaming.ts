@@ -85,6 +85,23 @@ export type StreamEvent =
       message: string;
       stage?: string;
       versionId?: string;
+    }
+  | {
+      type: 'warning';
+      message: string;
+      versionId?: string;
+    }
+  | {
+      type: 'info';
+      message: string;
+      versionId?: string;
+    }
+  | {
+      type: 'step:progress';
+      step: string;
+      progress: number;
+      message?: string;
+      versionId?: string;
     };
 
 export type StreamEventWithTimestamp = StreamEvent & {

@@ -52,10 +52,11 @@ export class SmartContextBuilder {
       maxFiles?: number;
       includeTests?: boolean;
       isGitHubProject?: boolean;
+      errorFileName?: string | null;
     } = {}
   ): Promise<SmartGenerationContext> {
     const startTime = Date.now();
-    const { messageLimit = 20, maxFiles = 15, includeTests = false, isGitHubProject = false } = options;
+    const { messageLimit = 20, maxFiles = 15, includeTests = false, isGitHubProject = false, errorFileName = null } = options;
     
     console.log(`🔧 Building smart context for project ${projectId}`);
     console.log(`📝 User prompt: "${userPrompt}"`);
@@ -77,12 +78,35 @@ export class SmartContextBuilder {
     
     console.log(`📁 Total files in project: ${Object.keys(allFiles).length}`);
     
+    // Step 2.1: If error file specified, prioritize it
+    if (errorFileName) {
+      console.log(`🐛 Prioritizing error file: ${errorFileName}`);
+      const errorFilePath = Object.keys(allFiles).find(path => path.includes(errorFileName));
+      if (errorFilePath) {
+        console.log(`✓ Found error file: ${errorFilePath}`);
+      } else {
+        console.log(`⚠️ Error file not found in project files`);
+      }
+    }
+    
     // Step 2.5: Extract keywords and find matching files by path
     // This catches explicit file references that semantic search might miss
     const keywordMatches = this.findFilesByKeywords(userPrompt, allFiles);
     console.log(`🎯 Keyword matches: ${keywordMatches.length} files`);
     if (keywordMatches.length > 0) {
       console.log(`   Matched files: ${keywordMatches.join(', ')}`);
+    }
+    
+    // Step 2.6: For GitHub projects, be extra aggressive about finding relevant files
+    // Look for files that might be related even if not explicitly mentioned
+    let contextualMatches: string[] = [];
+    if (isGitHubProject && keywordMatches.length === 0) {
+      console.log(`🔍 GitHub project with no keyword matches - searching for contextual files...`);
+      contextualMatches = this.findContextualFiles(userPrompt, allFiles);
+      console.log(`📍 Contextual matches: ${contextualMatches.length} files`);
+      if (contextualMatches.length > 0) {
+        console.log(`   Matched files: ${contextualMatches.join(', ')}`);
+      }
     }
     
     // Step 3: Semantic search for relevant files
@@ -116,7 +140,20 @@ export class SmartContextBuilder {
     // Step 4: Build relevant files map with reasons
     const relevantFiles: Record<string, { content: string; relevance: number; reason: string }> = {};
     
-    // Step 4a: Add keyword-matched files FIRST with high relevance (0.95)
+    // Step 4a: Add error file FIRST with highest relevance (0.99) if specified
+    if (errorFileName) {
+      const errorFilePath = Object.keys(allFiles).find(path => path.includes(errorFileName));
+      if (errorFilePath && allFiles[errorFilePath]) {
+        relevantFiles[errorFilePath] = {
+          content: allFiles[errorFilePath],
+          relevance: 0.99, // Highest relevance for error files
+          reason: 'File mentioned in error message - MUST FIX THIS FILE',
+        };
+        console.log(`✓ Added error file to relevant files: ${errorFilePath}`);
+      }
+    }
+    
+    // Step 4b: Add keyword-matched files with high relevance (0.95)
     // These are files that match keywords in the user's prompt (e.g., "hero" -> "HeroSection.tsx")
     for (const filePath of keywordMatches) {
       if (allFiles[filePath]) {
@@ -124,6 +161,17 @@ export class SmartContextBuilder {
           content: allFiles[filePath],
           relevance: 0.95, // High relevance for keyword matches
           reason: 'Keyword match from prompt',
+        };
+      }
+    }
+    
+    // Step 4a.5: Add contextual matches with high relevance (0.92)
+    for (const filePath of contextualMatches) {
+      if (allFiles[filePath] && !relevantFiles[filePath]) {
+        relevantFiles[filePath] = {
+          content: allFiles[filePath],
+          relevance: 0.92, // High relevance for contextual matches
+          reason: 'Contextual match - likely related to request',
         };
       }
     }
@@ -708,5 +756,58 @@ export class SmartContextBuilder {
     }
     
     return keywords;
+  }
+  
+  /**
+   * Find contextually relevant files based on prompt intent
+   * This is more aggressive than keyword matching and looks for files that might be related
+   * even if not explicitly mentioned (useful for GitHub projects)
+   */
+  private static findContextualFiles(
+    prompt: string,
+    allFiles: Record<string, string>
+  ): string[] {
+    const matches: string[] = [];
+    const promptLower = prompt.toLowerCase();
+    
+    // Extract action words and subjects from prompt
+    const actionWords = ['change', 'update', 'modify', 'fix', 'improve', 'enhance', 'refactor', 'edit', 'adjust', 'alter'];
+    const hasAction = actionWords.some(word => promptLower.includes(word));
+    
+    if (!hasAction) {
+      return []; // Only use contextual matching for modification requests
+    }
+    
+    // Extract potential UI/component references
+    const uiTerms = ['button', 'header', 'footer', 'nav', 'menu', 'hero', 'section', 'card', 'modal', 'dialog', 'form', 'input', 'text', 'title', 'heading', 'image', 'icon', 'banner', 'landing', 'home', 'page'];
+    const mentionedTerms = uiTerms.filter(term => promptLower.includes(term));
+    
+    if (mentionedTerms.length === 0) {
+      return []; // No UI terms found
+    }
+    
+    console.log(`   Searching for files related to: ${mentionedTerms.join(', ')}`);
+    
+    // Search for files that might contain these UI elements
+    for (const [filePath, content] of Object.entries(allFiles)) {
+      // Skip non-component files
+      if (!filePath.match(/\.(tsx|jsx|ts|js|vue|svelte)$/)) {
+        continue;
+      }
+      
+      const filePathLower = filePath.toLowerCase();
+      const contentLower = typeof content === 'string' ? content.toLowerCase() : '';
+      
+      // Check if file path or content mentions any of the UI terms
+      for (const term of mentionedTerms) {
+        if (filePathLower.includes(term) || contentLower.includes(term)) {
+          matches.push(filePath);
+          console.log(`   ✓ Found "${term}" in ${filePath}`);
+          break; // Only add each file once
+        }
+      }
+    }
+    
+    return [...new Set(matches)];
   }
 }

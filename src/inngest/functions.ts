@@ -1827,6 +1827,303 @@ EXAMPLE STRUCTURE:
  * Iterate API - Version-aware generation workflow
  * Similar to generateAPI but builds on previous versions
  */
+// Helper function to detect framework from project files
+function detectFramework(filePaths: string[], configFiles: Record<string, string>): string {
+  // Check for Next.js
+  if (filePaths.some(p => p.includes('next.config')) || configFiles['next.config.js'] || configFiles['next.config.mjs']) {
+    // Check if it's App Router (Next.js 13+)
+    if (filePaths.some(p => p.includes('app/') && (p.endsWith('page.tsx') || p.endsWith('layout.tsx')))) {
+      return 'nextjs-app-router';
+    }
+    return 'nextjs-pages-router';
+  }
+  
+  // Check for React (Vite/CRA)
+  if (filePaths.some(p => p.includes('vite.config')) || configFiles['vite.config.ts'] || configFiles['vite.config.js']) {
+    return 'react-vite';
+  }
+  
+  // Check for Vue
+  if (filePaths.some(p => p.endsWith('.vue'))) {
+    return 'vue';
+  }
+  
+  // Check for Angular
+  if (filePaths.some(p => p.includes('angular.json'))) {
+    return 'angular';
+  }
+  
+  // Check for Svelte
+  if (filePaths.some(p => p.endsWith('.svelte'))) {
+    return 'svelte';
+  }
+  
+  // Default to React
+  if (filePaths.some(p => p.endsWith('.tsx') || p.endsWith('.jsx'))) {
+    return 'react';
+  }
+  
+  return 'unknown';
+}
+
+// Helper function to analyze project patterns
+function analyzeProjectPatterns(files: Record<string, string>, configFiles: Record<string, string>): {
+  uiLibrary: string;
+  stateManagement: string;
+  styling: string;
+  formLibrary: string;
+  colorScheme: string[];
+  commonComponents: string[];
+  importPatterns: string[];
+} {
+  const analysis = {
+    uiLibrary: 'none',
+    stateManagement: 'react-hooks',
+    styling: 'css',
+    formLibrary: 'none',
+    colorScheme: [] as string[],
+    commonComponents: [] as string[],
+    importPatterns: [] as string[],
+  };
+
+  // Detect UI library
+  const allContent = Object.values(files).join('\n');
+  if (allContent.includes('shadcn') || allContent.includes('@/components/ui')) {
+    analysis.uiLibrary = 'shadcn/ui';
+  } else if (allContent.includes('material-ui') || allContent.includes('@mui')) {
+    analysis.uiLibrary = 'Material-UI';
+  } else if (allContent.includes('antd') || allContent.includes('ant-design')) {
+    analysis.uiLibrary = 'Ant Design';
+  } else if (allContent.includes('chakra-ui')) {
+    analysis.uiLibrary = 'Chakra UI';
+  }
+
+  // Detect styling approach
+  if (allContent.includes('tailwindcss') || allContent.includes('className=')) {
+    analysis.styling = 'Tailwind CSS';
+  } else if (allContent.includes('styled-components')) {
+    analysis.styling = 'styled-components';
+  } else if (allContent.includes('emotion')) {
+    analysis.styling = 'Emotion';
+  } else if (allContent.includes('module.css')) {
+    analysis.styling = 'CSS Modules';
+  }
+
+  // Detect form library
+  if (allContent.includes('react-hook-form')) {
+    analysis.formLibrary = 'react-hook-form';
+  } else if (allContent.includes('formik')) {
+    analysis.formLibrary = 'Formik';
+  }
+
+  // Detect state management
+  if (allContent.includes('zustand')) {
+    analysis.stateManagement = 'Zustand';
+  } else if (allContent.includes('redux')) {
+    analysis.stateManagement = 'Redux';
+  } else if (allContent.includes('jotai')) {
+    analysis.stateManagement = 'Jotai';
+  } else if (allContent.includes('recoil')) {
+    analysis.stateManagement = 'Recoil';
+  }
+
+  // Extract color scheme from Tailwind config or CSS
+  const tailwindConfig = configFiles['tailwind.config.js'] || configFiles['tailwind.config.ts'] || '';
+  const colorMatches = tailwindConfig.match(/colors:\s*{([^}]+)}/);
+  if (colorMatches) {
+    analysis.colorScheme.push('Found in tailwind.config');
+  }
+
+  // Extract common component patterns
+  const componentFiles = Object.keys(files).filter(f => 
+    f.includes('components/') && (f.endsWith('.tsx') || f.endsWith('.jsx'))
+  );
+  analysis.commonComponents = componentFiles.slice(0, 10);
+
+  // Extract import patterns
+  const importRegex = /import\s+.*\s+from\s+['"]([^'"]+)['"]/g;
+  const imports = new Set<string>();
+  for (const content of Object.values(files)) {
+    if (typeof content !== 'string') continue;
+    let match;
+    while ((match = importRegex.exec(content)) !== null) {
+      if (match[1].startsWith('@/') || match[1].startsWith('./') || match[1].startsWith('../')) {
+        imports.add(match[1]);
+      }
+    }
+  }
+  analysis.importPatterns = Array.from(imports).slice(0, 20);
+
+  return analysis;
+}
+
+// Helper function to extract error information from prompt
+function extractErrorInfo(prompt: string): {
+  hasError: boolean;
+  errorType: string;
+  errorMessage: string;
+  fileName: string | null;
+  lineNumber: string | null;
+  suggestedFix: string;
+} | null {
+  // Check if prompt contains error indicators
+  const errorIndicators = ['error', 'typeerror', 'referenceerror', 'syntaxerror', 'exception', 'failed', 'not a function', 'is not defined', 'cannot find', 'unexpected'];
+  const hasError = errorIndicators.some(indicator => prompt.toLowerCase().includes(indicator));
+  
+  if (!hasError) return null;
+  
+  // Extract error type
+  let errorType = 'Unknown Error';
+  if (prompt.includes('TypeError')) errorType = 'TypeError';
+  else if (prompt.includes('ReferenceError')) errorType = 'ReferenceError';
+  else if (prompt.includes('SyntaxError')) errorType = 'SyntaxError';
+  
+  // Extract file name from error stack
+  let fileName: string | null = null;
+  const fileMatch = prompt.match(/at\s+\w+\s+\((.*?\.tsx?)\?/i) || prompt.match(/([\w/-]+\.tsx?)/i);
+  if (fileMatch) {
+    fileName = fileMatch[1];
+    // Clean up the file path
+    if (fileName.includes('webpack-internal')) {
+      const cleanMatch = fileName.match(/\/([^/]+\.tsx?)$/);
+      if (cleanMatch) fileName = cleanMatch[1];
+    }
+  }
+  
+  // Extract line number
+  let lineNumber: string | null = null;
+  const lineMatch = prompt.match(/:(\d+):\d+/);
+  if (lineMatch) lineNumber = lineMatch[1];
+  
+  // Extract error message
+  let errorMessage = '';
+  const messageMatch = prompt.match(/TypeError:\s*(.+?)(?:at|$)/i) || 
+                      prompt.match(/Error:\s*(.+?)(?:at|$)/i);
+  if (messageMatch) {
+    errorMessage = messageMatch[1].trim();
+  }
+  
+  // Determine suggested fix based on error
+  let suggestedFix = '';
+  if (errorMessage.includes('useForm') && errorMessage.includes('not a function')) {
+    suggestedFix = 'Add "use client" directive at the top of the file and ensure react-hook-form is imported correctly';
+  } else if (errorMessage.includes('is not a function')) {
+    suggestedFix = 'Check if the function is properly imported and the module is installed';
+  } else if (errorMessage.includes('is not defined')) {
+    suggestedFix = 'Import the missing variable or function';
+  } else if (errorMessage.includes('Cannot find module')) {
+    suggestedFix = 'Install the missing npm package';
+  }
+  
+  return {
+    hasError: true,
+    errorType,
+    errorMessage,
+    fileName,
+    lineNumber,
+    suggestedFix,
+  };
+}
+
+// Helper function to classify user intent
+function classifyUserIntent(prompt: string): 'question' | 'code-change' | 'both' {
+  const lowerPrompt = prompt.toLowerCase();
+  
+  // Error messages are always code-change requests
+  if (lowerPrompt.includes('error') || lowerPrompt.includes('fix')) {
+    return 'code-change';
+  }
+  
+  // Question indicators
+  const questionWords = ['what', 'how', 'why', 'when', 'where', 'which', 'who', 'can you explain', 'tell me', 'show me', 'what are', 'how do', 'is there'];
+  const hasQuestionWord = questionWords.some(word => lowerPrompt.includes(word));
+  const hasQuestionMark = prompt.includes('?');
+  
+  // Code change indicators
+  const actionWords = ['create', 'add', 'update', 'modify', 'change', 'delete', 'remove', 'fix', 'refactor', 'implement', 'build', 'make', 'edit'];
+  const hasActionWord = actionWords.some(word => lowerPrompt.includes(word));
+  
+  // Determine intent
+  if ((hasQuestionWord || hasQuestionMark) && !hasActionWord) {
+    return 'question';
+  } else if (hasActionWord && !hasQuestionWord && !hasQuestionMark) {
+    return 'code-change';
+  } else {
+    return 'both'; // User might be asking AND requesting changes
+  }
+}
+
+// Helper function to get framework-specific rules
+function getFrameworkSpecificRules(framework: string): string {
+  switch (framework) {
+    case 'nextjs-app-router':
+      return `   🔷 NEXT.JS APP ROUTER RULES:
+   - ALL components are Server Components by default
+   - Add "use client" directive at the TOP of files that use:
+     * React hooks (useState, useEffect, useForm, etc.)
+     * Event handlers (onClick, onChange, etc.)
+     * Browser APIs (window, document, localStorage, etc.)
+     * Third-party libraries that use hooks (react-hook-form, etc.)
+   
+   🚨 CRITICAL "use client" SYNTAX:
+   - "use client" is a DIRECTIVE, NOT an import statement
+   - It MUST be the FIRST line of the file (before any imports)
+   - Correct syntax: "use client";
+   - WRONG: import "use client";
+   - WRONG: import 'use client';
+   - WRONG: import "use client"; // comment
+   
+   - Server Components CAN'T use hooks or event handlers
+   - Client Components MUST have "use client" as the FIRST line
+   - Use async/await in Server Components for data fetching
+   - Import client components into server components is OK
+   
+   - Example Client Component (CORRECT):
+     "use client";
+     
+     import { useState } from "react";
+     
+     export default function MyComponent() {
+       const [state, setState] = useState(false);
+       return <button onClick={() => setState(!state)}>Click</button>;
+     }
+   
+   - Example Server Component (CORRECT):
+     import { db } from "@/lib/db";
+     
+     export default async function MyComponent() {
+       const data = await db.query();
+       return <div>{data}</div>;
+     }`;
+    
+    case 'nextjs-pages-router':
+      return `   🔷 NEXT.JS PAGES ROUTER RULES:
+   - Use getServerSideProps or getStaticProps for data fetching
+   - All components can use hooks freely
+   - Pages go in pages/ directory
+   - API routes go in pages/api/`;
+    
+    case 'react-vite':
+    case 'react':
+      return `   ⚛️ REACT RULES:
+   - All components can use hooks
+   - Import React hooks from "react"
+   - Use proper TypeScript types for props
+   - Follow React best practices`;
+    
+    case 'vue':
+      return `   🟢 VUE RULES:
+   - Use Composition API with <script setup>
+   - Import refs and reactive from "vue"
+   - Use proper TypeScript types`;
+    
+    default:
+      return `   - Follow standard JavaScript/TypeScript best practices
+   - Ensure all imports are correct
+   - Use proper error handling`;
+  }
+}
+
 export const iterateAPI = inngest.createFunction(
   { id: "iterate-api" },
   { event: "api/iterate" },
@@ -1836,7 +2133,85 @@ export const iterateAPI = inngest.createFunction(
     let versionId: string | undefined;
     
     try {
-      // Step 1: Create version record
+      // Step 1: Quick intent check - skip version creation for questions
+      const quickIntent = classifyUserIntent(prompt);
+      const isQuestionOnly = quickIntent === 'question';
+      
+      console.log(`🎯 Quick Intent Check: ${quickIntent}`);
+      
+      if (isQuestionOnly) {
+        console.log('📝 Question detected - skipping version creation');
+        
+        // For questions, just answer directly without creating a version
+        await streamingService.emit(projectId, {
+          type: 'step:start',
+          step: 'Answering',
+          message: 'Analyzing your question...',
+        });
+        
+        // Get some context for better answers
+        const latestVersion = await VersionManager.getLatestVersion(projectId);
+        const projectFiles = latestVersion?.files || {};
+        const fileList = Object.keys(projectFiles).slice(0, 20).join(', ');
+        
+        // Generate answer using AI
+        const completion = await openaiClient.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content: `You are a helpful technical assistant. Answer the user's question about their codebase.
+              
+Project context:
+- Total files: ${Object.keys(projectFiles).length}
+- Some files: ${fileList}
+
+Provide a clear, concise answer. Be specific and helpful.`
+            },
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          stream: true,
+        });
+        
+        // Stream the answer
+        let answer = '';
+        for await (const chunk of completion) {
+          const content = chunk.choices[0]?.delta?.content || '';
+          if (content) {
+            answer += content;
+          }
+        }
+        
+        // Save answer as message
+        const { MessageService } = await import('../modules/messages/service');
+        await MessageService.saveResult({
+          content: answer,
+          role: 'assistant',
+          type: 'text',
+          project_id: projectId,
+        });
+        
+        // Emit completion
+        await streamingService.emit(projectId, {
+          type: 'complete',
+          summary: 'Question answered',
+          totalFiles: 0,
+        });
+        
+        streamingService.closeProject(projectId);
+        
+        return {
+          success: true,
+          isQuestion: true,
+          answer,
+          projectId,
+        };
+      }
+      
+      // Step 2: Create version record (only for code changes)
       versionId = await step.run("create-version", async () => {
         // Get parent version
         const parentVersion = parentVersionId 
@@ -1867,7 +2242,7 @@ export const iterateAPI = inngest.createFunction(
         return version.id;
       });
       
-      // Step 2: Check if this is a GitHub cloned project
+      // Step 3: Check if this is a GitHub cloned project
       const projectInfo = await step.run("check-project-type", async () => {
         const { data: project } = await supabase
           .from('projects')
@@ -1886,8 +2261,16 @@ export const iterateAPI = inngest.createFunction(
         return { isGitHubProject, repoFullName };
       });
       
-      // Step 3: Build smart context using semantic search
+      // Step 4: Build smart context using semantic search
       const context = await step.run("build-smart-context", async () => {
+        // Extract error file name if present in prompt
+        const errorFileMatch = prompt.match(/SignupDialog\.tsx|([A-Z]\w+\.tsx)/);
+        const errorFileName = errorFileMatch ? errorFileMatch[0] : null;
+        
+        if (errorFileName) {
+          console.log(`🐛 Error detected in file: ${errorFileName}`);
+        }
+        
         return await SmartContextBuilder.buildSmartContext(
           projectId,
           prompt,
@@ -1896,11 +2279,35 @@ export const iterateAPI = inngest.createFunction(
             maxFiles: 15,
             includeTests: false,
             isGitHubProject: projectInfo.isGitHubProject, // Pass this flag
+            errorFileName, // Pass error file name for prioritization
           }
         );
       });
       
-      // Step 3: Generate code with context
+      // Step 5: Analyze user intent and project patterns
+      const analysis = await step.run("analyze-intent-and-patterns", async () => {
+        const userIntent = classifyUserIntent(prompt);
+        const projectPatterns = analyzeProjectPatterns(context.previousFiles || {}, context.configFiles);
+        
+        // Extract error information if present
+        const errorInfo = extractErrorInfo(prompt);
+        
+        console.log(`🎯 User Intent: ${userIntent}`);
+        console.log(`📊 Project Analysis:`, {
+          uiLibrary: projectPatterns.uiLibrary,
+          styling: projectPatterns.styling,
+          formLibrary: projectPatterns.formLibrary,
+          stateManagement: projectPatterns.stateManagement,
+        });
+        
+        if (errorInfo) {
+          console.log(`🐛 Error Detected:`, errorInfo);
+        }
+        
+        return { userIntent, projectPatterns, errorInfo };
+      });
+      
+      // Step 6: Generate code with context
       const apiResult = await step.run("generate-api-code", async () => {
         // Emit step start event
         await streamingService.emit(projectId, {
@@ -1915,16 +2322,88 @@ export const iterateAPI = inngest.createFunction(
         
         // Extract list of relevant files that should be considered for modification
         const relevantFilePaths = Object.keys(context.relevantFiles || {});
+        const allExistingFilePaths = Object.keys(context.previousFiles || {});
+        
         const explicitFileInstructions = relevantFilePaths.length > 0
           ? `\n\n🎯 TARGET FILES FOR MODIFICATION:\nThe following files are semantically relevant to the user's request. If the request involves modifying/editing code, you MUST modify these EXISTING files rather than creating new ones with different names or paths:\n${relevantFilePaths.map((p, i) => `${i + 1}. ${p}`).join('\n')}\n\nDO NOT create new files like "hero-section.tsx" or "HeroComponent.tsx" if "HeroSection.tsx" already exists above. MODIFY THE EXISTING FILE PATH EXACTLY AS SHOWN.`
+          : '';
+        
+        const existingFilesWarning = allExistingFilePaths.length > 0
+          ? `\n\n📁 ALL EXISTING FILES IN PROJECT (${allExistingFilePaths.length} files):\n${allExistingFilePaths.slice(0, 50).join('\n')}${allExistingFilePaths.length > 50 ? `\n... and ${allExistingFilePaths.length - 50} more files` : ''}\n\nBefore creating ANY new file, check if a similar file already exists in the list above. If it does, MODIFY that file instead.`
           : '';
         
         const isModifyCommand = commandType === 'MODIFY_FILE' || commandType === 'REFACTOR_CODE';
         
         // GitHub projects get ULTRA strict modification-only instructions
         const githubProjectWarning = projectInfo.isGitHubProject
-          ? `\n\n🚨 GITHUB PROJECT - ULTRA STRICT MODE 🚨\nThis is a CLONED GitHub project (${projectInfo.repoFullName}). You are ABSOLUTELY FORBIDDEN from creating new files unless the user EXPLICITLY says "create a new file called X".\n\nYou MUST ONLY modify existing files listed in the "Relevant Files" section. Any attempt to create new files will break the user's application.\n\nIF YOU CREATE A NEW FILE INSTEAD OF MODIFYING AN EXISTING ONE, YOU HAVE FAILED.`
+          ? `\n\n🚨 GITHUB PROJECT - ULTRA STRICT MODE 🚨\nThis is a CLONED GitHub project (${projectInfo.repoFullName}). You are ABSOLUTELY FORBIDDEN from creating new files unless the user EXPLICITLY says "create a new file called X".\n\nYou MUST ONLY modify existing files listed in the "Relevant Files" section. Any attempt to create new files will break the user's application.\n\nIF YOU CREATE A NEW FILE INSTEAD OF MODIFYING AN EXISTING ONE, YOU HAVE FAILED.\n\nThe "newFiles" object in your response MUST be empty {} unless the user explicitly requested a new file.`
           : '';
+        
+        // Detect framework from project files
+        const detectedFramework = detectFramework(allExistingFilePaths, context.configFiles);
+        const frameworkRules = getFrameworkSpecificRules(detectedFramework);
+        
+        // Build project patterns context
+        const patterns = analysis.projectPatterns;
+        const projectPatternsContext = `\n\n📚 PROJECT PATTERNS & LIBRARIES (MUST FOLLOW):
+   - UI Library: ${patterns.uiLibrary} ${patterns.uiLibrary !== 'none' ? '← USE THIS for all UI components' : ''}
+   - Styling: ${patterns.styling} ${patterns.styling !== 'css' ? '← USE THIS styling approach' : ''}
+   - Forms: ${patterns.formLibrary} ${patterns.formLibrary !== 'none' ? '← USE THIS for forms' : ''}
+   - State: ${patterns.stateManagement} ← USE THIS for state management
+   - Common Components: ${patterns.commonComponents.slice(0, 5).join(', ')}
+   
+   🎨 CONSISTENCY RULES:
+   - REUSE existing components from the project (check common components above)
+   - FOLLOW the same import patterns: ${patterns.importPatterns.slice(0, 3).join(', ')}
+   - MAINTAIN the same styling approach throughout
+   - USE the same libraries that are already in the project
+   - DO NOT introduce new libraries unless absolutely necessary
+   - MATCH the existing code style and patterns`;
+        
+        // Add error-specific instructions if error detected
+        const errorInstructions = analysis.errorInfo ? `\n\n🐛 ERROR DETECTED IN USER PROMPT:
+   - Error Type: ${analysis.errorInfo.errorType}
+   - Error Message: ${analysis.errorInfo.errorMessage}
+   - File: ${analysis.errorInfo.fileName || 'Unknown'}
+   - Line: ${analysis.errorInfo.lineNumber || 'Unknown'}
+   - Suggested Fix: ${analysis.errorInfo.suggestedFix}
+   
+   🚨 CRITICAL ERROR FIXING RULES:
+   1. The user is reporting an ERROR - you MUST fix it in the EXISTING file
+   2. DO NOT create new files or documentation files
+   3. DO NOT create demo files or example files
+   4. ONLY modify the file mentioned in the error: ${analysis.errorInfo.fileName || 'the file with the error'}
+   5. Apply the suggested fix: ${analysis.errorInfo.suggestedFix}
+   6. If the error is "useForm is not a function":
+      - Add "use client" at the very top of the file
+      - Ensure react-hook-form is imported: import { useForm } from "react-hook-form"
+      - Do NOT create shader animations or unrelated components
+   7. Return ONLY the fixed file in "modifiedFiles"
+   8. DO NOT create any files in "newFiles"
+   9. Your response MUST fix the actual error, not create something unrelated` : '';
+        
+        // Determine response format based on user intent
+        const responseFormat = analysis.userIntent === 'question' 
+          ? `\n\n💬 RESPONSE FORMAT FOR QUESTIONS:
+   Since the user is asking a QUESTION (not requesting code changes), respond with:
+   {
+     "answer": "Your detailed answer to the user's question",
+     "modifiedFiles": {},
+     "newFiles": {},
+     "deletedFiles": [],
+     "changes": [],
+     "description": "Answered user's question about [topic]"
+   }
+   
+   Provide a helpful, detailed answer. DO NOT modify any files unless the user explicitly asks for changes.`
+          : `\n\n💻 RESPONSE FORMAT FOR CODE CHANGES:
+   {
+     "modifiedFiles": { "path/to/file.ext": "complete file content..." },
+     "newFiles": { "path/to/newfile.ext": "complete new file content..." },
+     "deletedFiles": ["path/to/deleted/file.ext"],
+     "changes": [{ "file": "path", "description": "what changed" }],
+     "description": "Brief summary of changes"
+   }`;
         
         const completion = await openaiClient.chat.completions.create({
           model: "gpt-4o",
@@ -1932,23 +2411,174 @@ export const iterateAPI = inngest.createFunction(
           messages: [
             {
               role: "system",
-              content: `You are an expert code iteration assistant. You help users modify and improve existing codebases.${githubProjectWarning}
+              content: `You are v0, an expert code iteration assistant. You help users build and modify applications with precision and intelligence.${githubProjectWarning}
 
-IMPORTANT INSTRUCTIONS:
-1. You are working on an EXISTING codebase. The user wants to ${commandType === 'CREATE_FILE' ? 'add new features' : commandType === 'MODIFY_FILE' ? 'modify existing files' : commandType === 'DELETE_FILE' ? 'remove features' : commandType === 'REFACTOR_CODE' ? 'refactor code' : 'make changes'}.
-2. ${isModifyCommand || projectInfo.isGitHubProject ? '⚠️ CRITICAL: When modifying/refactoring code, you MUST use the EXACT file paths from the "Relevant Files" section below. DO NOT create new files with similar names. MODIFY THE EXISTING FILES.' : 'For new features, create new files as needed.'}
-3. ${projectInfo.isGitHubProject ? '🚨 FOR GITHUB PROJECTS: You can ONLY add files to "modifiedFiles", NEVER to "newFiles". The "newFiles" object MUST be empty {} unless the user explicitly says "create a new file".' : 'ONLY output files that are NEW or MODIFIED. Do NOT output unchanged files.'}
-4. For MODIFIED files, output the COMPLETE file content with your changes applied.
-5. Use the EXACT file paths provided in the context. DO NOT change file names, casing, or directory structure.
-6. Maintain the same coding style and patterns from the existing code.
-7. Ensure backward compatibility unless explicitly asked to break it.
-8. DO NOT generate OpenAPI specs, API documentation, or unrelated files.${explicitFileInstructions}
+🎯 USER INTENT: ${analysis.userIntent.toUpperCase()}
+${analysis.userIntent === 'question' ? '→ The user is asking a QUESTION. Provide a helpful answer WITHOUT modifying files.' : '→ The user wants CODE CHANGES. Modify/create files as requested.'}
+${errorInstructions}
 
-Current codebase context:
+═══════════════════════════════════════════════════════════════════════════════
+🚨 CRITICAL COMPONENT LINKING RULES - FOLLOW EXACTLY:
+═══════════════════════════════════════════════════════════════════════════════
+
+**WHEN USER SAYS: "Create X and link it to Y"**
+
+You MUST do ALL of these steps:
+
+1. **CREATE the new component** (e.g., SignInForm.tsx)
+   - Add "use client" if it uses hooks/events
+   - Import all dependencies
+   - Make it fully functional
+
+2. **FIND the parent component** (e.g., page.tsx with the button)
+   - Read the ENTIRE parent file
+   - Understand the EXISTING button/trigger
+   - Identify what needs to change
+
+3. **MODIFY the parent component** to:
+   - Import the new component at the top
+   - Add state for showing/hiding (if modal/dialog)
+   - Wire up the EXISTING button's onClick
+   - Add the new component to JSX
+   - DO NOT duplicate the button
+   - DO NOT create a new button if one exists
+
+4. **EXAMPLE - Correct Approach:**
+
+User: "Create a sign-in form and link it to the sign-in button"
+
+Step 1 - Create components/SignInForm.tsx:
+\`\`\`tsx
+"use client";
+import { useState } from "react";
+export function SignInForm({ open, onClose }: { open: boolean; onClose: () => void }) {
+  // Form implementation
+}
+\`\`\`
+
+Step 2 - Modify app/page.tsx (COMPLETE FILE):
+\`\`\`tsx
+"use client"; // <CHANGE> Added for state management
+import { useState } from "react"; // <CHANGE> Added for dialog state
+import { SignInForm } from "@/components/SignInForm"; // <CHANGE> Added import
+
+export default function Page() {
+  const [showSignIn, setShowSignIn] = useState(false); // <CHANGE> Added state
+  
+  return (
+    <div>
+      <nav>
+        {/* EXISTING button - just add onClick */}
+        <button onClick={() => setShowSignIn(true)}> {/* <CHANGE> Added onClick */}
+          Sign In
+        </button>
+      </nav>
+      
+      {/* <CHANGE> Added dialog */}
+      <SignInForm 
+        open={showSignIn} 
+        onClose={() => setShowSignIn(false)} 
+      />
+    </div>
+  );
+}
+\`\`\`
+
+═══════════════════════════════════════════════════════════════════════════════
+🚨 CRITICAL MISTAKES TO AVOID:
+═══════════════════════════════════════════════════════════════════════════════
+
+❌ **NEVER DO THIS:**
+- Create a new button when one already exists
+- Duplicate the navbar or any existing component
+- Create Button.tsx when <button> already exists
+- Forget to add onClick to existing buttons
+- Import the component but not use it
+- Use the component but not import it
+- Create the component but not link it to the parent
+
+✅ **ALWAYS DO THIS:**
+- Read the parent file FIRST before modifying
+- Find the EXISTING button/trigger element
+- Add onClick to the EXISTING element
+- Import the new component at the top
+- Add necessary state (useState for dialogs/modals)
+- Include the new component in JSX
+- Test the logic: "If user clicks button → state changes → component shows"
+
+═══════════════════════════════════════════════════════════════════════════════
+📋 STEP-BY-STEP CHECKLIST FOR LINKING:
+═══════════════════════════════════════════════════════════════════════════════
+
+When user says "create X and link to Y":
+
+□ Step 1: Create the new component X
+  - Add "use client" if needed
+  - Import dependencies
+  - Make it accept open/onClose props (for dialogs)
+
+□ Step 2: Find the parent file containing Y
+  - Search for the button/trigger
+  - Read the ENTIRE file
+  - Understand existing structure
+
+□ Step 3: Modify parent file
+  - Add "use client" at top (if adding state)
+  - Import useState (if needed)
+  - Import the new component
+  - Add state variable (e.g., const [showX, setShowX] = useState(false))
+  - Find EXISTING button Y
+  - Add onClick={() => setShowX(true)} to EXISTING button
+  - Add new component to JSX: <X open={showX} onClose={() => setShowX(false)} />
+
+□ Step 4: Verify logic
+  - User clicks button → state becomes true → component shows
+  - User closes component → state becomes false → component hides
+
+═══════════════════════════════════════════════════════════════════════════════
+GENERAL RULES:
+═══════════════════════════════════════════════════════════════════════════════
+
+1. **UNDERSTAND USER INTENT:**
+   - Questions → ANSWER without modifying files
+   - "Create and link" → CREATE + MODIFY parent to link
+   - "Change X" → MODIFY existing file
+   - "Fix error" → FIX the specific error file
+
+2. **FILE MODIFICATION RULES:**
+   ${isModifyCommand || projectInfo.isGitHubProject ? '⚠️ CRITICAL: Use EXACT file paths from "Relevant Files". DO NOT create new files with similar names.' : 'Check if similar files exist before creating new ones.'}
+
+3. ${projectInfo.isGitHubProject ? '🚨 GITHUB PROJECTS: "newFiles" MUST be empty {} unless user explicitly says "create a new file".' : 'ONLY output NEW or MODIFIED files.'}
+
+4. **FRAMEWORK-SPECIFIC RULES (${detectedFramework}):**
+${frameworkRules}
+${projectPatternsContext}
+
+5. **ERROR HANDLING:**
+   - "useForm is not a function" → Add "use client" + import
+   - "Cannot find module" → Fix import paths
+   - "X is not defined" → Import missing items
+
+6. **CODE QUALITY:**
+   - Output COMPLETE file content (not diffs)
+   - Maintain existing code style
+   - Add // <CHANGE> comments for clarity
+   - Ensure TypeScript types are correct
+   - Test logic mentally before generating
+
+${explicitFileInstructions}${existingFilesWarning}${responseFormat}
+
+═══════════════════════════════════════════════════════════════════════════════
+CURRENT CODEBASE CONTEXT:
+═══════════════════════════════════════════════════════════════════════════════
 ${context.summary}
 
+═══════════════════════════════════════════════════════════════════════════════
+RESPONSE FORMAT:
+═══════════════════════════════════════════════════════════════════════════════
 You MUST respond with valid JSON in this exact structure:
 {
+  "answer": "If user asked a question, provide detailed answer here. Otherwise, leave empty.",
   "modifiedFiles": {
     "path/to/file.ext": "complete file content with changes..."
   },
@@ -1962,7 +2592,7 @@ You MUST respond with valid JSON in this exact structure:
       "description": "What was changed and why"
     }
   ],
-  "description": "Brief summary of all changes"
+  "description": "Brief summary of all changes OR answer summary"
 }`,
             },
             { role: "user", content: enhancedPrompt }
@@ -2031,6 +2661,44 @@ You MUST respond with valid JSON in this exact structure:
           jsonStr = jsonStr.trim();
           const parsed = JSON.parse(jsonStr);
           
+          // Check if this is a question response (answer field present and no file changes)
+          const isQuestionResponse = parsed.answer && 
+            (!parsed.modifiedFiles || Object.keys(parsed.modifiedFiles).length === 0) &&
+            (!parsed.newFiles || Object.keys(parsed.newFiles).length === 0);
+          
+          if (isQuestionResponse) {
+            console.log('📝 AI provided an answer to user question (no code changes)');
+            
+            // Save answer as assistant message
+            const { MessageService } = await import('../modules/messages/service');
+            await MessageService.saveResult({
+              content: parsed.answer,
+              role: 'assistant',
+              type: 'text',
+              project_id: projectId,
+            });
+            
+            // Emit answer to frontend
+            await streamingService.emit(projectId, {
+              type: 'complete',
+              summary: parsed.description || 'Question answered',
+              totalFiles: 0,
+              versionId,
+            });
+            
+            // Return early - no file changes needed
+            return {
+              state: {
+                data: {
+                  summary: parsed.answer,
+                  files: {},
+                  requirements: [],
+                  isAnswer: true,
+                } as AgentState
+              }
+            };
+          }
+          
           // Merge with parent version files
           const parentFiles = context.previousFiles || {};
           let modifiedFiles: Record<string, string> = parsed.modifiedFiles || {};
@@ -2070,43 +2738,149 @@ You MUST respond with valid JSON in this exact structure:
           const reconciledNew: Record<string, string> = {};
           const aliasDeletions: string[] = [];
 
+          // Enhanced normalization function that handles more edge cases
           const normalizePath = (p: string): string => {
             const parts = p.split('/');
             const file = parts.pop() || '';
             const lastDot = file.lastIndexOf('.');
             const name = lastDot === -1 ? file : file.slice(0, lastDot);
             const ext = lastDot === -1 ? '' : file.slice(lastDot);
+            // Remove hyphens, underscores, and convert to lowercase for comparison
             const normalizedName = name.toLowerCase().replace(/[-_]/g, '');
-            return [...parts, normalizedName + ext.toLowerCase()].join('/');
+            return [...parts.map(p => p.toLowerCase()), normalizedName + ext.toLowerCase()].join('/');
           };
+
+          // Build a map of normalized paths to actual paths for faster lookup
+          const normalizedToActual = new Map<string, string>();
+          for (const existingPath of Object.keys(parentFiles)) {
+            const normalized = normalizePath(existingPath);
+            normalizedToActual.set(normalized, existingPath);
+          }
 
           for (const [newPath, content] of Object.entries(newFiles)) {
             // If AI put file in "newFiles" but it already exists with exact same path,
             // it should be treated as a modification
             if (parentFiles[newPath]) {
+              console.log(`✓ Reconciling: "${newPath}" already exists, treating as modification`);
               reconciledModified[newPath] = content as string;
               continue;
             }
 
             // Check if this "new" file is actually an alias of an existing file
-            // (e.g., hero-section.tsx vs HeroSection.tsx)
+            // (e.g., hero-section.tsx vs HeroSection.tsx, Hero.tsx vs HeroSection.tsx)
             const norm = normalizePath(newPath);
-            const candidate = Object.keys(parentFiles).find(
-              (p) => p !== newPath && normalizePath(p) === norm
-            );
+            const candidate = normalizedToActual.get(norm);
 
-            if (candidate) {
+            if (candidate && candidate !== newPath) {
               // Treat as modification of the existing file path instead of a brand new file
+              console.log(`✓ Reconciling: "${newPath}" → "${candidate}" (alias detected)`);
               reconciledModified[candidate] = content as string;
               aliasDeletions.push(newPath);
             } else {
-              // Truly new file that doesn't exist in parent
-              reconciledNew[newPath] = content as string;
+              // Additional fuzzy matching: check if filename matches but directory differs slightly
+              const newFileName = newPath.split('/').pop()?.toLowerCase().replace(/[-_]/g, '') || '';
+              const newExt = newPath.split('.').pop() || '';
+              
+              let fuzzyMatch: string | null = null;
+              for (const existingPath of Object.keys(parentFiles)) {
+                const existingFileName = existingPath.split('/').pop()?.toLowerCase().replace(/[-_]/g, '') || '';
+                const existingExt = existingPath.split('.').pop() || '';
+                
+                // If filename and extension match, it's likely the same file
+                if (newFileName === existingFileName && newExt === existingExt) {
+                  fuzzyMatch = existingPath;
+                  break;
+                }
+              }
+              
+              if (fuzzyMatch) {
+                console.log(`✓ Reconciling: "${newPath}" → "${fuzzyMatch}" (fuzzy filename match)`);
+                reconciledModified[fuzzyMatch] = content as string;
+                aliasDeletions.push(newPath);
+              } else {
+                // Truly new file that doesn't exist in parent
+                reconciledNew[newPath] = content as string;
+              }
             }
           }
 
           modifiedFiles = reconciledModified;
           newFiles = reconciledNew;
+          
+          // Log reconciliation results
+          if (aliasDeletions.length > 0) {
+            console.log(`📋 Reconciliation: Prevented ${aliasDeletions.length} duplicate files:`, aliasDeletions);
+          }
+          
+          // 🔧 IMMEDIATE AUTO-FIX: Apply fixes BEFORE streaming to frontend
+          console.log('🔧 Applying immediate auto-fixes to generated files...');
+          const allGeneratedFiles = { ...modifiedFiles, ...newFiles };
+          
+          for (const [filePath, content] of Object.entries(allGeneratedFiles)) {
+            if (typeof content !== 'string') continue;
+            if (!filePath.endsWith('.tsx') && !filePath.endsWith('.jsx')) continue;
+            
+            let fixedContent = content;
+            let wasFixed = false;
+            
+            // Fix 1: Missing "use client" for hooks/events
+            const hasHooks = /use(State|Effect|Form|Callback|Memo|Ref|Context|Reducer)\s*\(/.test(content);
+            const hasEventHandlers = /on(Click|Change|Submit|KeyDown|KeyUp|MouseEnter|MouseLeave|Focus|Blur)\s*=/.test(content);
+            const hasBrowserAPIs = /\b(window|document|localStorage|sessionStorage)\b/.test(content);
+            const hasUseClient = /^["']use client["'];?\s*$/m.test(content);
+            
+            if ((hasHooks || hasEventHandlers || hasBrowserAPIs) && !hasUseClient) {
+              // Remove any existing incorrect "use client" imports
+              fixedContent = fixedContent.replace(/import\s+["']use client["'];?\s*\n?/g, '');
+              fixedContent = fixedContent.replace(/import\s+"use client";?\s*\/\/[^\n]*\n?/g, '');
+              
+              // Add "use client" as the FIRST line (it's a directive, not an import)
+              fixedContent = `"use client";\n\n${fixedContent}`;
+              wasFixed = true;
+              console.log(`✓ Auto-fix: Added "use client" directive to ${filePath}`);
+            }
+            
+            // Fix 2: Missing imports
+            const missingImports: string[] = [];
+            
+            if (/\buseState\b/.test(fixedContent) && !/import.*\{[^}]*useState[^}]*\}.*from\s+['"]react['"]/.test(fixedContent)) {
+              if (!/import.*from\s+['"]react['"]/.test(fixedContent)) {
+                missingImports.push(`import { useState } from "react";`);
+              }
+            }
+            
+            if (/\buseEffect\b/.test(fixedContent) && !/import.*\{[^}]*useEffect[^}]*\}.*from\s+['"]react['"]/.test(fixedContent)) {
+              if (!/import.*from\s+['"]react['"]/.test(fixedContent)) {
+                missingImports.push(`import { useEffect } from "react";`);
+              }
+            }
+            
+            if (/\buseForm\b/.test(fixedContent) && !/import.*useForm.*from\s+['"]react-hook-form['"]/.test(fixedContent)) {
+              missingImports.push(`import { useForm } from "react-hook-form";`);
+            }
+            
+            if (missingImports.length > 0) {
+              // Add imports after "use client" if present
+              const useClientMatch = fixedContent.match(/^["']use client["'];?\s*\n/m);
+              if (useClientMatch) {
+                const afterUseClient = fixedContent.substring(useClientMatch[0].length);
+                fixedContent = `${useClientMatch[0]}\n${missingImports.join('\n')}\n${afterUseClient}`;
+              } else {
+                fixedContent = `${missingImports.join('\n')}\n\n${fixedContent}`;
+              }
+              wasFixed = true;
+              console.log(`✓ Auto-fix: Added missing imports to ${filePath}`);
+            }
+            
+            // Apply fixes
+            if (wasFixed) {
+              if (modifiedFiles[filePath]) {
+                modifiedFiles[filePath] = fixedContent;
+              } else if (newFiles[filePath]) {
+                newFiles[filePath] = fixedContent;
+              }
+            }
+          }
           
           // 🚨 GITHUB PROJECT SAFETY CHECK: Prevent creating new files unless explicitly requested
           if (projectInfo.isGitHubProject && Object.keys(newFiles).length > 0) {
@@ -2429,14 +3203,165 @@ You MUST respond with valid JSON in this exact structure:
         }
       });
       
-      // Step 5: Update version with generated files
+      // Step 7: Validate and auto-fix errors + check component linking
+      const validatedFiles = await step.run("validate-and-fix-errors", async () => {
+        if (!('state' in apiResult) || !apiResult.state?.data) {
+          throw new Error('Invalid API result structure');
+        }
+        
+        // Skip validation if this was a question response (no files to validate)
+        if ((apiResult.state.data as any).isAnswer) {
+          console.log('⏭️ Skipping validation - this was a question response');
+          return {};
+        }
+        
+        const files = apiResult.state.data.files;
+        const errors: string[] = [];
+        const fixes: Record<string, string> = {};
+        
+        // Check for component linking issues
+        const newComponentFiles = Object.keys(files).filter(f => 
+          (f.endsWith('.tsx') || f.endsWith('.jsx')) && 
+          !f.includes('page.tsx') && 
+          !f.includes('layout.tsx')
+        );
+        
+        if (newComponentFiles.length > 0 && prompt.toLowerCase().includes('link')) {
+          console.log(`🔗 Checking component linking for: ${newComponentFiles.join(', ')}`);
+          
+          // Check if parent files were modified to import these components
+          const parentFiles = Object.keys(files).filter(f => 
+            f.includes('page.tsx') || f.includes('layout.tsx')
+          );
+          
+          for (const componentFile of newComponentFiles) {
+            const componentName = componentFile.split('/').pop()?.replace(/\.(tsx|jsx)$/, '');
+            let isLinked = false;
+            
+            for (const parentFile of parentFiles) {
+              const parentContent = files[parentFile];
+              if (typeof parentContent === 'string') {
+                // Check if component is imported and used
+                const hasImport = parentContent.includes(componentName || '');
+                const hasUsage = new RegExp(`<${componentName}[\\s/>]`).test(parentContent);
+                
+                if (hasImport && hasUsage) {
+                  isLinked = true;
+                  console.log(`✓ ${componentName} is properly linked in ${parentFile}`);
+                  break;
+                }
+              }
+            }
+            
+            if (!isLinked && parentFiles.length > 0) {
+              errors.push(`Component ${componentName} was created but not linked to any parent file`);
+              console.warn(`⚠️ ${componentName} created but not linked!`);
+            }
+          }
+        }
+        
+        // Detect framework for validation
+        const allFiles = Object.keys(context.previousFiles || {});
+        const framework = detectFramework(allFiles, context.configFiles);
+        
+        // Check for common errors in generated files
+        for (const [filePath, content] of Object.entries(files)) {
+          if (typeof content !== 'string') continue;
+          
+          const fileErrors: string[] = [];
+          
+          // Check 1: React hooks without "use client" in Next.js App Router
+          if (framework === 'nextjs-app-router' && (filePath.endsWith('.tsx') || filePath.endsWith('.jsx'))) {
+            const hasHooks = /use(State|Effect|Form|Callback|Memo|Ref|Context|Reducer|ImperativeHandle|LayoutEffect|DebugValue|Id|Transition|DeferredValue|SyncExternalStore|InsertionEffect)\s*\(/.test(content);
+            const hasEventHandlers = /on(Click|Change|Submit|KeyDown|KeyUp|MouseEnter|MouseLeave|Focus|Blur)\s*=/.test(content);
+            const hasBrowserAPIs = /\b(window|document|localStorage|sessionStorage|navigator)\b/.test(content);
+            const hasUseClient = /^["']use client["'];?\s*$/m.test(content);
+            
+            if ((hasHooks || hasEventHandlers || hasBrowserAPIs) && !hasUseClient) {
+              fileErrors.push(`Missing "use client" directive for client-side features`);
+              // Auto-fix: Add "use client" at the top
+              fixes[filePath] = `"use client";\n\n${content}`;
+              console.log(`✓ Auto-fix: Added "use client" to ${filePath}`);
+            }
+          }
+          
+          // Check 2: Missing imports for common libraries
+          const missingImports: string[] = [];
+          
+          if (/\buseForm\b/.test(content) && !/import.*useForm.*from\s+['"]react-hook-form['"]/.test(content)) {
+            missingImports.push(`import { useForm } from "react-hook-form";`);
+          }
+          
+          if (/\bzodResolver\b/.test(content) && !/import.*zodResolver.*from\s+['"]@hookform\/resolvers\/zod['"]/.test(content)) {
+            missingImports.push(`import { zodResolver } from "@hookform/resolvers/zod";`);
+          }
+          
+          if (/\bz\.\w+/.test(content) && !/import.*z.*from\s+['"]zod['"]/.test(content) && !/import\s+\*\s+as\s+z\s+from\s+['"]zod['"]/.test(content)) {
+            missingImports.push(`import * as z from "zod";`);
+          }
+          
+          if (missingImports.length > 0) {
+            fileErrors.push(`Missing imports: ${missingImports.join(', ')}`);
+            // Auto-fix: Add missing imports after "use client" if present
+            const useClientMatch = content.match(/^["']use client["'];?\s*\n/m);
+            if (useClientMatch) {
+              const afterUseClient = content.substring(useClientMatch[0].length);
+              fixes[filePath] = `${useClientMatch[0]}\n${missingImports.join('\n')}\n${afterUseClient}`;
+            } else {
+              fixes[filePath] = `${missingImports.join('\n')}\n\n${content}`;
+            }
+            console.log(`✓ Auto-fix: Added missing imports to ${filePath}`);
+          }
+          
+          if (fileErrors.length > 0) {
+            errors.push(`${filePath}: ${fileErrors.join(', ')}`);
+          }
+        }
+        
+        // Apply fixes
+        const fixedFiles = { ...files };
+        for (const [filePath, fixedContent] of Object.entries(fixes)) {
+          fixedFiles[filePath] = fixedContent;
+          
+          // Emit fix notification
+          await streamingService.emit(projectId, {
+            type: 'info',
+            message: `🔧 Auto-fixed: ${filePath}`,
+            versionId,
+          });
+        }
+        
+        if (errors.length > 0) {
+          console.log(`⚠️ Found and fixed ${errors.length} issues:`, errors);
+        }
+        
+        return fixedFiles;
+      });
+      
+      // Step 8: Update version with validated/fixed files
       await step.run("update-version", async () => {
         if (!('state' in apiResult) || !apiResult.state?.data) {
           throw new Error('Invalid API result structure');
         }
         
+        // Skip version update if this was a question response
+        if ((apiResult.state.data as any).isAnswer) {
+          console.log('⏭️ Skipping version update - this was a question response');
+          // Mark version as complete but with no files
+          await VersionManager.updateVersion(versionId!, {
+            files: {},
+            status: 'complete',
+            metadata: {
+              requirements: [],
+              summary: apiResult.state.data.summary,
+              isAnswer: true,
+            },
+          });
+          return;
+        }
+        
         await VersionManager.updateVersion(versionId!, {
-          files: apiResult.state.data.files,
+          files: validatedFiles,
           status: 'complete',
           metadata: {
             requirements: apiResult.state.data.requirements,
@@ -2445,7 +3370,7 @@ You MUST respond with valid JSON in this exact structure:
         });
       });
       
-      // Step 6: Update message with version_id
+      // Step 9: Update message with version_id
       await step.run("link-message-to-version", async () => {
         await supabase
           .from('messages')
@@ -2453,13 +3378,13 @@ You MUST respond with valid JSON in this exact structure:
           .eq('id', messageId);
       });
       
-      // Step 7: Emit completion event
+      // Step 10: Emit completion event
       await step.run("emit-complete", async () => {
         if (!('state' in apiResult) || !apiResult.state?.data) {
           throw new Error('Invalid API result structure');
         }
         
-        const filesList = Object.keys(apiResult.state.data.files || {});
+        const filesList = Object.keys(validatedFiles || {});
         
         await streamingService.emit(projectId, {
           type: 'complete',
