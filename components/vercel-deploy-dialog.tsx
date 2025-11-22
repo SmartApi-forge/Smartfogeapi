@@ -53,33 +53,32 @@ export function VercelDeployDialog({
 
   const handleConnect = async () => {
     try {
-      // First, try to fetch the connect endpoint
+      // Fetch the OAuth URL from the server
       const response = await fetch('/api/vercel/connect', {
         method: 'GET',
         credentials: 'same-origin',
       });
 
-      // If it's a redirect, follow it
-      if (response.redirected) {
-        window.location.href = response.url;
-        return;
-      }
-
-      // If it's an error, show it
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error('Vercel connect error:', errorData);
         
         toast.error("Connection failed", {
-          description: errorData.details?.message || errorData.error || "Please check console for details",
+          description: errorData.error || "Unable to connect to Vercel",
         });
         return;
       }
 
-      // If we get here, check if there's a redirect URL
-      const data = await response.json().catch(() => null);
-      if (data?.redirectUrl) {
-        window.location.href = data.redirectUrl;
+      const data = await response.json();
+      
+      // Redirect to Vercel OAuth
+      if (data.authUrl) {
+        console.log('Redirecting to Vercel OAuth...');
+        window.location.href = data.authUrl;
+      } else {
+        toast.error("Configuration error", {
+          description: "Unable to get Vercel authorization URL",
+        });
       }
     } catch (error: any) {
       console.error('Connect error:', error);

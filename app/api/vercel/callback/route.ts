@@ -11,22 +11,37 @@ export async function GET(req: NextRequest) {
     const searchParams = req.nextUrl.searchParams;
     
     const code = searchParams.get('code');
-    const state = searchParams.get('state'); // user_id
+    const state = searchParams.get('state'); // CSRF token
     const teamId = searchParams.get('teamId'); // null for personal accounts
     const configurationId = searchParams.get('configurationId');
     
+    console.log('Vercel Callback - Received params:', {
+      hasCode: !!code,
+      hasState: !!state,
+      hasConfigId: !!configurationId,
+      teamId,
+    });
+    
     if (!code || !state || !configurationId) {
+      console.error('Vercel Callback - Missing parameters');
       return NextResponse.redirect(
         `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/projects?error=missing_params`
       );
     }
 
-    // Verify user
+    // Verify user session exists (we don't verify state === user.id anymore)
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     
-    if (userError || !user || user.id !== state) {
+    console.log('Vercel Callback - Auth check:', {
+      hasUser: !!user,
+      userId: user?.id,
+      error: userError?.message,
+    });
+    
+    if (userError || !user) {
+      console.error('Vercel Callback - No user session');
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/login?error=unauthorized`
+        `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/login?error=unauthorized&message=${encodeURIComponent('Please sign in first')}`
       );
     }
 
@@ -67,7 +82,7 @@ export async function GET(req: NextRequest) {
     const { error: dbError } = await supabase
       .from('vercel_connections')
       .upsert({
-        user_id: state,
+        user_id: user.id, // Use the authenticated user's ID
         access_token: access_token,
         team_id: team_id || teamId,
         configuration_id: configurationId,
