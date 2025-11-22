@@ -1,9 +1,10 @@
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { appRouter } from '@/src/trpc/routers/_app';
 import { createTRPCContext } from '@/lib/trpc';
+import type { FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';
 
-const handler = (req: Request) =>
-  fetchRequestHandler({
+async function handler(req: Request) {
+  return fetchRequestHandler({
     endpoint: '/api/trpc',
     req,
     router: appRouter,
@@ -17,5 +18,7 @@ const handler = (req: Request) =>
           }
         : undefined,
   });
+}
 
-export { handler as GET, handler as POST };
+export const GET = handler;
+export const POST = handler;

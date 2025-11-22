@@ -2,6 +2,9 @@ import React from "react";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import { ArrowUp, Square, Paperclip, SlidersHorizontal } from "lucide-react";
 import { TypingAnimation } from "./typing-animation";
+import { GitHubRepoSelector } from "../github-repo-selector";
+import Image from "next/image";
+import { useTheme } from "next-themes";
 
 // Utility function for className merging
 const cn = (...classes: (string | undefined | null | false)[]) => classes.filter(Boolean).join(" ");
@@ -265,23 +268,27 @@ const PromptInputActions: React.FC<PromptInputActionsProps> = ({ children, class
 
 // Main PromptInputBox Component
 interface PromptInputBoxProps {
-  onSend?: (message: string) => void;
+  onSend?: (message: string, githubRepo?: any) => void;
   isLoading?: boolean;
   className?: string;
 }
 export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxProps>(
   ({ onSend = () => { }, isLoading = false, className }, ref) => {
     const [input, setInput] = React.useState("");
+    const [selectedGithubRepo, setSelectedGithubRepo] = React.useState<any>(null);
     const promptBoxRef = React.useRef<HTMLDivElement>(null);
 
     const handleSubmit = () => {
       if (input.trim()) {
-        onSend(input);
+        onSend(input, selectedGithubRepo);
         setInput("");
+        setSelectedGithubRepo(null);
       }
     };
 
     const hasContent = input.trim() !== "";
+
+    const { theme } = useTheme();
 
     return (
       <PromptInput
@@ -299,6 +306,22 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
         <PromptInputTextarea className="text-base" />
         <PromptInputActions className="flex items-center justify-between p-0 pt-2">
           <div className="flex items-center gap-2">
+            <GitHubRepoSelector onRepositorySelected={setSelectedGithubRepo}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 py-0 rounded-full text-xs text-gray-200 border-[#444444] bg-transparent hover:bg-gray-700/40"
+              >
+                <Image 
+                  src={`/github-${theme === 'dark' ? 'dark' : 'light'}.svg`}
+                  alt="GitHub"
+                  width={14}
+                  height={14}
+                  className="mr-1.5 opacity-70"
+                />
+                {selectedGithubRepo ? selectedGithubRepo.repo_name : 'GitHub'}
+              </Button>
+            </GitHubRepoSelector>
             <Button
               variant="outline"
               size="sm"

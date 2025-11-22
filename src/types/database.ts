@@ -39,7 +39,7 @@ export interface Database {
           name: string
           description: string | null
           prompt: string
-          framework: 'fastapi' | 'express'
+          framework: 'fastapi' | 'express' | 'nextjs' | 'react' | 'vue' | 'angular' | 'unknown' | 'flask' | 'django' | 'python'
           advanced: boolean
           status: 'generating' | 'completed' | 'failed' | 'deployed'
           openapi_spec: Json | null
@@ -48,6 +48,9 @@ export interface Database {
           swagger_url: string | null
           created_at: string
           updated_at: string
+          github_mode: boolean | null
+          github_repo_id: string | null
+          repo_url: string | null
         }
         Insert: {
           id?: string
@@ -55,7 +58,7 @@ export interface Database {
           name: string
           description?: string | null
           prompt: string
-          framework: 'fastapi' | 'express'
+          framework: 'fastapi' | 'express' | 'nextjs' | 'react' | 'vue' | 'angular' | 'unknown' | 'flask' | 'django' | 'python'
           advanced?: boolean
           status?: 'generating' | 'completed' | 'failed' | 'deployed'
           openapi_spec?: Json | null
@@ -64,6 +67,9 @@ export interface Database {
           swagger_url?: string | null
           created_at?: string
           updated_at?: string
+          github_mode?: boolean | null
+          github_repo_id?: string | null
+          repo_url?: string | null
         }
         Update: {
           id?: string
@@ -71,7 +77,7 @@ export interface Database {
           name?: string
           description?: string | null
           prompt?: string
-          framework?: 'fastapi' | 'express'
+          framework?: 'fastapi' | 'express' | 'nextjs' | 'react' | 'vue' | 'angular' | 'unknown' | 'flask' | 'django' | 'python'
           advanced?: boolean
           status?: 'generating' | 'completed' | 'failed' | 'deployed'
           openapi_spec?: Json | null
@@ -80,6 +86,9 @@ export interface Database {
           swagger_url?: string | null
           created_at?: string
           updated_at?: string
+          github_mode?: boolean | null
+          github_repo_id?: string | null
+          repo_url?: string | null
         }
       }
       jobs: {
@@ -210,6 +219,110 @@ export interface Database {
           created_at?: string
           updated_at?: string
         }
+      }
+      messages: {
+        Row: {
+          id: string
+          content: string
+          role: string
+          type: string
+          sender_id: string | null
+          receiver_id: string | null
+          project_id: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          content: string
+          role: string
+          type: string
+          sender_id?: string | null
+          receiver_id?: string | null
+          project_id?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          content?: string
+          role?: string
+          type?: string
+          sender_id?: string | null
+          receiver_id?: string | null
+          project_id?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fragments: {
+        Row: {
+          content: string
+          created_at: string | null
+          files: Json
+          fragment_type: string
+          id: string
+          message_id: string
+          metadata: Json
+          order_index: number
+          project_id: string | null
+          sandbox_url: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          content?: string
+          created_at?: string | null
+          files?: Json
+          fragment_type?: string
+          id?: string
+          message_id: string
+          metadata?: Json
+          order_index?: number
+          project_id?: string | null
+          sandbox_url: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          files?: Json
+          fragment_type?: string
+          id?: string
+          message_id?: string
+          metadata?: Json
+          order_index?: number
+          project_id?: string | null
+          sandbox_url?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fragments_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fragments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

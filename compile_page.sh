@@ -386,7 +386,7 @@ export -f run_test_suite
 export -f run_tests
 export -f validate_api_project
 
-# Only run the announce and tail block when executed directly (not when sourced)
+# Only run the announce block when executed directly (not when sourced)
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     # Make the validation function available for external calls
     echo "API validation environment is ready!"
@@ -402,7 +402,5 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     echo "  - validate_api_project          : Run full validation suite"
     echo "  - node health-check.js          : Start health check server"
     
-    # Keep the container running
     echo "Sandbox is ready for API development and testing!"
-    tail -f /dev/null
 fi

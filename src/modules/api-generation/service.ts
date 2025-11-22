@@ -174,8 +174,8 @@ export class ApiGenerationService {
         .from('projects')
         .insert({
           user_id: userId,
-          name: `API from prompt: ${input.prompt.substring(0, 50)}...`,
-          description: `API generated from user prompt`,
+          name: `API Project ${new Date().toLocaleDateString()}`, // Shorter, cleaner name
+          description: `API generated from user prompt: ${input.prompt.substring(0, 100)}...`,
           framework: input.framework,
           advanced: input.advanced,
           status: 'generating'

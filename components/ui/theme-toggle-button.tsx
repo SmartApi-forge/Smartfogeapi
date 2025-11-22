@@ -54,7 +54,12 @@ export function ThemeToggleButton({
       setTheme(theme === "light" ? "dark" : "light")
     }
 
-    if (!document.startViewTransition) {
+    // Check if there are any active EventSource connections (streaming in progress)
+    // Skip view transition during streaming to prevent DOM update blocking
+    const hasActiveStreaming = typeof window !== "undefined" && 
+      (window as any).__activeStreamingSessions > 0;
+
+    if (!document.startViewTransition || hasActiveStreaming) {
       switchTheme()
       return
     }

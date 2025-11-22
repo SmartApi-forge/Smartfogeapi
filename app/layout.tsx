@@ -1,18 +1,13 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Geist } from "next/font/google"
+import { GeistSans } from "geist/font/sans"
+import { GeistMono } from "geist/font/mono"
 import { ThemeProvider } from "@/components/theme-provider"
 import { TRPCReactProvider } from "@/src/trpc/client"
 import { AuthInitializer } from "@/components/auth-initializer"
 import { Toaster } from "@/components/ui/sonner"
 import { Analytics } from '@vercel/analytics/next';
 import "./globals.css"
-
-const geist = Geist({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-geist",
-})
 
 export const metadata: Metadata = {
   title: "SmartAPIForge - Build APIs Without Code",
@@ -26,13 +21,17 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${geist.variable} antialiased`}>
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable} antialiased`} suppressHydrationWarning>
+      <head>
+        {/* Global tRPC client for browser console testing */}
+        <script src="/trpc-console-helper.js" defer></script>
+      </head>
       <body className="font-sans">
         <TRPCReactProvider>
           <AuthInitializer />
           <ThemeProvider
             attribute="class"
-            defaultTheme="system"
+            defaultTheme="light"
             enableSystem
             disableTransitionOnChange
           >
@@ -40,6 +39,7 @@ export default function RootLayout({
           </ThemeProvider>
         </TRPCReactProvider>
         <Analytics />
+        <Toaster />
       </body>
     </html>
   )

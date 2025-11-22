@@ -1,0 +1,115 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getWorkspace } from '@/src/lib/daytona-client';
+import { createRouteHandlerClient } from '@/lib/supabase-route-handler';
+
+export async function POST(request: NextRequest) {
+  try {
+    const { sandboxId, projectId, filePath } = await request.json();
+
+    if (!sandboxId || !projectId || !filePath) {
+      return NextResponse.json(
+        { error: 'Missing required parameters' },
+        { status: 400 }
+      );
+    }
+
+    const supabase = await createRouteHandlerClient();
+
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    // Verify user has access to this project
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('id, user_id, metadata')
+      .eq('id', projectId)
+      .single();
+
+    if (projectError || !project) {
+      return NextResponse.json(
+        { error: 'Project not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check if user is owner OR collaborator with edit access
+    const isOwner = project.user_id === user.id;
+    
+    if (!isOwner) {
+      // Check if user is a collaborator with edit permissions
+      const { data: collaborator, error: collabError } = await supabase
+        .from('project_collaborators')
+        .select('access_level')
+        .eq('project_id', projectId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (collabError || !collaborator) {
+        return NextResponse.json(
+          { error: 'You do not have access to this project' },
+          { status: 403 }
+        );
+      }
+
+      // Only users with 'edit' access can delete files
+      if (collaborator.access_level !== 'edit') {
+        return NextResponse.json(
+          { error: 'You need edit permissions to delete files' },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Verify sandbox ID matches
+    if (project.metadata?.sandboxId !== sandboxId) {
+      return NextResponse.json(
+        { error: 'Sandbox ID mismatch' },
+        { status: 403 }
+      );
+    }
+
+    // Get sandbox
+    const sandbox = await getWorkspace(sandboxId);
+
+    if (!sandbox) {
+      return NextResponse.json(
+        { error: 'Sandbox not found' },
+        { status: 404 }
+      );
+    }
+
+    // Delete the file from the sandbox using shell command
+    const fullPath = `workspace/project/${filePath}`;
+
+    await sandbox.process.executeCommand(
+      `rm -f "${fullPath}"`,
+      'workspace',
+      undefined,
+      30
+    );
+
+    console.log(`🗑️ Deleted file: ${fullPath}`);
+
+    return NextResponse.json({
+      success: true,
+      filePath,
+      message: 'File deleted successfully',
+    });
+  } catch (error: any) {
+    console.error('File deletion error:', error);
+    return NextResponse.json(
+      { 
+        error: 'Failed to delete file',
+        message: error.message || 'Unknown error',
+      },
+      { status: 500 }
+    );
+  }
+}

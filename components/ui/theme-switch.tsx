@@ -75,7 +75,12 @@ const ThemeSwitch = React.forwardRef<HTMLDivElement, ThemeSwitchProps>(
         setTheme(modes[nextIndex]);
       };
 
-      if (variant === "circle-blur" && typeof window !== "undefined" && document.startViewTransition) {
+      // Check if there are any active EventSource connections (streaming in progress)
+      // Skip view transition during streaming to prevent DOM update blocking
+      const hasActiveStreaming = typeof window !== "undefined" && 
+        (window as any).__activeStreamingSessions > 0;
+
+      if (variant === "circle-blur" && typeof window !== "undefined" && document.startViewTransition && !hasActiveStreaming) {
         document.startViewTransition(switchTheme);
       } else {
         switchTheme();
@@ -95,7 +100,12 @@ const ThemeSwitch = React.forwardRef<HTMLDivElement, ThemeSwitchProps>(
         setTheme(modes[idx]);
       };
 
-      if (variant === "circle-blur" && typeof window !== "undefined" && document.startViewTransition) {
+      // Check if there are any active EventSource connections (streaming in progress)
+      // Skip view transition during streaming to prevent DOM update blocking
+      const hasActiveStreaming = typeof window !== "undefined" && 
+        (window as any).__activeStreamingSessions > 0;
+
+      if (variant === "circle-blur" && typeof window !== "undefined" && document.startViewTransition && !hasActiveStreaming) {
         document.startViewTransition(switchTheme);
       } else {
         switchTheme();

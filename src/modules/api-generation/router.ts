@@ -7,6 +7,9 @@ import {
   projectIdSchema, 
   jobStatusSchema 
 } from './types'
+import { classifyCommand } from '../../services/command-classifier'
+import { ContextBuilder } from '../../services/context-builder'
+import { classifyCommandSchema } from '../versions/types'
 
 const apiGenerationService = new ApiGenerationService()
 
@@ -142,6 +145,66 @@ export const apiGenerationRouter = createTRPCRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       return await apiGenerationService.retryJob(input.jobId, ctx.user.id)
+    }),
+
+  // Command classification
+  classify: baseProcedure
+    .input(classifyCommandSchema)
+    .mutation(async ({ input }) => {
+      const classification = await classifyCommand(
+        input.prompt,
+        input.currentFiles || []
+      );
+      return classification;
+    }),
+
+  // Build context for iteration
+  buildContext: baseProcedure
+    .input(z.object({
+      projectId: z.string().uuid(),
+      messageLimit: z.number().int().positive().default(20),
+    }))
+    .query(async ({ input }) => {
+      const context = await ContextBuilder.buildContext(
+        input.projectId,
+        input.messageLimit
+      );
+      return context;
+    }),
+
+  // Trigger iteration workflow
+  triggerIteration: baseProcedure
+    .input(z.object({
+      projectId: z.string().uuid(),
+      messageId: z.string().uuid(),
+      prompt: z.string().min(1),
+      commandType: z.enum(['CREATE_FILE', 'MODIFY_FILE', 'DELETE_FILE', 'REFACTOR_CODE', 'GENERATE_API', 'CLONE_REPO']),
+      shouldCreateNewVersion: z.boolean(),
+      parentVersionId: z.string().uuid().optional(),
+      conversationHistory: z.array(z.object({
+        role: z.string(),
+        content: z.string(),
+      })).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      // Send event to Inngest to trigger iteration workflow
+      await inngest.send({
+        name: 'api/iterate',
+        data: {
+          projectId: input.projectId,
+          messageId: input.messageId,
+          prompt: input.prompt,
+          commandType: input.commandType,
+          shouldCreateNewVersion: input.shouldCreateNewVersion,
+          parentVersionId: input.parentVersionId,
+          conversationHistory: input.conversationHistory,
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Iteration workflow triggered',
+      };
     }),
 })
 

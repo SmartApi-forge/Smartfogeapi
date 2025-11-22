@@ -40,18 +40,19 @@ export type ProjectIdInput = z.infer<typeof projectIdSchema>
 
 export interface Project {
   id: string
+  user_id: string
   name: string
-  description: string
-  framework: 'fastapi' | 'express'
-  status: 'generating' | 'testing' | 'deploying' | 'deployed' | 'failed'
-  created_at: Date
-  updated_at: Date
-  deploy_url?: string
-  swagger_url?: string
-  openapi_spec?: any
-  code_url?: string
-  prompt?: string
-  advanced?: boolean
+  description: string | null
+  prompt: string
+  framework: 'fastapi' | 'express' | 'nextjs' | 'react' | 'vue' | 'angular' | 'unknown' | 'flask' | 'django' | 'python'
+  advanced: boolean
+  status: 'generating' | 'completed' | 'failed' | 'deployed'
+  openapi_spec: any
+  code_url: string | null
+  deploy_url: string | null
+  swagger_url: string | null
+  created_at: string
+  updated_at: string
 }
 
 export interface Job {

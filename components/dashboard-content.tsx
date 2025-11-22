@@ -1,30 +1,34 @@
 "use client"
 
-
+import { useRouter } from 'next/navigation'
 import { PromptInputBox } from "@/components/ui/ai-prompt-box"
 import { api } from "@/lib/trpc-client"
 
 export function DashboardContent() {
+  const router = useRouter()
+  
   // tRPC hook for automatic Inngest invocation
   const invokeInngest = api.apiGeneration.invoke.useMutation({
-    onSuccess: () => {
-      console.log("Inngest function invoked successfully!")
+    onSuccess: (data) => {
+      console.log("Inngest function invoked successfully!", data)
+      // Redirect to the loading page with the project ID
+      if (data.projectId) {
+        router.push(`/loading?projectId=${data.projectId}`)
+      }
     },
     onError: (error: any) => {
       console.error("Failed to invoke Inngest function:", error)
     }
   })
 
-  const handleSendMessage = (message: string) => {
+  const handleSendMessage = (message: string, githubRepo?: any) => {
     if (!message.trim()) return
 
     // Invoke Inngest function with the user's input
     invokeInngest.mutate({ 
-      text: message,
-      mode: 'direct',
-      repoUrl: undefined
+      text: message
     })
-    console.log('Message:', message)
+    console.log('Message:', message, 'GitHub Repo:', githubRepo)
   }
 
   return (
@@ -50,14 +54,7 @@ export function DashboardContent() {
         />
       </div>
 
-      {/* Success Message */}
-      {invokeInngest.isSuccess && (
-        <div className="mt-6 p-4 bg-green-600/20 border border-green-500/30 rounded-lg backdrop-blur-sm">
-          <p className="text-white text-sm text-center">
-            ✅ Your request has been processed! Check back soon for results.
-          </p>
-        </div>
-      )}
+
 
       {/* Error Message */}
       {invokeInngest.isError && (

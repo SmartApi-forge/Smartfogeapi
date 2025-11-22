@@ -5,6 +5,13 @@ import { messagesRouter } from '../../modules/messages/router';
 import { fragmentsRouter } from '../../modules/fragments/router';
 import { authRouter } from '../../modules/auth/router';
 import { apiGenerationRouter } from '../../modules/api-generation/router';
+import { projectsRouter } from '../../modules/projects/router';
+import { generationEventsRouter } from '../../modules/generation-events/router';
+import { versionsRouter } from '../../modules/versions/router';
+import { invitationsRouter } from '../../modules/invitations/router';
+import { githubRouter } from './github';
+import { codeModificationsRouter } from './code-modifications';
+import { vercelRouter } from './vercel';
 
 export const appRouter = createTRPCRouter({
   // Modular routers - each module controls its own procedures
@@ -12,6 +19,13 @@ export const appRouter = createTRPCRouter({
   fragments: fragmentsRouter,
   auth: authRouter,
   apiGeneration: apiGenerationRouter,
+  projects: projectsRouter,
+  generationEvents: generationEventsRouter,
+  versions: versionsRouter,
+  invitations: invitationsRouter,
+  github: githubRouter,
+  codeModifications: codeModificationsRouter,
+  vercel: vercelRouter,
 });
 
 // export type definition of API

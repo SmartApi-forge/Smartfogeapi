@@ -17,6 +17,10 @@ RUN apt-get update && apt-get install -y \
 COPY compile_page.sh /compile_page.sh
 RUN chmod +x /compile_page.sh
 
+# Also copy to /usr/local/bin for easy access
+COPY compile_page.sh /usr/local/bin/compile_page.sh
+RUN chmod +x /usr/local/bin/compile_page.sh
+
 # Create non-root user and set up working directory
 RUN groupadd --gid 1001 appuser || true && \
     useradd --uid 1001 --gid 1001 --shell /bin/bash --create-home appuser || true

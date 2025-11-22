@@ -9,6 +9,8 @@ import { supabase } from "@/lib/supabase"
 export default function Dashboard() {
   const router = useRouter()
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     // Clear any old localStorage auth data
@@ -57,12 +59,18 @@ export default function Dashboard() {
 
   return (
     <div 
-      className="min-h-screen h-screen overflow-hidden bg-cover bg-center bg-no-repeat font-neue-500 flex flex-col"
+      className="min-h-screen h-screen overflow-hidden bg-cover bg-center bg-no-repeat font-neue-500 flex flex-col transition-all duration-300 ease-in-out"
       style={{
-        backgroundImage: "url('/anime-1.jpeg')"
+        backgroundImage: "url('/anime-1.jpeg')",
+        marginLeft: sidebarOpen ? '320px' : '0px'
       }}
     >
-      <DashboardHeader />
+      <DashboardHeader 
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
+      />
       <div className="flex-1 min-h-0">
         <DashboardContent />
       </div>

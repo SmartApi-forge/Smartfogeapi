@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { ThemeSwitch } from "@/components/ui/theme-switch"
 import React from "react"
 import { AnimatePresence, motion } from "@/components/motion-wrapper"
+import { authService } from "@/lib/auth"
 
 const menuItems = [
   { name: "Model Platform", key: "features" },
@@ -73,8 +74,18 @@ export const HeroHeader = () => {
   const [menuState, setMenuState] = React.useState(false)
   const [openKey, setOpenKey] = React.useState<string | null>(null)
   const [panelStyle, setPanelStyle] = React.useState<{ left: number; width: number } | null>(null)
+  const [isLoggedIn, setIsLoggedIn] = React.useState(false)
   const navRef = React.useRef<HTMLDivElement | null>(null)
   const triggerRefs = React.useRef<Record<string, HTMLAnchorElement | null>>({})
+
+  // Check authentication status on mount
+  React.useEffect(() => {
+    const checkAuth = async () => {
+      const { session } = await authService.getCurrentSession()
+      setIsLoggedIn(!!session?.user)
+    }
+    checkAuth()
+  }, [])
 
   const openPanel = (key: string) => {
     setOpenKey(key)
@@ -131,7 +142,9 @@ export const HeroHeader = () => {
               variant="icon-click"
             />
             <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-              <Link href="/login">Log In</Link>
+              <Link href={isLoggedIn ? "/ask" : "/login"}>
+                {isLoggedIn ? "Generate" : "Log In"}
+              </Link>
             </Button>
           </div>
 
@@ -235,7 +248,9 @@ export const HeroHeader = () => {
                   {/* Bottom Actions */}
                   <div className="space-y-3 mt-8">
                     <Button asChild variant="outline" size="lg" className="w-full justify-center text-base h-12 border-border">
-                      <Link href="/?auth=login" onClick={() => setMenuState(false)}>Log In</Link>
+                      <Link href={isLoggedIn ? "/ask" : "/?auth=login"} onClick={() => setMenuState(false)}>
+                        {isLoggedIn ? "Generate" : "Log In"}
+                      </Link>
                     </Button>
                   </div>
                 </div>

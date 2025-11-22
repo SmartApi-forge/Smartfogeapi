@@ -1,6 +1,7 @@
 "use client"
 
-import { Suspense } from "react"
+import { Suspense, useState } from "react"
+import { useRouter } from "next/navigation"
 import { HeroHeader } from "@/components/header"
 import AuthDialog from "@/components/auth-dialog"
 import { Button } from "@/components/ui/button"
@@ -17,10 +18,61 @@ import NewsletterCTA from "@/components/newsletter-cta"
 import Link from "next/link"
 import { motion } from "@/components/motion-wrapper"
 import BelowFooterBanner from "@/components/below-footer-banner"
+import { api } from "@/lib/trpc-client"
+import { authService } from "@/lib/auth"
 
 
 
 export default function HomePage() {
+  const router = useRouter()
+  const [isLoading, setIsLoading] = useState(false)
+
+  // Use the tRPC mutation hook
+  const generateAPI = api.apiGeneration.generateAPI.useMutation({
+    onSuccess: (result) => {
+      console.log('✅ API generation successful, result:', result)
+      // Redirect to the loading page with the new project ID
+      console.log('🔄 Redirecting to loading page:', `/loading?projectId=${result.projectId}`)
+      router.push(`/loading?projectId=${result.projectId}`)
+      setIsLoading(false)
+    },
+    onError: (error) => {
+      console.error('❌ Failed to create project:', error)
+      setIsLoading(false)
+      // Handle error - could show a toast or error message
+    }
+  })
+
+  const handlePromptSubmit = async (prompt: string) => {
+    console.log('🚀 handlePromptSubmit called with prompt:', prompt)
+    
+    // Check if user is authenticated using Supabase session
+    const { session } = await authService.getCurrentSession()
+    console.log('👤 Current session:', session)
+    
+    if (!session?.user) {
+      console.log('❌ No authenticated session found, redirecting to login')
+      // If not authenticated, show login dialog
+      router.push("/?auth=login")
+      return
+    }
+
+    console.log('✅ User authenticated, starting API generation')
+    setIsLoading(true)
+    
+    // Create a new project with the prompt using the API generation router
+    console.log('📡 Calling generateAPI.mutate with:', {
+      prompt: prompt,
+      framework: 'fastapi',
+      advanced: false
+    })
+    
+    generateAPI.mutate({
+      prompt: prompt,
+      framework: 'fastapi',
+      advanced: false
+    })
+  }
   return (
     <div className="min-h-screen bg-background overflow-x-clip">
       <HeroHeader />
@@ -84,7 +136,10 @@ export default function HomePage() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, delay: 0.4 }}
                 >
-                  <PromptInputBox />
+                  <PromptInputBox 
+                    onSend={handlePromptSubmit}
+                    isLoading={isLoading}
+                  />
                 </motion.div>
 
                 {/* Supporting text with precise line breaks */}
@@ -107,10 +162,11 @@ export default function HomePage() {
                   transition={{ duration: 0.5, delay: 0.8 }}
                 >
                   <Button
+                    asChild
                     size="lg"
                     className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 h-12 rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl w-full sm:w-auto"
                   >
-                    Get Started Free
+                    <Link href="/ask">Get Started Free</Link>
                   </Button>
                   <Button
                     variant="outline"
