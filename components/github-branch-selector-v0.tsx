@@ -106,38 +106,58 @@ export function GitHubBranchSelectorV0({
     if (!project.repo_url) return
     
     setLoading(true)
+    setBranches([]) // Clear existing branches
+    
     try {
       const repoInfoData = extractRepoInfo(project.repo_url)
       if (!repoInfoData) {
         toast.error("Invalid repository URL")
+        setLoading(false)
         return
       }
 
-      // Use tRPC to fetch branches with authentication
-      const data = await trpcUtils.github.getBranches.fetch({
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 10000)
+      )
+
+      const fetchPromise = trpcUtils.github.getBranches.fetch({
         owner: repoInfoData.owner,
         repo: repoInfoData.repo,
       })
+
+      // Race between fetch and timeout
+      const data = await Promise.race([fetchPromise, timeoutPromise]) as any
       
       if (data && data.length > 0) {
         // Safely map branches with sha check
-        setBranches(
-          data
-            .filter((b: any) => b.commit && b.commit.sha) // Filter out branches without sha
-            .map((b: any) => ({
-              name: b.name,
-              sha: b.commit.sha,
-              protected: b.protected || false,
-            }))
-        )
+        const validBranches = data
+          .filter((b: any) => b.commit && b.commit.sha)
+          .map((b: any) => ({
+            name: b.name,
+            sha: b.commit.sha,
+            protected: b.protected || false,
+          }))
+        
+        setBranches(validBranches)
+        
+        // Auto-select current branch if it exists
+        if (project.active_branch && validBranches.some((b: any) => b.name === project.active_branch)) {
+          setActiveBranch(project.active_branch)
+        }
       } else {
         // Repository has no branches yet
+        setBranches([])
         toast.warning("Repository has no branches yet")
       }
     } catch (error: any) {
       console.error("Failed to fetch branches:", error)
+      setBranches([])
+      
       // More specific error messages
-      if (error.message && error.message.includes('404')) {
+      if (error.message === 'Request timeout') {
+        toast.error("Request timed out. Please try again.")
+      } else if (error.message && error.message.includes('404')) {
         toast.error("Repository not found or not yet initialized")
       } else if (error.message && error.message.includes('401')) {
         toast.error("GitHub authentication failed. Please reconnect.")
@@ -147,14 +167,14 @@ export function GitHubBranchSelectorV0({
     } finally {
       setLoading(false)
     }
-  }, [project.repo_url, trpcUtils.github.getBranches])
+  }, [project.repo_url, project.active_branch, trpcUtils])
 
   // Fetch branches when dialog opens
   useEffect(() => {
-    if (open && project.repo_url) {
+    if (open && project.repo_url && branches.length === 0 && !loading) {
       fetchBranches()
     }
-  }, [open, project.repo_url, fetchBranches])
+  }, [open, project.repo_url]) // Remove fetchBranches from deps to prevent loops
 
   // Update active branch from project data
   useEffect(() => {
@@ -315,6 +335,42 @@ export function GitHubBranchSelectorV0({
         await trpcUtils.github.getProjectRepository.invalidate({ projectId: project.id })
         await trpcUtils.projects.getOne.invalidate({ id: project.id })
         await trpcUtils.projects.getFiles.invalidate({ projectId: project.id })
+
+        // Restart sandbox if project has repo_url (cloned from GitHub)
+        if (project.repo_url && project.status !== 'generating') {
+          toast.loading("Restarting sandbox with new changes...", { id: "restart" })
+          
+          try {
+            const restartResponse = await fetch(`/api/sandbox/restart/${project.id}`, {
+              method: 'POST',
+            })
+
+            if (restartResponse.ok) {
+              const restartData = await restartResponse.json()
+              toast.success("Sandbox restarted successfully!", { id: "restart" })
+              
+              // Refresh project data to get new sandbox URL
+              await trpcUtils.projects.getOne.invalidate({ id: project.id })
+              
+              // Optionally reload the page to show updated preview
+              setTimeout(() => {
+                window.location.reload()
+              }, 1000)
+            } else {
+              const errorData = await restartResponse.json()
+              toast.error("Failed to restart sandbox", { 
+                id: "restart",
+                description: errorData.error || "Please refresh the page manually"
+              })
+            }
+          } catch (restartError: any) {
+            console.error("Sandbox restart error:", restartError)
+            toast.error("Failed to restart sandbox", { 
+              id: "restart",
+              description: "Please refresh the page manually"
+            })
+          }
+        }
       }
     } catch (error: any) {
       toast.error(error.message || "Failed to pull changes", { id: "pull" })

@@ -11,6 +11,7 @@ import { versionsRouter } from '../../modules/versions/router';
 import { invitationsRouter } from '../../modules/invitations/router';
 import { githubRouter } from './github';
 import { codeModificationsRouter } from './code-modifications';
+import { vercelRouter } from './vercel';
 
 export const appRouter = createTRPCRouter({
   // Modular routers - each module controls its own procedures
@@ -24,6 +25,7 @@ export const appRouter = createTRPCRouter({
   invitations: invitationsRouter,
   github: githubRouter,
   codeModifications: codeModificationsRouter,
+  vercel: vercelRouter,
 });
 
 // export type definition of API

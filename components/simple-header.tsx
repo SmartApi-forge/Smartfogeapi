@@ -7,7 +7,7 @@ import { Settings5Line } from "./settings-5-line"
 import { GitHubSetupDialog } from "@/components/github-setup-dialog"
 import { GitHubBranchSelectorV0 } from "@/components/github-branch-selector-v0"
 import { ShareDialog } from "@/components/share-dialog"
-import { PublishDialog } from "@/components/publish-dialog"
+import { VercelDeployDialog } from "@/components/vercel-deploy-dialog"
 import { useTheme } from "next-themes"
 import { useState, useEffect } from "react"
 import { createBrowserClient } from "@/lib/supabase/client"
@@ -142,20 +142,28 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
             </ShareDialog>
           )}
           
-          {/* Publish button - Theme-aware with icon */}
+          {/* Publish button - Theme-aware with Vercel icon */}
           {project?.id && (
-            <PublishDialog
+            <VercelDeployDialog
               projectId={project.id}
               projectName={project.name}
+              projectFiles={projectFiles}
             >
               <button 
-                aria-label="Publish project"
+                aria-label="Deploy to Vercel"
                 className={`transition-all duration-300 h-8 px-3 rounded-md flex items-center justify-center gap-1.5 ${isDark ? 'bg-white hover:bg-gray-200 text-black' : 'bg-black hover:bg-gray-900 text-white'}`}
               >
-                <Globe className="h-[16px] w-[16px]" />
+                <svg
+                  viewBox="0 0 76 65"
+                  fill="currentColor"
+                  className="h-3.5 w-3.5"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path d="M37.5274 0L75.0548 65H0L37.5274 0Z" />
+                </svg>
                 <span className="text-xs font-medium transition-colors duration-300">Publish</span>
               </button>
-            </PublishDialog>
+            </VercelDeployDialog>
           )}
         </div>
       </div>
