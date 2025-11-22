@@ -51,9 +51,42 @@ export function VercelDeployDialog({
     }
   }, [latestDeployment]);
 
-  const handleConnect = () => {
-    // Redirect to Vercel OAuth flow
-    window.location.href = '/api/vercel/connect';
+  const handleConnect = async () => {
+    try {
+      // First, try to fetch the connect endpoint
+      const response = await fetch('/api/vercel/connect', {
+        method: 'GET',
+        credentials: 'same-origin',
+      });
+
+      // If it's a redirect, follow it
+      if (response.redirected) {
+        window.location.href = response.url;
+        return;
+      }
+
+      // If it's an error, show it
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Vercel connect error:', errorData);
+        
+        toast.error("Connection failed", {
+          description: errorData.details?.message || errorData.error || "Please check console for details",
+        });
+        return;
+      }
+
+      // If we get here, check if there's a redirect URL
+      const data = await response.json().catch(() => null);
+      if (data?.redirectUrl) {
+        window.location.href = data.redirectUrl;
+      }
+    } catch (error: any) {
+      console.error('Connect error:', error);
+      toast.error("Failed to connect to Vercel", {
+        description: error.message || "Please try again",
+      });
+    }
   };
 
   const handleDeploy = async () => {

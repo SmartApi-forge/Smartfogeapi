@@ -9,6 +9,14 @@ export async function GET(req: NextRequest) {
   const origin = req.nextUrl.origin;
   
   try {
+    // Check Supabase environment variables first
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.error('Supabase not configured. Missing environment variables.');
+      return NextResponse.redirect(
+        new URL(`/projects?error=config_error&message=${encodeURIComponent('Supabase environment variables not set in Vercel')}`, origin)
+      );
+    }
+
     const supabase = await createRouteHandlerClient();
     
     // Get current user
@@ -21,15 +29,23 @@ export async function GET(req: NextRequest) {
       error: userError?.message,
       hasClientId: !!process.env.VERCEL_CLIENT_ID,
       hasRedirectUri: !!process.env.VERCEL_REDIRECT_URI,
+      hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+      hasSupabaseKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       origin: origin,
     });
     
     if (userError || !user) {
       console.error('Vercel Connect - Auth failed:', userError);
-      // Return to projects with error message
-      return NextResponse.redirect(
-        new URL(`/projects?error=auth_required&message=${encodeURIComponent('Please sign in to connect Vercel')}`, origin)
-      );
+      // Return JSON response for debugging instead of redirect
+      return NextResponse.json({
+        error: 'Authentication failed',
+        details: {
+          message: userError?.message || 'No user session found',
+          hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+          hasSupabaseKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+          suggestion: 'Make sure you are logged in and Supabase environment variables are set in Vercel',
+        }
+      }, { status: 401 });
     }
 
     // Check if Vercel credentials are configured
