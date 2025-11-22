@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { githubOAuth } from '@/lib/github-oauth';
+import { getGitHubOAuthService } from '@/lib/github-oauth';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -46,6 +46,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const githubOAuth = getGitHubOAuthService();
+    
     // Exchange code for access token
     const tokenResponse = await githubOAuth.exchangeCodeForToken(code);
 

@@ -340,5 +340,17 @@ export class GitHubOAuthService {
   }
 }
 
-export const githubOAuth = new GitHubOAuthService();
+// Lazy-load singleton to avoid build-time environment variable checks
+let githubOAuthInstance: GitHubOAuthService | null = null;
+
+export function getGitHubOAuthService(): GitHubOAuthService {
+  if (!githubOAuthInstance) {
+    githubOAuthInstance = new GitHubOAuthService();
+  }
+  return githubOAuthInstance;
+}
+
+// Export for backward compatibility (but will throw at build time if used)
+// Use getGitHubOAuthService() instead
+export const githubOAuth = getGitHubOAuthService;
 

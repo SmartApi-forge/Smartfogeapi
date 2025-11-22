@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Octokit } from '@octokit/rest';
 import { createRouteHandlerClient } from '@/lib/supabase-route-handler';
-import { githubOAuth } from '@/lib/github-oauth';
 
 /**
  * Validate GitHub token by making a lightweight API call

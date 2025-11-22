@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { githubOAuth } from '@/lib/github-oauth';
+import { getGitHubOAuthService } from '@/lib/github-oauth';
 import { createClient } from '@supabase/supabase-js';
 
 export async function GET(request: NextRequest) {
@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
   const state = crypto.randomUUID();
 
   // Store state in cookie for verification in callback
+  const githubOAuth = getGitHubOAuthService();
   const response = NextResponse.redirect(githubOAuth.getAuthorizationUrl(state));
   
   response.cookies.set('github_oauth_state', state, {

@@ -6,7 +6,7 @@
 import { z } from 'zod';
 import { protectedProcedure, createTRPCRouter } from '../init';
 import { TRPCError } from '@trpc/server';
-import { githubOAuth } from '@/lib/github-oauth';
+import { getGitHubOAuthService } from '@/lib/github-oauth';
 import { githubRepositoryService } from '@/src/services/github-repository-service';
 import { githubSyncService } from '@/src/services/github-sync-service';
 import { createClient } from '@supabase/supabase-js';
@@ -28,6 +28,7 @@ export const githubRouter = createTRPCRouter({
   getIntegrationStatus: protectedProcedure
     .query(async ({ ctx }) => {
       try {
+        const githubOAuth = getGitHubOAuthService();
         const integration = await githubOAuth.getUserIntegration(ctx.user.id);
         
         return {
@@ -54,6 +55,7 @@ export const githubRouter = createTRPCRouter({
   disconnect: protectedProcedure
     .mutation(async ({ ctx }) => {
       try {
+        const githubOAuth = getGitHubOAuthService();
         await githubOAuth.revokeIntegration(ctx.user.id);
         
         return {
@@ -78,6 +80,7 @@ export const githubRouter = createTRPCRouter({
   getUserOrgs: protectedProcedure
     .query(async ({ ctx }) => {
       try {
+        const githubOAuth = getGitHubOAuthService();
         const integration = await githubOAuth.getUserIntegration(ctx.user.id);
         
         if (!integration?.access_token) {
@@ -131,6 +134,7 @@ export const githubRouter = createTRPCRouter({
     }))
     .query(async ({ ctx, input }) => {
       try {
+        const githubOAuth = getGitHubOAuthService();
         const integration = await githubOAuth.getUserIntegration(ctx.user.id);
         
         if (!integration) {
@@ -173,6 +177,7 @@ export const githubRouter = createTRPCRouter({
     }))
     .mutation(async ({ ctx, input }) => {
       try {
+        const githubOAuth = getGitHubOAuthService();
         const integration = await githubOAuth.getUserIntegration(ctx.user.id);
         
         if (!integration) {
@@ -305,6 +310,7 @@ export const githubRouter = createTRPCRouter({
     }))
     .mutation(async ({ ctx, input }) => {
       try {
+        const githubOAuth = getGitHubOAuthService();
         const integration = await githubOAuth.getUserIntegration(ctx.user.id);
         
         if (!integration) {
@@ -444,6 +450,7 @@ export const githubRouter = createTRPCRouter({
     }))
     .mutation(async ({ ctx, input }) => {
       try {
+        const githubOAuth = getGitHubOAuthService();
         const integration = await githubOAuth.getUserIntegration(ctx.user.id);
         
         if (!integration) {
@@ -632,6 +639,7 @@ export const githubRouter = createTRPCRouter({
     }))
     .mutation(async ({ ctx, input }) => {
       try {
+        const githubOAuth = getGitHubOAuthService();
         const integration = await githubOAuth.getUserIntegration(ctx.user.id);
         
         if (!integration) {
@@ -710,6 +718,7 @@ export const githubRouter = createTRPCRouter({
     }))
     .query(async ({ ctx, input }) => {
       try {
+        const githubOAuth = getGitHubOAuthService();
         const integration = await githubOAuth.getUserIntegration(ctx.user.id);
         
         if (!integration) {
@@ -749,6 +758,7 @@ export const githubRouter = createTRPCRouter({
     }))
     .mutation(async ({ ctx, input }) => {
       try {
+        const githubOAuth = getGitHubOAuthService();
         const integration = await githubOAuth.getUserIntegration(ctx.user.id);
         
         if (!integration) {
@@ -828,6 +838,7 @@ export const githubRouter = createTRPCRouter({
     }))
     .mutation(async ({ ctx, input }) => {
       try {
+        const githubOAuth = getGitHubOAuthService();
         const integration = await githubOAuth.getUserIntegration(ctx.user.id);
         
         if (!integration) {
