@@ -3596,14 +3596,26 @@ export const cloneAndPreviewRepository = inngest.createFunction(
         
         const filesMap: Record<string, string> = {};
         
-        // Get list of source files - EXCLUDE build/generated folders
-        const findFilesCommand = `find ${repoPath} -type f \\( -name '*.py' -o -name '*.js' -o -name '*.ts' -o -name '*.tsx' -o -name '*.jsx' -o -name '*.json' -o -name '*.md' -o -name '*.txt' -o -name '*.yml' -o -name '*.yaml' -o -name '*.css' -o -name '*.scss' \\) ! -path '*/node_modules/*' ! -path '*/.git/*' ! -path '*/dist/*' ! -path '*/build/*' ! -path '*/.next/*' ! -path '*/__pycache__/*' ! -path '*/coverage/*' ! -path '*/.cache/*' ! -path '*/out/*' ! -path '*/.turbo/*' | head -200`;
+        // Get ALL repository files - comprehensive approach
+        // 1. Get all code/config files (expanded extensions)
+        const findFilesCommand = `find ${repoPath} -type f \\( -name '*.py' -o -name '*.js' -o -name '*.mjs' -o -name '*.cjs' -o -name '*.ts' -o -name '*.tsx' -o -name '*.jsx' -o -name '*.json' -o -name '*.html' -o -name '*.md' -o -name '*.txt' -o -name '*.yml' -o -name '*.yaml' -o -name '*.css' -o -name '*.scss' -o -name '*.sass' -o -name '*.less' -o -name '.env*' -o -name '.gitignore' -o -name '.prettierrc*' -o -name '.eslintrc*' \\) ! -path '*/node_modules/*' ! -path '*/.git/*' ! -path '*/dist/*' ! -path '*/build/*' ! -path '*/.next/*' ! -path '*/__pycache__/*' ! -path '*/coverage/*' ! -path '*/.cache/*' ! -path '*/out/*' ! -path '*/.turbo/*' | head -200`;
           
-          const filesListResult = await sandbox.process.executeCommand(findFilesCommand);
+        // 2. Get ALL asset files from common asset directories
+        const findAssetsCommand = `find ${repoPath} \\( -path '*/public/*' -o -path '*/static/*' -o -path '*/assets/*' -o -path '*/images/*' \\) -type f ! -path '*/node_modules/*' ! -path '*/.git/*' ! -path '*/dist/*' ! -path '*/build/*' ! -path '*/.next/*' 2>/dev/null || true`;
           
-          if (filesListResult.exitCode === 0 && filesListResult.result) {
-            const filesList = filesListResult.result.trim().split('\n').filter(f => f.trim());
-            console.log(`Found ${filesList.length} source files to read`);
+        const filesListResult = await sandbox.process.executeCommand(findFilesCommand);
+        const assetsResult = await sandbox.process.executeCommand(findAssetsCommand);
+        
+        if (filesListResult.exitCode === 0 && filesListResult.result) {
+          let filesList = filesListResult.result.trim().split('\n').filter(f => f.trim());
+          
+          // Add asset files
+          if (assetsResult.exitCode === 0 && assetsResult.result) {
+            const assetFiles = assetsResult.result.trim().split('\n').filter(f => f.trim());
+            console.log(`Found ${assetFiles.length} asset files (public, static, assets, images folders)`);
+            filesList = [...filesList, ...assetFiles];
+          }
+          console.log(`Found ${filesList.length} total files to read`);
             
             // Categorize files by priority
             const configFiles = filesList.filter(f => 
@@ -3616,23 +3628,30 @@ export const cloneAndPreviewRepository = inngest.createFunction(
               f.includes('README')
             );
             
+            // IMPORTANT: Asset files (public, static, assets, images) - high priority!
+            const assetFiles = filesList.filter(f => 
+              (f.includes('/public/') || f.includes('/static/') || f.includes('/assets/') || f.includes('/images/')) &&
+              !configFiles.includes(f)
+            );
+            
             const appFiles = filesList.filter(f => 
               (f.includes('/app/') || f.includes('/pages/') || f.includes('/src/pages/')) &&
-              !configFiles.includes(f)
+              !configFiles.includes(f) && !assetFiles.includes(f)
             );
             
             const componentFiles = filesList.filter(f => 
               (f.includes('/components/') || f.includes('/ui/')) &&
-              !configFiles.includes(f) && !appFiles.includes(f)
+              !configFiles.includes(f) && !assetFiles.includes(f) && !appFiles.includes(f)
             );
             
             const utilFiles = filesList.filter(f => 
               (f.includes('/lib/') || f.includes('/utils/') || f.includes('/hooks/')) &&
-              !configFiles.includes(f) && !appFiles.includes(f) && !componentFiles.includes(f)
+              !configFiles.includes(f) && !assetFiles.includes(f) && !appFiles.includes(f) && !componentFiles.includes(f)
             );
             
             const otherFiles = filesList.filter(f => 
               !configFiles.includes(f) && 
+              !assetFiles.includes(f) &&
               !appFiles.includes(f) && 
               !componentFiles.includes(f) && 
               !utilFiles.includes(f)
@@ -3641,30 +3660,48 @@ export const cloneAndPreviewRepository = inngest.createFunction(
             // Smart selection: Get representative files from each category
             const orderedFiles = [
               ...configFiles,                          // All config files
+              ...assetFiles.slice(0, 50),              // Up to 50 asset files (images, fonts, etc.)
               ...appFiles.slice(0, 30),                // Up to 30 pages/routes
-              ...componentFiles.slice(0, 40),          // Up to 40 components  
+              ...componentFiles.slice(0, 30),          // Up to 30 components  
               ...utilFiles.slice(0, 20),               // Up to 20 utils
               ...otherFiles.slice(0, 10),              // Up to 10 other files
-            ].slice(0, 150); // Max 150 files total
+            ].slice(0, 200); // Max 200 files total (increased from 150)
             
-            console.log(`Reading ${orderedFiles.length} files: ${configFiles.length} config, ${appFiles.slice(0, 30).length} pages, ${componentFiles.slice(0, 40).length} components, ${utilFiles.slice(0, 20).length} utils`);
+            console.log(`Reading ${orderedFiles.length} files: ${configFiles.length} config, ${assetFiles.slice(0, 50).length} assets, ${appFiles.slice(0, 30).length} pages, ${componentFiles.slice(0, 30).length} components, ${utilFiles.slice(0, 20).length} utils`);
+            
+            // Helper to detect binary files
+            const isBinaryFile = (path: string): boolean => {
+              const binaryExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.bmp', '.tiff', '.woff', '.woff2', '.ttf', '.otf', '.eot', '.pdf', '.mp4', '.mp3', '.wav'];
+              const ext = path.toLowerCase().substring(path.lastIndexOf('.'));
+              return binaryExtensions.includes(ext);
+            };
             
             // Read each file
             let filesRead = 0;
             let filesSkipped = 0;
+            let binaryFilesRead = 0;
             
             for (const filePath of orderedFiles) {
               try {
                 const fileContentBuffer = await sandbox.fs.downloadFile(filePath);
-                const fileContent = fileContentBuffer.toString('utf-8');
-                // Get relative path from repo root
                 const relativePath = filePath.replace(`${repoPath}/`, '');
                 
-                // Skip if file is too large (> 200KB)
-                if (fileContent.length > 200000) {
-                  console.log(`Skipping large file: ${relativePath} (${fileContent.length} bytes)`);
+                // Skip if file is too large (> 200KB for text, > 2MB for binary)
+                const maxSize = isBinaryFile(relativePath) ? 2000000 : 200000;
+                if (fileContentBuffer.length > maxSize) {
+                  console.log(`Skipping large file: ${relativePath} (${fileContentBuffer.length} bytes)`);
                   filesSkipped++;
                   continue;
+                }
+                
+                // Handle binary files (base64 encode)
+                let fileContent: string;
+                if (isBinaryFile(relativePath)) {
+                  fileContent = fileContentBuffer.toString('base64');
+                  binaryFilesRead++;
+                  console.log(`Read binary file: ${relativePath} (${fileContentBuffer.length} bytes, base64)`);
+                } else {
+                  fileContent = fileContentBuffer.toString('utf-8');
                 }
                 
                 filesMap[relativePath] = fileContent;
@@ -3685,7 +3722,7 @@ export const cloneAndPreviewRepository = inngest.createFunction(
               }
             }
             
-            console.log(`Successfully read ${filesRead} files, skipped ${filesSkipped} files`);
+            console.log(`Successfully read ${filesRead} files (${binaryFilesRead} binary), skipped ${filesSkipped} files`);
           }
           
           console.log(`Successfully read ${Object.keys(filesMap).length} source files`);

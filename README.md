@@ -839,3 +839,5 @@ Built with amazing open-source technologies:
 [Report Bug](https://github.com/Shashank4507/smart-forge-api/issues) · [Request Feature](https://github.com/Shashank4507/smart-forge-api/issues) · [Documentation](https://docs.smartapiforge.dev)
 
 </div>
+#   T r i g g e r   r e b u i l d  
+ 

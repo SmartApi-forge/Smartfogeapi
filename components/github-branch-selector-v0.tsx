@@ -53,6 +53,7 @@ export function GitHubBranchSelectorV0({
   const [isCreatingBranch, setIsCreatingBranch] = useState(false)
   const [newBranchName, setNewBranchName] = useState("")
   const [hasLocalChanges, setHasLocalChanges] = useState(hasUnsavedChanges)
+  const [hasRemoteChanges, setHasRemoteChanges] = useState(false)
   // For cloned projects (github_mode=true or repo_url exists), always show Connected state
   const [isConnected, setIsConnected] = useState(
     project.github_mode || !!project.repo_url || !isInitialSetup
@@ -547,7 +548,13 @@ export function GitHubBranchSelectorV0({
               </label>
               
               <div className="flex items-center gap-2">
-                <Popover open={branchDropdownOpen} onOpenChange={setBranchDropdownOpen}>
+                <Popover open={branchDropdownOpen} onOpenChange={(open) => {
+                  setBranchDropdownOpen(open);
+                  if (open) {
+                    // Refresh branches when opening dropdown
+                    fetchBranches();
+                  }
+                }}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -590,11 +597,11 @@ export function GitHubBranchSelectorV0({
                               setBranchDropdownOpen(false)
                               setSearchQuery("")
                             }}
-                            className={`w-full flex items-center justify-between p-2 rounded text-sm ${isDark ? 'hover:bg-[#2a2a2a]' : 'hover:bg-[#f2f2f2]'}`}
+                            className={`w-full flex items-center justify-between p-2 rounded text-sm transition-colors ${isDark ? 'hover:bg-[#2a2a2a] text-white hover:text-white' : 'hover:bg-[#f2f2f2] text-gray-900 hover:text-gray-900'}`}
                           >
                             <div className="flex items-center gap-2">
                               <GitBranch className={`h-3.5 w-3.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`} />
-                              <span className={isDark ? 'text-white' : 'text-gray-900'}>{branch.name}</span>
+                              <span>{branch.name}</span>
                             </div>
                             {activeBranch === branch.name && (
                               <Check className={`h-3.5 w-3.5 ${isDark ? 'text-white' : 'text-gray-900'}`} />
@@ -633,8 +640,12 @@ export function GitHubBranchSelectorV0({
             <div className="flex gap-2">
               <Button
                 onClick={handlePullChanges}
-                variant="outline"
-                className={`flex-1 h-9 font-normal ${isDark ? 'bg-[#2a2a2a] border-[#404040] text-white hover:bg-[#353535]' : 'bg-white border-[#e5e5e5] text-gray-900 hover:bg-[#fafafa]'}`}
+                className={`flex-1 h-9 font-normal ${
+                  hasRemoteChanges 
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white border-0' 
+                    : isDark ? 'bg-[#2a2a2a] border border-[#404040] text-gray-400 hover:bg-[#353535]' : 'bg-white border border-[#e5e5e5] text-gray-400 hover:bg-[#fafafa]'
+                }`}
+                disabled={!hasRemoteChanges}
               >
                 Pull Changes
               </Button>
@@ -642,7 +653,7 @@ export function GitHubBranchSelectorV0({
                 onClick={handlePushChanges}
                 className={`flex-1 h-9 font-normal ${
                   hasLocalChanges 
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white border-0' 
                     : isDark ? 'bg-[#2a2a2a] border border-[#404040] text-gray-400 hover:bg-[#353535]' : 'bg-white border border-[#e5e5e5] text-gray-400 hover:bg-[#fafafa]'
                 }`}
                 disabled={!hasLocalChanges}
