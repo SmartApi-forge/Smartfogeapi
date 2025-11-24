@@ -43,14 +43,16 @@ export function VersionCard({ version, isActive, onClick, previousVersion, onFil
 
   const getVersionIcon = () => {
     switch (version.command_type) {
-      case 'CREATE_FILE':
+      case 'CREATE':
         return <Sparkles className="size-4 text-blue-500" />;
-      case 'MODIFY_FILE':
+      case 'MODIFY':
         return <Edit className="size-4 text-amber-500" />;
-      case 'DELETE_FILE':
-        return <Trash2 className="size-4 text-red-500" />;
-      case 'REFACTOR_CODE':
+      case 'CREATE_AND_LINK':
         return <FileCode2 className="size-4 text-purple-500" />;
+      case 'FIX_ERROR':
+        return <FileCode2 className="size-4 text-red-500" />;
+      case 'QUESTION':
+        return <FileCode2 className="size-4 text-green-500" />;
       default:
         return <FileCode2 className="size-4 text-green-500" />;
     }
