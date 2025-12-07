@@ -30,9 +30,12 @@ interface SimpleHeaderProps {
   onViewModeChange?: (mode: 'preview' | 'code') => void
   project?: Project
   projectFiles?: Record<string, any>
+  isSidebarOpen?: boolean
+  onSidebarToggle?: () => void
+  onLogoHover?: (hovered: boolean) => void
 }
 
-export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, projectFiles = {} }: SimpleHeaderProps) {
+export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, projectFiles = {}, isSidebarOpen = false, onSidebarToggle, onLogoHover }: SimpleHeaderProps) {
   const { resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -62,13 +65,35 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
   return (
     <>
       <header className="sticky top-0 z-40 w-full bg-[#FAFAFA] dark:bg-[#0E100F] backdrop-blur supports-[backdrop-filter]:bg-[#FAFAFA]/60 dark:supports-[backdrop-filter]:bg-[#0E100F]/60 border-b border-border/50">
-      <div className="container flex h-[50px] items-center justify-between px-4">
-        {/* Left side - Logo */}
-        <div className="flex items-center space-x-2 sm:space-x-4">
-          <Link href="/" className="flex items-center space-x-2">
-            <Logo />
-          </Link>
-        </div>
+      <div className="flex h-[50px] items-center justify-between w-full pl-2 pr-4">
+        {/* Left side - Modern S logo button for sidebar toggle */}
+        <button 
+          onClick={onSidebarToggle}
+          onMouseEnter={() => onLogoHover?.(true)}
+          onMouseLeave={() => onLogoHover?.(false)}
+          aria-label="Toggle sidebar"
+          className={`group relative transition-all duration-300 h-10 w-10 p-0 rounded-xl flex items-center justify-center overflow-hidden ${
+            isSidebarOpen 
+              ? 'scale-95 shadow-lg' 
+              : 'hover:scale-105 hover:shadow-xl'
+          }`}
+          style={{
+            background: isDark 
+              ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+              : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          }}
+        >
+          {/* Animated gradient overlay on hover */}
+          <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          
+          {/* S Letter with modern styling */}
+          <span className="relative z-10 text-2xl font-bold text-white drop-shadow-sm">
+            S
+          </span>
+          
+          {/* Subtle glow effect */}
+          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-50" />
+        </button>
 
         {/* Center - Empty (view toggle is in sandbox preview) */}
         <div className="flex items-center">
@@ -92,6 +117,7 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
               projectFiles={projectFiles}
             >
               <button 
+                id="github-setup-button"
                 aria-label="Connect to GitHub"
                 className={`transition-all duration-300 h-8 w-8 p-0 rounded-md flex items-center justify-center ${isDark ? 'bg-[#1A1A1A] hover:bg-[#262626] border border-gray-600' : 'bg-[#fafafa] hover:bg-[#f2f2f2] border border-gray-300'}`}
               >
@@ -110,6 +136,7 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
           {shouldShowGitHubBranchSelector && project && (
             <GitHubBranchSelectorV0 project={project}>
               <button 
+                id="github-branch-button"
                 aria-label="Manage GitHub branches"
                 className={`transition-all duration-300 h-8 w-8 p-0 rounded-md flex items-center justify-center ${isDark ? 'bg-[#1A1A1A] hover:bg-[#262626] border border-gray-600' : 'bg-[#fafafa] hover:bg-[#f2f2f2] border border-gray-300'}`}
               >
