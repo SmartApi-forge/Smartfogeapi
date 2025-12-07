@@ -34,6 +34,17 @@ interface Message {
   content: string;
   role: 'user' | 'assistant';
   created_at: string;
+  project_id?: string;
+}
+
+interface Project {
+  id: string;
+  name: string;
+  description?: string;
+  framework?: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface V0SidebarProps {
@@ -66,13 +77,80 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
   const [showChatList, setShowChatList] = useState(false);
   const [showProjectList, setShowProjectList] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [projectSearchQuery, setProjectSearchQuery] = useState('');
   const [manuallyToggled, setManuallyToggled] = useState(false);
   const [lastHoverTime, setLastHoverTime] = useState(0);
+  const [userProjects, setUserProjects] = useState<Project[]>([]);
+  const [recentChats, setRecentChats] = useState<Message[]>([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+  const [isLoadingChats, setIsLoadingChats] = useState(false);
+
+  // Fetch user's projects
+  useEffect(() => {
+    const fetchProjects = async () => {
+      if (!showProjectList) return;
+      
+      setIsLoadingProjects(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data, error } = await supabase
+          .from('projects')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('updated_at', { ascending: false })
+          .limit(50);
+
+        if (error) throw error;
+        setUserProjects(data || []);
+      } catch (error) {
+        console.error('Error fetching projects:', error);
+      } finally {
+        setIsLoadingProjects(false);
+      }
+    };
+
+    fetchProjects();
+  }, [showProjectList]);
+
+  // Fetch recent chats for the current project only
+  useEffect(() => {
+    const fetchRecentChats = async () => {
+      if (!showChatList || !projectId) return;
+      
+      setIsLoadingChats(true);
+      try {
+        // Get recent messages from the current project only
+        const { data, error } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('project_id', projectId)
+          .eq('role', 'user')
+          .order('created_at', { ascending: false })
+          .limit(50);
+
+        if (error) throw error;
+        setRecentChats(data || []);
+      } catch (error) {
+        console.error('Error fetching recent chats:', error);
+      } finally {
+        setIsLoadingChats(false);
+      }
+    };
+
+    fetchRecentChats();
+  }, [showChatList, projectId]);
 
   // Filter messages based on search query
-  const filteredMessages = messages.filter(msg => 
-    msg.role === 'user' && 
+  const filteredMessages = recentChats.filter(msg => 
     msg.content.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Filter projects based on search query
+  const filteredProjects = userProjects.filter(proj =>
+    proj.name.toLowerCase().includes(projectSearchQuery.toLowerCase()) ||
+    (proj.description && proj.description.toLowerCase().includes(projectSearchQuery.toLowerCase()))
   );
 
   // Detect mobile screen
@@ -283,9 +361,9 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
         }}
       >
 
-        {/* Search Bar - only visible when expanded and showing chat list */}
+        {/* Search Bar - visible when showing chat list or project list */}
         <AnimatePresence>
-          {isExpanded && showChatList && (
+          {isExpanded && (showChatList || showProjectList) && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
@@ -297,14 +375,14 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                 <input
                   type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search conversations..."
+                  value={showChatList ? searchQuery : projectSearchQuery}
+                  onChange={(e) => showChatList ? setSearchQuery(e.target.value) : setProjectSearchQuery(e.target.value)}
+                  placeholder={showChatList ? "Search conversations..." : "Search projects..."}
                   className="w-full pl-9 pr-8 py-2 text-sm bg-muted/50 dark:bg-[#1D1D1D] border border-border dark:border-[#333433] rounded-lg outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 />
-                {searchQuery && (
+                {(searchQuery || projectSearchQuery) && (
                   <button
-                    onClick={() => setSearchQuery('')}
+                    onClick={() => showChatList ? setSearchQuery('') : setProjectSearchQuery('')}
                     className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded"
                   >
                     <X className="size-3 text-muted-foreground" />
@@ -315,15 +393,71 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
           )}
         </AnimatePresence>
 
-        {/* Navigation Items or Chat List */}
+        {/* Navigation Items, Chat List, or Project List */}
         <nav className="flex-1 overflow-y-auto py-4 px-2">
           <TooltipProvider delayDuration={300}>
-            {/* Show chat list when expanded and chat is active */}
-            {isExpanded && showChatList && activeSection === 'chat' ? (
+            {/* Show project list when expanded and projects is active */}
+            {isExpanded && showProjectList ? (
               <div className="space-y-1">
                 {/* Back button */}
                 <button
-                  onClick={() => setShowChatList(false)}
+                  onClick={() => {
+                    setShowProjectList(false);
+                    setProjectSearchQuery('');
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 dark:hover:bg-[#1D1D1D] rounded-lg transition-all mb-2"
+                >
+                  <ChevronLeft className="size-4" />
+                  <span>Back</span>
+                </button>
+
+                {/* Projects list */}
+                <div className="space-y-1">
+                  {isLoadingProjects ? (
+                    <div className="px-3 py-8 text-center">
+                      <div className="size-8 mx-auto mb-2 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      <p className="text-sm text-muted-foreground">Loading projects...</p>
+                    </div>
+                  ) : filteredProjects.length > 0 ? (
+                    filteredProjects.map((proj) => (
+                      <motion.a
+                        key={proj.id}
+                        href={`/projects/${proj.id}`}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="block px-3 py-2 rounded-lg hover:bg-muted/50 dark:hover:bg-[#1D1D1D] cursor-pointer transition-all group"
+                      >
+                        <p className="text-sm text-foreground font-medium line-clamp-1 mb-1">
+                          {proj.name}
+                        </p>
+                        {proj.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-1 mb-1">
+                            {proj.description}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(proj.updated_at).toLocaleDateString()}
+                        </p>
+                      </motion.a>
+                    ))
+                  ) : (
+                    <div className="px-3 py-8 text-center">
+                      <FolderKanban className="size-8 mx-auto mb-2 text-muted-foreground opacity-50" />
+                      <p className="text-sm text-muted-foreground">
+                        {projectSearchQuery ? 'No projects found' : 'No projects yet'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : isExpanded && showChatList ? (
+              <div className="space-y-1">
+                {/* Back button */}
+                <button
+                  onClick={() => {
+                    setShowChatList(false);
+                    setSearchQuery('');
+                  }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 dark:hover:bg-[#1D1D1D] rounded-lg transition-all mb-2"
                 >
                   <ChevronLeft className="size-4" />
@@ -332,13 +466,19 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
 
                 {/* Conversations list */}
                 <div className="space-y-1">
-                  {filteredMessages.length > 0 ? (
+                  {isLoadingChats ? (
+                    <div className="px-3 py-8 text-center">
+                      <div className="size-8 mx-auto mb-2 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      <p className="text-sm text-muted-foreground">Loading chats...</p>
+                    </div>
+                  ) : filteredMessages.length > 0 ? (
                     filteredMessages.map((msg) => (
-                      <motion.div
+                      <motion.a
                         key={msg.id}
+                        href={msg.project_id ? `/projects/${msg.project_id}` : '#'}
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
-                        className="px-3 py-2 rounded-lg hover:bg-muted/50 dark:hover:bg-[#1D1D1D] cursor-pointer transition-all group"
+                        className="block px-3 py-2 rounded-lg hover:bg-muted/50 dark:hover:bg-[#1D1D1D] cursor-pointer transition-all group"
                       >
                         <p className="text-sm text-foreground line-clamp-2 mb-1">
                           {msg.content}
@@ -346,7 +486,7 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
                         <p className="text-xs text-muted-foreground">
                           {new Date(msg.created_at).toLocaleDateString()}
                         </p>
-                      </motion.div>
+                      </motion.a>
                     ))
                   ) : (
                     <div className="px-3 py-8 text-center">
