@@ -2,7 +2,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { Logo } from "@/components/logo"
-import { Share, Globe, Monitor } from "lucide-react"
+import { Share, Globe, Monitor, HomeIcon } from "lucide-react"
 import { Settings5Line } from "./settings-5-line"
 import { GitHubSetupDialog } from "@/components/github-setup-dialog"
 import { GitHubBranchSelectorV0 } from "@/components/github-branch-selector-v0"
@@ -12,6 +12,14 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { useTheme } from "next-themes"
 import { useState, useEffect } from "react"
 import { createBrowserClient } from "@/lib/supabase/client"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator
+} from '@/components/ui/breadcrumb'
 
 interface Project {
   id: string
@@ -66,38 +74,62 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
     <>
       <header className="sticky top-0 z-40 w-full bg-[#FAFAFA] dark:bg-[#0E100F] backdrop-blur supports-[backdrop-filter]:bg-[#FAFAFA]/60 dark:supports-[backdrop-filter]:bg-[#0E100F]/60 border-b border-border/50">
       <div className="flex h-[50px] items-center justify-between w-full pl-2 pr-4">
-        {/* Left side - Modern S logo button for sidebar toggle */}
-        <button 
-          onClick={onSidebarToggle}
-          onMouseEnter={() => onLogoHover?.(true)}
-          onMouseLeave={() => onLogoHover?.(false)}
-          aria-label="Toggle sidebar"
-          className={`group relative transition-all duration-300 h-10 w-10 p-0 rounded-xl flex items-center justify-center overflow-hidden ${
-            isSidebarOpen 
-              ? 'scale-95 shadow-lg' 
-              : 'hover:scale-105 hover:shadow-xl'
-          }`}
-          style={{
-            background: isDark 
-              ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-              : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          }}
-        >
-          {/* Animated gradient overlay on hover */}
-          <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          
-          {/* S Letter with modern styling */}
-          <span className="relative z-10 text-2xl font-bold text-white drop-shadow-sm">
-            S
-          </span>
-          
-          {/* Subtle glow effect */}
-          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-50" />
-        </button>
+        {/* Left side - Logo and Breadcrumb navigation */}
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          {/* Modern S logo button for sidebar toggle */}
+          <button 
+            onClick={onSidebarToggle}
+            onMouseEnter={() => onLogoHover?.(true)}
+            onMouseLeave={() => onLogoHover?.(false)}
+            aria-label="Toggle sidebar"
+            className={`group relative transition-all duration-300 h-10 w-10 p-0 rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0 ${
+              isSidebarOpen 
+                ? 'scale-95 shadow-lg' 
+                : 'hover:scale-105 hover:shadow-xl'
+            }`}
+            style={{
+              background: isDark 
+                ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            }}
+          >
+            {/* Animated gradient overlay on hover */}
+            <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            
+            {/* S Letter with modern styling */}
+            <span className="relative z-10 text-2xl font-bold text-white drop-shadow-sm">
+              S
+            </span>
+            
+            {/* Subtle glow effect */}
+            <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-50" />
+          </button>
 
-        {/* Center - Empty (view toggle is in sandbox preview) */}
-        <div className="flex items-center">
-          {/* View toggle is positioned in the sandbox preview component */}
+          {/* Breadcrumb navigation */}
+          <div className="flex items-center min-w-0">
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <BreadcrumbLink href='/' className='flex items-center gap-2 hover:text-foreground transition-colors'>
+                    <HomeIcon className='size-4' />
+                    <span className="hidden sm:inline">Home</span>
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator>/</BreadcrumbSeparator>
+                <BreadcrumbItem>
+                  <BreadcrumbLink href='/ask' className='hover:text-foreground transition-colors'>
+                    Ask
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator>/</BreadcrumbSeparator>
+                <BreadcrumbItem>
+                  <BreadcrumbPage className="max-w-[100px] sm:max-w-[150px] md:max-w-[200px] lg:max-w-xs truncate">
+                    {project?.name || 'Project'}
+                  </BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+          </div>
         </div>
 
         {/* Right side - Action buttons - Responsive with subtle hover */}
