@@ -425,17 +425,14 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
                         animate={{ opacity: 1, x: 0 }}
                         className="block px-3 py-2 rounded-lg hover:bg-muted/50 dark:hover:bg-[#1D1D1D] cursor-pointer transition-all group"
                       >
-                        <p className="text-sm text-foreground font-medium line-clamp-1 mb-1">
+                        <p className="text-sm text-foreground font-medium line-clamp-1">
                           {proj.name}
                         </p>
                         {proj.description && (
-                          <p className="text-xs text-muted-foreground line-clamp-1 mb-1">
+                          <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
                             {proj.description}
                           </p>
                         )}
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(proj.updated_at).toLocaleDateString()}
-                        </p>
                       </motion.a>
                     ))
                   ) : (
@@ -478,11 +475,8 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
                         animate={{ opacity: 1, x: 0 }}
                         className="block px-3 py-2 rounded-lg hover:bg-muted/50 dark:hover:bg-[#1D1D1D] cursor-pointer transition-all group"
                       >
-                        <p className="text-sm text-foreground line-clamp-2 mb-1">
+                        <p className="text-sm text-foreground line-clamp-2">
                           {msg.content}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(msg.created_at).toLocaleDateString()}
                         </p>
                       </motion.a>
                     ))

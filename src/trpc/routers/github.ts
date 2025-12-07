@@ -209,7 +209,7 @@ export const githubRouter = createTRPCRouter({
             .insert({
               user_id: ctx.user.id,
               name: repo.name,
-              description: repo.description || `Connected from GitHub: ${repo.full_name}`,
+              description: repo.description || repo.full_name,
               prompt: `Clone and preview GitHub repository: ${repo.full_name}`,
               framework: 'express', // Will be detected during clone
               status: 'generating',

@@ -7,7 +7,6 @@ import {
   FolderOpen, 
   Plus, 
   Search, 
-  Clock,
   ChevronRight
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -214,17 +213,6 @@ export function ProjectsSidebar({ isOpen, onClose, searchQuery: externalSearchQu
     onClose()
   }
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
-    
-    if (diffInHours < 1) return "Just now"
-    if (diffInHours < 24) return `${diffInHours}h ago`
-    if (diffInHours < 168) return `${Math.floor(diffInHours / 24)}d ago`
-    return date.toLocaleDateString()
-  }
-
   return (
     <AnimatePresence>
       {isOpen && (
@@ -375,17 +363,15 @@ export function ProjectsSidebar({ isOpen, onClose, searchQuery: externalSearchQu
                         className="group cursor-pointer"
                         onClick={() => handleProjectClick(project)}
                       >
-                        <div className="px-3 py-4 rounded-lg transition-all duration-200 ease-in-out hover:bg-[#2A2D31]/60 hover:shadow-sm border border-transparent hover:border-[#444444]/50 group-hover:scale-[1.01]">
-                          <div className="mb-2">
-                            <h3 className="font-medium text-gray-100 text-sm leading-relaxed group-hover:text-blue-400 transition-colors duration-200 line-clamp-2">
-                              {getProjectTitle(project)}
-                            </h3>
-                          </div>
-                          
-                          <div className="flex items-center gap-1.5 text-xs text-gray-400 group-hover:text-blue-400 transition-colors duration-200">
-                            <Clock className="h-3 w-3" />
-                            <span className="font-medium">{formatDate(project.created_at)}</span>
-                          </div>
+                        <div className="px-3 py-3 rounded-lg transition-all duration-200 ease-in-out hover:bg-[#2A2D31]/60 hover:shadow-sm border border-transparent hover:border-[#444444]/50 group-hover:scale-[1.01]">
+                          <h3 className="font-medium text-gray-100 text-sm leading-relaxed group-hover:text-blue-400 transition-colors duration-200 line-clamp-2">
+                            {getProjectTitle(project)}
+                          </h3>
+                          {project.description && (
+                            <p className="text-xs text-gray-400 line-clamp-2 mt-1.5">
+                              {project.description}
+                            </p>
+                          )}
                         </div>
                       </motion.div>
                     ))}

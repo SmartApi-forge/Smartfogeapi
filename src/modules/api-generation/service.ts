@@ -169,13 +169,35 @@ export class ApiGenerationService {
    */
   async generateAPI(input: GenerateAPIInput, userId: string): Promise<GenerateAPIResponse> {
     try {
+      // Generate a meaningful project name from the prompt
+      const generateProjectName = (prompt: string): string => {
+        // Extract key words from prompt (remove common words)
+        const commonWords = ['create', 'build', 'make', 'generate', 'api', 'for', 'a', 'an', 'the', 'with', 'that', 'can', 'to', 'and', 'or'];
+        const words = prompt
+          .toLowerCase()
+          .replace(/[^\w\s]/g, '') // Remove punctuation
+          .split(/\s+/)
+          .filter(word => word.length > 2 && !commonWords.includes(word))
+          .slice(0, 3); // Take first 3 meaningful words
+        
+        // Capitalize first letter of each word
+        const capitalizedWords = words.map(word => 
+          word.charAt(0).toUpperCase() + word.slice(1)
+        );
+        
+        // If we got meaningful words, use them; otherwise use a generic name
+        return capitalizedWords.length > 0 
+          ? capitalizedWords.join(' ')
+          : 'New Project';
+      };
+
       // Create project record using Supabase MCP
       const { data: project, error: projectError } = await supabase
         .from('projects')
         .insert({
           user_id: userId,
-          name: `${input.framework.toUpperCase()} API Project`,
-          description: `API generated from user prompt: ${input.prompt.substring(0, 100)}...`,
+          name: generateProjectName(input.prompt),
+          description: input.prompt.substring(0, 200), // Use full prompt as description
           framework: input.framework,
           advanced: input.advanced,
           status: 'generating'
