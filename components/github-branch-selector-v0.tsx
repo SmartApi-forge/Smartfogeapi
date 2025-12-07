@@ -117,53 +117,73 @@ export function GitHubBranchSelectorV0({
         return
       }
 
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 10000)
-      )
+      console.log('Fetching branches for:', repoInfoData)
+      console.log('Owner:', repoInfoData.owner, 'Repo:', repoInfoData.repo)
 
-      const fetchPromise = trpcUtils.github.getBranches.fetch({
+      // Try to fetch branches directly
+      const data = await trpcUtils.github.getBranches.fetch({
         owner: repoInfoData.owner,
         repo: repoInfoData.repo,
       })
-
-      // Race between fetch and timeout
-      const data = await Promise.race([fetchPromise, timeoutPromise]) as any
+      
+      console.log('Fetched branches response:', data)
+      console.log('Branches count:', data ? data.length : 0)
+      console.log('First branch structure:', data && data[0] ? JSON.stringify(data[0], null, 2) : 'No branches')
       
       if (data && data.length > 0) {
-        // Safely map branches with sha check
-        const validBranches = data
-          .filter((b: any) => b.commit && b.commit.sha)
-          .map((b: any) => ({
-            name: b.name,
-            sha: b.commit.sha,
-            protected: b.protected || false,
-          }))
+        // The GitHub service already returns the correct format with sha directly
+        const validBranches = data.map((b: any) => ({
+          name: b.name,
+          sha: b.sha || b.commit?.sha || 'unknown',
+          protected: b.protected || false,
+        }))
         
+        console.log('Valid branches:', validBranches)
+        console.log('Valid branches count:', validBranches.length)
         setBranches(validBranches)
         
-        // Auto-select current branch if it exists
+        // Auto-select current branch if it exists, otherwise select first branch
         if (project.active_branch && validBranches.some((b: any) => b.name === project.active_branch)) {
           setActiveBranch(project.active_branch)
+        } else if (validBranches.length > 0 && !activeBranch) {
+          // Set first branch as active if no active branch is set
+          setActiveBranch(validBranches[0].name)
         }
       } else {
-        // Repository has no branches yet
-        setBranches([])
-        toast.warning("Repository has no branches yet")
+        // Repository has no branches yet - add fallback branches
+        console.log('No branches returned, adding fallback branches')
+        const fallbackBranches = [
+          { name: 'main', sha: 'unknown', protected: false },
+          { name: 'master', sha: 'unknown', protected: false }
+        ]
+        setBranches(fallbackBranches)
+        if (!activeBranch) {
+          setActiveBranch('main')
+        }
       }
     } catch (error: any) {
       console.error("Failed to fetch branches:", error)
-      setBranches([])
+      console.error("Error details:", JSON.stringify(error, null, 2))
+      
+      // Set fallback branches on error
+      const fallbackBranches = [
+        { name: 'main', sha: 'unknown', protected: false },
+        { name: 'master', sha: 'unknown', protected: false }
+      ]
+      setBranches(fallbackBranches)
+      if (!activeBranch) {
+        setActiveBranch('main')
+      }
       
       // More specific error messages
       if (error.message === 'Request timeout') {
-        toast.error("Request timed out. Please try again.")
+        toast.error("Request timed out. Using fallback branches.")
       } else if (error.message && error.message.includes('404')) {
-        toast.error("Repository not found or not yet initialized")
+        toast.error("Repository not found. Using fallback branches.")
       } else if (error.message && error.message.includes('401')) {
-        toast.error("GitHub authentication failed. Please reconnect.")
+        toast.error("GitHub authentication failed. Using fallback branches.")
       } else {
-        toast.error("Failed to fetch branches: " + (error.message || "Unknown error"))
+        toast.error("Failed to fetch branches. Using fallback branches.")
       }
     } finally {
       setLoading(false)
@@ -172,7 +192,12 @@ export function GitHubBranchSelectorV0({
 
   // Fetch branches when dialog opens
   useEffect(() => {
-    if (open && project.repo_url && branches.length === 0 && !loading) {
+    if (open && project.repo_url) {
+      console.log('Dialog opened, fetching branches...')
+      console.log('Project repo URL:', project.repo_url)
+      console.log('Current activeBranch:', activeBranch)
+      console.log('Current branches:', branches)
+      // Always fetch branches when opening to ensure fresh data
       fetchBranches()
     }
   }, [open, project.repo_url]) // Remove fetchBranches from deps to prevent loops
@@ -426,7 +451,15 @@ export function GitHubBranchSelectorV0({
                 Active Branch
               </label>
               
-              <Popover open={branchDropdownOpen} onOpenChange={setBranchDropdownOpen}>
+              <Popover open={branchDropdownOpen} onOpenChange={(open) => {
+                setBranchDropdownOpen(open);
+                if (open) {
+                  // Clear and refresh branches when opening dropdown
+                  setBranches([]);
+                  setLoading(true);
+                  fetchBranches();
+                }
+              }}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -442,7 +475,7 @@ export function GitHubBranchSelectorV0({
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent 
-                  className="w-[calc(100vw-3rem)] sm:w-[288px] max-w-[320px] p-0 bg-[#1e1e1e] border-[#333333]"
+                  className={`w-[calc(100vw-3rem)] sm:w-[288px] max-w-[320px] p-0 ${isDark ? 'bg-[#1e1e1e] border-[#333333]' : 'bg-white border-[#e5e5e5]'}`}
                   align="start"
                   side="bottom"
                   sideOffset={4}
@@ -455,14 +488,14 @@ export function GitHubBranchSelectorV0({
                         placeholder="Create or search branches"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-8 bg-[#2a2a2a] border-[#404040] text-white placeholder:text-gray-500 h-8 text-sm focus-visible:ring-1 focus-visible:ring-blue-500"
+                        className={`pl-8 h-8 text-sm ${isDark ? 'bg-[#2a2a2a] border-[#404040] text-white placeholder:text-gray-500' : 'bg-white border-[#e5e5e5] text-gray-900 placeholder:text-gray-400'}`}
                       />
                     </div>
                     
                     {/* Branch list */}
                     <div className="max-h-48 overflow-y-auto">
                       {loading ? (
-                        <div className="p-3 text-sm text-gray-400 text-center">
+                        <div className={`p-3 text-sm text-center ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                           Loading branches...
                         </div>
                       ) : filteredBranches.length > 0 ? (
@@ -474,19 +507,19 @@ export function GitHubBranchSelectorV0({
                               setBranchDropdownOpen(false)
                               setSearchQuery("")
                             }}
-                            className="w-full flex items-center justify-between p-2 hover:bg-[#2a2a2a] rounded text-sm transition-colors"
+                            className={`w-full flex items-center justify-between p-2 rounded text-sm transition-colors ${isDark ? 'hover:bg-[#2a2a2a] text-white hover:text-white' : 'hover:bg-[#f2f2f2] text-gray-900 hover:text-gray-900'}`}
                           >
                             <div className="flex items-center gap-2">
-                              <GitBranch className="h-3.5 w-3.5 text-gray-400" />
-                              <span className="text-white">{branch.name}</span>
+                              <GitBranch className={`h-3.5 w-3.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`} />
+                              <span>{branch.name}</span>
                             </div>
                             {activeBranch === branch.name && (
-                              <Check className="h-3.5 w-3.5 text-white" />
+                              <Check className={`h-3.5 w-3.5 ${isDark ? 'text-white' : 'text-gray-900'}`} />
                             )}
                           </button>
                         ))
                       ) : (
-                        <div className="p-3 text-sm text-gray-400 text-center">
+                        <div className={`p-3 text-sm text-center ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                           No branches found
                         </div>
                       )}
@@ -495,7 +528,7 @@ export function GitHubBranchSelectorV0({
                     {/* Create Branch option */}
                     <button
                       onClick={() => setIsCreatingBranch(true)}
-                      className="w-full flex items-center gap-2 p-2 hover:bg-[#2a2a2a] rounded text-sm transition-colors border-t border-[#333333] mt-1 pt-2"
+                      className={`w-full flex items-center gap-2 p-2 rounded text-sm border-t mt-1 pt-2 ${isDark ? 'hover:bg-[#2a2a2a] border-[#333333]' : 'hover:bg-[#f2f2f2] border-[#e5e5e5]'}`}
                     >
                       <div className="flex items-center justify-center w-4 h-4 rounded-full bg-blue-600">
                         <Plus className="h-3 w-3 text-white" />
@@ -551,18 +584,20 @@ export function GitHubBranchSelectorV0({
                 <Popover open={branchDropdownOpen} onOpenChange={(open) => {
                   setBranchDropdownOpen(open);
                   if (open) {
-                    // Refresh branches when opening dropdown
+                    // Clear and refresh branches when opening dropdown
+                    setBranches([]);
+                    setLoading(true);
                     fetchBranches();
                   }
                 }}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
-                      className={`flex-1 justify-between h-9 text-sm font-normal ${isDark ? 'bg-[#2a2a2a] border-[#404040] text-white hover:bg-[#353535]' : 'bg-white border-[#e5e5e5] text-gray-900 hover:bg-[#fafafa]'}`}
+                      className={`flex-1 justify-between h-9 text-sm font-normal ${isDark ? 'bg-[#2a2a2a] border-[#404040] text-white hover:bg-[#353535] hover:text-white' : 'bg-white border-[#d1d5db] text-[#171717] hover:bg-[#f5f5f5] hover:text-[#171717]'}`}
                     >
                       <div className="flex items-center gap-2">
-                        <GitBranch className="h-3.5 w-3.5" />
-                        <span>{activeBranch}</span>
+                        <GitBranch className={`h-3.5 w-3.5 ${isDark ? 'text-white' : 'text-[#171717]'}`} />
+                        <span className={isDark ? 'text-white' : 'text-[#171717]'}>{activeBranch || 'Select branch'}</span>
                       </div>
                       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="opacity-50">
                         <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -589,25 +624,35 @@ export function GitHubBranchSelectorV0({
                       
                       {/* Branch list */}
                       <div className="max-h-48 overflow-y-auto">
-                        {filteredBranches.map((branch) => (
-                          <button
-                            key={branch.name}
-                            onClick={() => {
-                              setActiveBranch(branch.name)
-                              setBranchDropdownOpen(false)
-                              setSearchQuery("")
-                            }}
-                            className={`w-full flex items-center justify-between p-2 rounded text-sm transition-colors ${isDark ? 'hover:bg-[#2a2a2a] text-white hover:text-white' : 'hover:bg-[#f2f2f2] text-gray-900 hover:text-gray-900'}`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <GitBranch className={`h-3.5 w-3.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`} />
-                              <span>{branch.name}</span>
-                            </div>
-                            {activeBranch === branch.name && (
-                              <Check className={`h-3.5 w-3.5 ${isDark ? 'text-white' : 'text-gray-900'}`} />
-                            )}
-                          </button>
-                        ))}
+                        {loading ? (
+                          <div className={`p-3 text-sm text-center ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                            Loading branches...
+                          </div>
+                        ) : filteredBranches.length > 0 ? (
+                          filteredBranches.map((branch) => (
+                            <button
+                              key={branch.name}
+                              onClick={() => {
+                                setActiveBranch(branch.name)
+                                setBranchDropdownOpen(false)
+                                setSearchQuery("")
+                              }}
+                              className={`w-full flex items-center justify-between p-2 rounded text-sm transition-colors ${isDark ? 'hover:bg-[#2a2a2a]' : 'hover:bg-[#f2f2f2]'}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <GitBranch className={`h-3.5 w-3.5 ${isDark ? 'text-gray-400' : 'text-[#171717]'}`} />
+                                <span className={isDark ? 'text-white' : 'text-[#171717]'}>{branch.name}</span>
+                              </div>
+                              {activeBranch === branch.name && (
+                                <Check className={`h-3.5 w-3.5 ${isDark ? 'text-white' : 'text-[#171717]'}`} />
+                              )}
+                            </button>
+                          ))
+                        ) : (
+                          <div className={`p-3 text-sm text-center ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                            No branches found
+                          </div>
+                        )}
                       </div>
 
                       {/* Create Branch */}
@@ -640,23 +685,21 @@ export function GitHubBranchSelectorV0({
             <div className="flex gap-2">
               <Button
                 onClick={handlePullChanges}
-                className={`flex-1 h-9 font-normal ${
-                  hasRemoteChanges 
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white border-0' 
-                    : isDark ? 'bg-[#2a2a2a] border border-[#404040] text-gray-400 hover:bg-[#353535]' : 'bg-white border border-[#e5e5e5] text-gray-400 hover:bg-[#fafafa]'
+                className={`flex-1 h-9 font-normal border ${
+                  isDark 
+                    ? 'bg-[#2a2a2a] border-[#404040] text-white hover:bg-[#353535]' 
+                    : 'bg-white border-[#d1d5db] text-[#171717] hover:bg-[#f5f5f5]'
                 }`}
-                disabled={!hasRemoteChanges}
               >
                 Pull Changes
               </Button>
               <Button
                 onClick={handlePushChanges}
-                className={`flex-1 h-9 font-normal ${
-                  hasLocalChanges 
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white border-0' 
-                    : isDark ? 'bg-[#2a2a2a] border border-[#404040] text-gray-400 hover:bg-[#353535]' : 'bg-white border border-[#e5e5e5] text-gray-400 hover:bg-[#fafafa]'
+                className={`flex-1 h-9 font-normal border ${
+                  isDark 
+                    ? 'bg-[#2a2a2a] border-[#404040] text-white hover:bg-[#353535]' 
+                    : 'bg-white border-[#d1d5db] text-[#171717] hover:bg-[#f5f5f5]'
                 }`}
-                disabled={!hasLocalChanges}
               >
                 Push Changes
               </Button>
@@ -702,7 +745,7 @@ export function GitHubBranchSelectorV0({
                   setNewBranchName("")
                 }}
                 variant="outline"
-                className={`flex-1 h-9 ${isDark ? 'bg-transparent border-[#404040] text-white hover:bg-[#2a2a2a]' : 'bg-white border-[#e5e5e5] text-gray-900 hover:bg-[#fafafa]'}`}
+                className={`flex-1 h-9 ${isDark ? 'bg-transparent border-[#404040] text-white hover:bg-[#2a2a2a] hover:text-white' : 'bg-white border-[#d1d5db] text-[#171717] hover:bg-[#f5f5f5] hover:text-[#171717]'}`}
               >
                 Cancel
               </Button>

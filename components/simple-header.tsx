@@ -8,6 +8,7 @@ import { GitHubSetupDialog } from "@/components/github-setup-dialog"
 import { GitHubBranchSelectorV0 } from "@/components/github-branch-selector-v0"
 import { ShareDialog } from "@/components/share-dialog"
 import { VercelDeployDialog } from "@/components/vercel-deploy-dialog"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { useTheme } from "next-themes"
 import { useState, useEffect } from "react"
 import { createBrowserClient } from "@/lib/supabase/client"
@@ -147,7 +148,6 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
             <VercelDeployDialog
               projectId={project.id}
               projectName={project.name}
-              projectFiles={projectFiles}
             >
               <button 
                 aria-label="Deploy to Vercel"
