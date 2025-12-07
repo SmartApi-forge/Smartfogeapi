@@ -58,6 +58,7 @@ import { GenerationProgressTracker } from "../../../components/generation-progre
 import { TextShimmer } from "@/components/ui/text-shimmer";
 import { VersionCard } from "@/components/version-card";
 import { SandboxPreview } from "@/components/sandbox-preview";
+import { V0Sidebar } from "@/components/v0-sidebar";
 import JSZip from "jszip";
 
 interface Message {
@@ -746,6 +747,8 @@ export function ProjectPageClient({
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [manuallyCreatedFiles, setManuallyCreatedFiles] = useState<Record<string, string>>({});
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; fileId: string } | null>(null);
+  const [activeSection, setActiveSection] = useState<string>('chat');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const versionDropdownRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1816,14 +1819,97 @@ export function ProjectPageClient({
     );
   }
 
+  const handleSidebarToggle = () => {
+    setIsSidebarOpen(prev => !prev);
+  };
+
+  const handleSidebarNavigate = (section: string) => {
+    console.log('Navigating to:', section);
+    setActiveSection(section);
+    
+    // Handle navigation based on section
+    switch (section) {
+      case 'chat':
+        setMobileView('chat');
+        setIsChatPanelCollapsed(false);
+        break;
+      case 'code':
+        setViewMode('code');
+        setMobileView('code');
+        break;
+      case 'files':
+        setViewMode('code');
+        setMobileView('code');
+        setIsMobileExplorerOpen(true);
+        break;
+      case 'terminal':
+        setViewMode('preview');
+        setShowTerminal(true);
+        setMobileView('code');
+        break;
+      case 'versions':
+        setIsVersionDropdownOpen(true);
+        setMobileView('code');
+        break;
+      case 'github':
+        // GitHub integration - trigger GitHub button in header
+        console.log('GitHub integration clicked');
+        // Try GitHub setup button first (for new projects)
+        const githubSetupButton = document.getElementById('github-setup-button');
+        if (githubSetupButton) {
+          githubSetupButton.click();
+        } else {
+          // Try GitHub branch button (for cloned projects)
+          const githubBranchButton = document.getElementById('github-branch-button');
+          if (githubBranchButton) {
+            githubBranchButton.click();
+          }
+        }
+        setMobileView('code');
+        break;
+      case 'settings':
+        // Settings - could open a modal or navigate to settings page
+        console.log('Settings clicked');
+        // For now, just log - you can implement settings modal later
+        break;
+      default:
+        break;
+    }
+  };
+
   return (
-    <div className="h-screen bg-background flex flex-col overflow-hidden">
-      <SimpleHeader 
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        project={currentProject}
-        projectFiles={projectFiles}
+    <>
+      {/* V0-inspired Sidebar - rendered at root level */}
+      <V0Sidebar 
+        projectId={projectId}
+        projectName={currentProject?.name}
+        messages={sortedMessages}
+        onNavigate={handleSidebarNavigate}
+        activeSection={activeSection}
+        project={{
+          id: currentProject?.id || projectId,
+          framework: currentProject?.framework,
+          status: currentProject?.status,
+          deploy_url: currentProject?.deploy_url,
+          swagger_url: currentProject?.swagger_url,
+          sandbox_url: 'sandbox_url' in currentProject ? currentProject.sandbox_url : undefined,
+        }}
+        onTerminalToggle={() => setShowTerminal(!showTerminal)}
+        onPreviewToggle={() => setViewMode(viewMode === 'preview' ? 'code' : 'preview')}
+        showTerminal={showTerminal}
+        isOpen={isSidebarOpen}
+        onOpenChange={setIsSidebarOpen}
       />
+      
+      <div className="h-screen bg-background flex flex-col overflow-hidden">
+        <SimpleHeader 
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          project={currentProject}
+          projectFiles={projectFiles}
+          isSidebarOpen={isSidebarOpen}
+          onSidebarToggle={handleSidebarToggle}
+        />
 
       {/* Mobile view toggle buttons */}
       <div className="sm:hidden flex border-b border-border dark:border-[#333433] bg-white dark:bg-[#0E100F]">
@@ -2740,5 +2826,6 @@ export function ProjectPageClient({
         </div>
       )}
     </div>
+    </>
   );
 }

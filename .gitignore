@@ -26,3 +26,29 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 /src/generated/prisma
+
+# Kiro IDE files
+.kiro/
+.vscode/
+
+# Documentation and implementation notes
+*_IMPLEMENTATION.md
+*_FEATURES.md
+*_GUIDE.md
+*_FIX.md
+*_FIXES.md
+*_SUMMARY.md
+*_CHANGES.md
+*_IMPROVEMENTS.md
+*_SIMPLIFICATION.md
+*_UPGRADE.md
+*_COMPLETE.md
+*_STATUS.md
+SIDEBAR_*.md
+TERMINAL_*.md
+GITHUB_*.md
+HEADER_*.md
+USER_*.md
+V0_*.md
+BEFORE_AFTER_*.md
+COLOR_*.md

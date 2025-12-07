@@ -174,7 +174,7 @@ export class ApiGenerationService {
         .from('projects')
         .insert({
           user_id: userId,
-          name: `API Project ${new Date().toLocaleDateString()}`, // Shorter, cleaner name
+          name: `${input.framework.toUpperCase()} API Project`,
           description: `API generated from user prompt: ${input.prompt.substring(0, 100)}...`,
           framework: input.framework,
           advanced: input.advanced,
