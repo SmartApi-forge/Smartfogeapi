@@ -171,22 +171,6 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
       },
     },
     {
-      id: "recent-chats",
-      label: "Recent Chats",
-      icon: <MessageSquare className="size-5" />,
-      onClick: () => {
-        if (activeSection === "recent-chats" && isExpanded) {
-          // Toggle chat list if already showing
-          setShowChatList(!showChatList);
-          setShowProjectList(false);
-        } else {
-          handleNavClick("recent-chats");
-          setShowChatList(true);
-          setShowProjectList(false);
-        }
-      },
-    },
-    {
       id: "projects",
       label: "Projects",
       icon: <FolderKanban className="size-5" />,
@@ -199,6 +183,22 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
           handleNavClick("projects");
           setShowProjectList(true);
           setShowChatList(false);
+        }
+      },
+    },
+    {
+      id: "recent-chats",
+      label: "Recent Chats",
+      icon: <MessageSquare className="size-5" />,
+      onClick: () => {
+        if (activeSection === "recent-chats" && isExpanded) {
+          // Toggle chat list if already showing
+          setShowChatList(!showChatList);
+          setShowProjectList(false);
+        } else {
+          handleNavClick("recent-chats");
+          setShowChatList(true);
+          setShowProjectList(false);
         }
       },
     },
