@@ -589,26 +589,26 @@ function CodeViewer({
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Code viewer header - sticky and always visible with clear filename - NO bottom border for unified look */}
-      <div className="sticky top-0 z-10 h-12 sm:h-10 px-2 sm:px-3 flex items-center justify-between gap-3 text-xs text-foreground bg-white dark:bg-[#1D1D1D] backdrop-blur-sm flex-shrink-0">
+      <div className="sticky top-0 z-10 h-11 sm:h-10 px-2 sm:px-3 flex items-center justify-between gap-2 sm:gap-3 text-xs text-foreground bg-white dark:bg-[#1D1D1D] backdrop-blur-sm flex-shrink-0 border-b border-border/50 dark:border-[#333433]/50">
         {/* Filename section with FULL PATH - responsive spacing */}
-        <div className="flex items-center gap-4 sm:gap-5 lg:gap-2.5 min-w-0 flex-1 overflow-hidden">
-          <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1 overflow-hidden">
+          <div className="flex-shrink-0 flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5">
             {getFileIcon(selectedFile.name)}
           </div>
-          <div className="flex items-center gap-2 min-w-0 flex-1 py-1">
-            <span className="font-sans font-medium truncate text-[12px] sm:text-[13px] text-foreground">{filename || selectedFile.name}</span>
-            <span className="font-sans text-muted-foreground flex-shrink-0 hidden md:inline text-[10px] sm:text-[11px] whitespace-nowrap opacity-70">
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
+            <span className="font-sans font-medium truncate text-[11px] sm:text-[12px] text-foreground">{filename || selectedFile.name}</span>
+            <span className="font-sans text-muted-foreground flex-shrink-0 hidden md:inline text-[10px] whitespace-nowrap opacity-70">
               • {selectedFile.language || 'text'}
             </span>
           </div>
         </div>
         
         {/* Action buttons */}
-        <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+        <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
           <button
             onClick={handleSave}
             disabled={isSaving || !hasUnsavedChanges}
-            className={`flex items-center justify-center gap-1 px-2 py-2 sm:py-1.5 rounded text-xs transition-colors focus:outline-none focus:ring-1 focus:ring-primary ${
+            className={`flex items-center justify-center gap-1 px-1.5 sm:px-2 py-1.5 rounded text-xs transition-colors focus:outline-none focus:ring-1 focus:ring-primary ${
               hasUnsavedChanges && !isSaving
                 ? 'bg-blue-500 hover:bg-blue-600 text-white'
                 : 'bg-muted text-muted-foreground cursor-not-allowed opacity-50'
@@ -617,41 +617,41 @@ function CodeViewer({
             aria-label="Save file"
           >
             {isSaving ? (
-              <Loader2 className="size-4 sm:size-3.5 animate-spin flex-shrink-0" />
+              <Loader2 className="size-3.5 sm:size-3.5 animate-spin flex-shrink-0" />
             ) : (
-              <Check className="size-4 sm:size-3.5 flex-shrink-0" />
+              <Check className="size-3.5 sm:size-3.5 flex-shrink-0" />
             )}
-            <span className="hidden lg:inline text-[11px] whitespace-nowrap">
+            <span className="hidden lg:inline text-[10px] sm:text-[11px] whitespace-nowrap">
               {isSaving ? 'Saving...' : 'Save'}
             </span>
           </button>
           <button
             onClick={handleCopyCode}
-            className="flex items-center justify-center gap-1 px-2 py-2 sm:py-1.5 rounded text-xs hover:bg-muted dark:hover:bg-[#262726] active:bg-muted/70 dark:active:bg-[#262726]/70 transition-colors focus:outline-none focus:ring-1 focus:ring-primary w-8 h-8 sm:w-auto sm:h-auto"
+            className="flex items-center justify-center gap-1 px-1.5 sm:px-2 py-1.5 rounded text-xs hover:bg-muted dark:hover:bg-[#262726] active:bg-muted/70 dark:active:bg-[#262726]/70 transition-colors focus:outline-none focus:ring-1 focus:ring-primary"
             title="Copy code to clipboard"
             aria-label="Copy code"
           >
             {copySuccess ? (
               <>
-                <Check className="size-4 sm:size-3.5 text-emerald-500 flex-shrink-0" />
-                <span className="text-emerald-500 hidden lg:inline text-[11px] whitespace-nowrap">Copied!</span>
+                <Check className="size-3.5 sm:size-3.5 text-emerald-500 flex-shrink-0" />
+                <span className="text-emerald-500 hidden lg:inline text-[10px] sm:text-[11px] whitespace-nowrap">Copied!</span>
               </>
             ) : (
               <>
-                <Copy className="size-4 sm:size-3.5 flex-shrink-0" />
-                <span className="hidden lg:inline text-[11px] whitespace-nowrap">Copy</span>
+                <Copy className="size-3.5 sm:size-3.5 flex-shrink-0" />
+                <span className="hidden lg:inline text-[10px] sm:text-[11px] whitespace-nowrap">Copy</span>
               </>
             )}
           </button>
           
           <button
             onClick={handleDownload}
-            className="flex items-center justify-center gap-1 px-2 py-2 sm:py-1.5 rounded text-xs hover:bg-muted dark:hover:bg-[#262726] active:bg-muted/70 dark:active:bg-[#262726]/70 transition-colors focus:outline-none focus:ring-1 focus:ring-primary w-8 h-8 sm:w-auto sm:h-auto"
+            className="flex items-center justify-center gap-1 px-1.5 sm:px-2 py-1.5 rounded text-xs hover:bg-muted dark:hover:bg-[#262726] active:bg-muted/70 dark:active:bg-[#262726]/70 transition-colors focus:outline-none focus:ring-1 focus:ring-primary"
             title="Download file"
             aria-label="Download file"
           >
-            <Download className="size-4 sm:size-3.5 flex-shrink-0" />
-            <span className="hidden lg:inline text-[11px] whitespace-nowrap">Download</span>
+            <Download className="size-3.5 sm:size-3.5 flex-shrink-0" />
+            <span className="hidden lg:inline text-[10px] sm:text-[11px] whitespace-nowrap">Download</span>
           </button>
         </div>
       </div>
@@ -1901,7 +1901,7 @@ export function ProjectPageClient({
         onOpenChange={setIsSidebarOpen}
       />
       
-      <div className="h-screen bg-background flex flex-col overflow-hidden">
+      <div className="h-screen bg-background flex flex-col overflow-hidden relative">
         <SimpleHeader 
           viewMode={viewMode}
           onViewModeChange={setViewMode}
@@ -1912,31 +1912,31 @@ export function ProjectPageClient({
         />
 
       {/* Mobile view toggle buttons */}
-      <div className="sm:hidden flex border-b border-border dark:border-[#333433] bg-white dark:bg-[#0E100F]">
+      <div className="sm:hidden flex border-b border-border dark:border-[#333433] bg-white dark:bg-[#0E100F] sticky top-[50px] z-30">
         <button
           onClick={() => setMobileView('chat')}
-          className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+          className={`flex-1 px-3 py-2.5 text-sm font-medium transition-colors ${
             mobileView === 'chat'
               ? 'text-foreground border-b-2 border-primary bg-muted/30'
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          <div className="flex items-center justify-center gap-2">
+          <div className="flex items-center justify-center gap-1.5">
             <MessageSquare className="size-4" />
-            <span>Chat</span>
+            <span className="text-xs sm:text-sm">Chat</span>
           </div>
         </button>
         <button
           onClick={() => setMobileView('code')}
-          className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+          className={`flex-1 px-3 py-2.5 text-sm font-medium transition-colors ${
             mobileView === 'code'
               ? 'text-foreground border-b-2 border-primary bg-muted/30'
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          <div className="flex items-center justify-center gap-2">
+          <div className="flex items-center justify-center gap-1.5">
             <FileCode className="size-4" />
-            <span>Code</span>
+            <span className="text-xs sm:text-sm">Code</span>
           </div>
         </button>
       </div>
@@ -1948,8 +1948,8 @@ export function ProjectPageClient({
           animate={isMobileScreen ? {} : { 
             // Only apply motion animations on desktop
             width: isChatPanelCollapsed ? 0 : 'auto',
-            minWidth: isChatPanelCollapsed ? 0 : '256px',
-            maxWidth: isChatPanelCollapsed ? 0 : '400px',
+            minWidth: isChatPanelCollapsed ? 0 : '280px',
+            maxWidth: isChatPanelCollapsed ? 0 : '420px',
             opacity: isChatPanelCollapsed ? 0 : 1
           }}
           transition={{ 
@@ -1969,7 +1969,7 @@ export function ProjectPageClient({
           className={`flex-col h-full bg-[#FAFAFA] dark:bg-[#0E100F] ${
             isChatPanelCollapsed 
               ? 'overflow-hidden' 
-              : 'w-full sm:w-64 md:w-72 lg:w-80 xl:w-96 overflow-hidden'
+              : 'w-full sm:min-w-[280px] sm:max-w-[420px] overflow-hidden'
           } ${mobileView === 'chat' ? 'flex flex-1 sm:flex-none' : 'hidden sm:flex'}`}
         >
           
@@ -2128,14 +2128,14 @@ export function ProjectPageClient({
 
 
         {/* Code viewer section - conditionally shown on mobile based on mobileView */}
-        <section className={`p-1 sm:p-2 min-h-0 relative bg-white dark:bg-[#0E100F] sm:min-w-0 flex-col ${
-          mobileView === 'code' ? 'flex flex-1' : 'hidden sm:flex sm:flex-1'
+        <section className={`p-1 sm:p-2 min-h-0 relative bg-white dark:bg-[#0E100F] flex-col ${
+          mobileView === 'code' ? 'flex flex-1 w-full' : 'hidden sm:flex sm:flex-1 sm:min-w-0'
         }`}>
           {/* Folder toggle button - only show when explorer is closed AND in code mode */}
           {!isMobileExplorerOpen && viewMode === 'code' && (
             <button
               onClick={() => setIsMobileExplorerOpen(true)}
-              className="sm:hidden absolute top-16 left-4 z-50 p-2 rounded-md bg-white dark:bg-[#1D1D1D] border border-border dark:border-[#333433] text-foreground hover:bg-muted transition-colors shadow-lg"
+              className="sm:hidden absolute top-14 left-3 z-50 p-2 rounded-lg bg-white dark:bg-[#1D1D1D] border border-border dark:border-[#333433] text-foreground hover:bg-muted transition-colors shadow-lg"
               aria-label="Open file explorer"
             >
               <Folder className="size-4" />
@@ -2398,15 +2398,15 @@ export function ProjectPageClient({
             {/* File explorer sidebar - NO header, just files - hidden in preview mode */}
             <aside
               className={`
-                border-r border-border dark:border-[#333433] flex-shrink-0 flex flex-col overflow-hidden
+                border-r border-border dark:border-[#333433] flex-shrink-0 flex flex-col overflow-hidden transition-transform duration-300
                 ${viewMode === 'preview' ? 'hidden' : ''}
                 ${isMobileExplorerOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}
-                sm:relative absolute sm:z-auto z-40 h-full bg-[#FAFAFA] dark:bg-[#1D1D1D]
+                absolute sm:relative z-40 sm:z-auto h-full bg-[#FAFAFA] dark:bg-[#1D1D1D]
               `}
               style={{
-                width: viewMode === 'code' ? 'clamp(144px, 15vw, 208px)' : '0',
-                minWidth: viewMode === 'code' ? 'clamp(144px, 15vw, 208px)' : '0',
-                maxWidth: viewMode === 'code' ? 'clamp(144px, 15vw, 208px)' : '0',
+                width: viewMode === 'code' ? (isMobileScreen ? '75vw' : 'clamp(180px, 18vw, 240px)') : '0',
+                minWidth: viewMode === 'code' ? (isMobileScreen ? '75vw' : 'clamp(180px, 18vw, 240px)') : '0',
+                maxWidth: viewMode === 'code' ? (isMobileScreen ? '75vw' : 'clamp(180px, 18vw, 240px)') : '0',
               }}
             >
               {/* File Explorer Toolbar - VS Code style */}
@@ -2510,9 +2510,10 @@ export function ProjectPageClient({
               </div>
             </aside>
 
+            {/* Mobile backdrop for file explorer */}
             {isMobileExplorerOpen && (
               <div
-                className="sm:hidden absolute inset-0 bg-black/50 z-30"
+                className="sm:hidden fixed inset-0 bg-black/50 z-30"
                 onClick={() => setIsMobileExplorerOpen(false)}
               />
             )}

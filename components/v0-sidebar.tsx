@@ -253,15 +253,13 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
       label: "Projects",
       icon: <FolderKanban className="size-5" />,
       onClick: () => {
-        if (activeSection === "projects" && isExpanded) {
-          // Toggle project list if already showing
-          setShowProjectList(!showProjectList);
-          setShowChatList(false);
-        } else {
-          handleNavClick("projects");
-          setShowProjectList(true);
-          setShowChatList(false);
-        }
+        // Always show project list when clicking Projects
+        handleNavClick("projects");
+        setShowProjectList(true);
+        setShowChatList(false);
+        // Ensure sidebar is expanded to show the list
+        setIsExpanded(true);
+        setManuallyToggled(true);
       },
     },
     {
@@ -269,15 +267,13 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
       label: "Recent Chats",
       icon: <MessageSquare className="size-5" />,
       onClick: () => {
-        if (activeSection === "recent-chats" && isExpanded) {
-          // Toggle chat list if already showing
-          setShowChatList(!showChatList);
-          setShowProjectList(false);
-        } else {
-          handleNavClick("recent-chats");
-          setShowChatList(true);
-          setShowProjectList(false);
-        }
+        // Always show chat list when clicking Recent Chats
+        handleNavClick("recent-chats");
+        setShowChatList(true);
+        setShowProjectList(false);
+        // Ensure sidebar is expanded to show the list
+        setIsExpanded(true);
+        setManuallyToggled(true);
       },
     },
   ];
@@ -296,14 +292,15 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
 
   return (
     <>
-      {/* Mobile toggle button - floating */}
-      {isMobile && showMobileToggle && !isExpanded && (
+      {/* Mobile toggle button - hidden since we use the header S button instead */}
+      {/* Keeping code for reference but not rendering */}
+      {false && isMobile && showMobileToggle && !isExpanded && (
         <motion.button
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.8 }}
           onClick={() => setIsExpanded(true)}
-          className="fixed top-4 left-4 z-40 size-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg flex items-center justify-center"
+          className="fixed top-[60px] left-4 z-40 size-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg flex items-center justify-center"
         >
           <Zap className="size-6" />
         </motion.button>
@@ -317,7 +314,8 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-black/20 dark:bg-black/40 z-40"
+            className="fixed inset-0 bg-black/20 dark:bg-black/40 z-30"
+            style={{ top: '50px' }}
             onClick={() => setIsExpanded(false)}
           />
         )}
@@ -346,17 +344,17 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
             onHoverChange?.(false);
           }
         }}
-        className={`fixed h-[calc(100vh-58px)] bg-white dark:bg-[#0E100F] z-40 flex flex-col ${
+        className={`fixed h-[calc(100vh-50px)] bg-white dark:bg-[#0E100F] z-40 flex flex-col ${
           isMobile && !isExpanded ? 'hidden' : ''
         }`}
         style={{
-          left: '4px',
-          top: '54px',
-          borderRadius: '12px',
+          left: isMobile ? '0' : '4px',
+          top: '50px',
+          borderRadius: isMobile ? '0' : '12px',
           boxShadow: isExpanded 
             ? '0 4px 16px rgba(0, 0, 0, 0.12), 0 8px 32px rgba(0, 0, 0, 0.08)' 
             : 'none',
-          border: '1px solid rgba(0, 0, 0, 0.08)',
+          border: isMobile ? 'none' : '1px solid rgba(0, 0, 0, 0.08)',
           overflow: 'hidden',
         }}
       >
