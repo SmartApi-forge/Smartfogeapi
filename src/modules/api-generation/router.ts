@@ -7,7 +7,7 @@ import {
   projectIdSchema, 
   jobStatusSchema 
 } from './types'
-import { classifyCommand } from '../../services/command-classifier'
+import { DecisionAgent } from '../../services/decision-agent'
 import { ContextBuilder } from '../../services/context-builder'
 import { classifyCommandSchema } from '../versions/types'
 
@@ -147,14 +147,28 @@ export const apiGenerationRouter = createTRPCRouter({
       return await apiGenerationService.retryJob(input.jobId, ctx.user.id)
     }),
 
-  // Command classification
+  // Command classification (NEW: uses Decision Agent with 10 specialized modes)
   classify: baseProcedure
     .input(classifyCommandSchema)
     .mutation(async ({ input }) => {
-      const classification = await classifyCommand(
+      // Use Decision Agent for advanced intent classification
+      const decisionResult = await DecisionAgent.analyze(
         input.prompt,
-        input.currentFiles || []
+        {
+          conversationHistory: [],
+          existingFiles: input.currentFiles || [],
+        }
       );
+      
+      // Map Decision Agent result to old format for backwards compatibility
+      const classification = {
+        type: decisionResult.intent as any,
+        confidence: decisionResult.confidence,
+        shouldCreateNewVersion: true,
+        entities: decisionResult.entities.toCreate || [],
+        reasoning: decisionResult.summary,
+      };
+      
       return classification;
     }),
 
@@ -178,7 +192,14 @@ export const apiGenerationRouter = createTRPCRouter({
       projectId: z.string().uuid(),
       messageId: z.string().uuid(),
       prompt: z.string().min(1),
-      commandType: z.enum(['CREATE_FILE', 'MODIFY_FILE', 'DELETE_FILE', 'REFACTOR_CODE', 'GENERATE_API', 'CLONE_REPO']),
+      // DecisionAgent intent types (new AI-powered classification)
+      commandType: z.enum([
+        'CREATE',
+        'MODIFY',
+        'CREATE_AND_LINK',
+        'FIX_ERROR',
+        'QUESTION'
+      ]),
       shouldCreateNewVersion: z.boolean(),
       parentVersionId: z.string().uuid().optional(),
       conversationHistory: z.array(z.object({
@@ -187,6 +208,10 @@ export const apiGenerationRouter = createTRPCRouter({
       })).optional(),
     }))
     .mutation(async ({ input }) => {
+      // Give SSE connection 500ms to establish before triggering workflow
+      // This prevents race condition where events are emitted before frontend connects
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // Send event to Inngest to trigger iteration workflow
       await inngest.send({
         name: 'api/iterate',

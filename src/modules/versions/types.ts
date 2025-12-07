@@ -1,13 +1,12 @@
 import { z } from 'zod';
 
-// Command types for version creation
+// Command types for version creation (DecisionAgent intent types)
 export type CommandType = 
-  | 'CREATE_FILE' 
-  | 'MODIFY_FILE' 
-  | 'DELETE_FILE' 
-  | 'REFACTOR_CODE' 
-  | 'GENERATE_API'
-  | 'CLONE_REPO';
+  | 'CREATE' 
+  | 'MODIFY' 
+  | 'CREATE_AND_LINK' 
+  | 'FIX_ERROR' 
+  | 'QUESTION';
 
 export type VersionStatus = 'generating' | 'complete' | 'failed';
 
@@ -35,7 +34,7 @@ export const createVersionSchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().optional(),
   files: z.record(z.string()),
-  command_type: z.enum(['CREATE_FILE', 'MODIFY_FILE', 'DELETE_FILE', 'REFACTOR_CODE', 'GENERATE_API', 'CLONE_REPO']).optional(),
+  command_type: z.enum(['CREATE', 'MODIFY', 'CREATE_AND_LINK', 'FIX_ERROR', 'QUESTION']).optional(),
   prompt: z.string().min(1),
   parent_version_id: z.string().uuid().optional(),
   status: z.enum(['generating', 'complete', 'failed']).default('generating'),

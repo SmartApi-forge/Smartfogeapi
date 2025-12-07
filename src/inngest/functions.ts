@@ -10,7 +10,13 @@ import { VersionManager } from '../services/version-manager';
 import { ContextBuilder } from '../services/context-builder';
 import { SmartContextBuilder } from '../services/smart-context-builder';
 import { EmbeddingService } from '../services/embedding-service';
+import { TwoAgentOrchestrator } from '../services/two-agent-orchestrator';
+import { DecisionAgent } from '../services/decision-agent';
+import { PromptLoader } from '../services/prompt-loader';
 import { SANDBOX_DEFAULT_TIMEOUT_MS, getSandboxTimeout } from '../config/sandbox';
+
+// Clear prompt cache on server start to ensure fresh prompts are loaded
+PromptLoader.clearCache();
 
 // Import default resources configuration
 import { DEFAULT_RESOURCES } from '../lib/daytona-client';
@@ -1669,7 +1675,7 @@ EXAMPLE STRUCTURE:
           name: versionName,
           description: `Initial generation: ${summary}`,
           files: files,
-          command_type: 'GENERATE_API',
+          command_type: 'CREATE', // Initial API generation is a CREATE action
           prompt: prompt,
           parent_version_id: undefined, // First version has no parent
           status: 'complete',
@@ -2307,7 +2313,7 @@ Provide a clear, concise answer. Be specific and helpful.`
         return { userIntent, projectPatterns, errorInfo };
       });
       
-      // Step 6: Generate code with context
+      // Step 6: Generate code using TWO-AGENT SYSTEM
       const apiResult = await step.run("generate-api-code", async () => {
         // Emit step start event
         await streamingService.emit(projectId, {
@@ -2316,698 +2322,50 @@ Provide a clear, concise answer. Be specific and helpful.`
           message: 'Planning changes...',
           versionId,
         });
-        
-        // Build enhanced prompt with smart context
-        const enhancedPrompt = SmartContextBuilder.formatForPrompt(context, prompt);
-        
-        // Extract list of relevant files that should be considered for modification
-        const relevantFilePaths = Object.keys(context.relevantFiles || {});
-        const allExistingFilePaths = Object.keys(context.previousFiles || {});
-        
-        const explicitFileInstructions = relevantFilePaths.length > 0
-          ? `\n\n🎯 TARGET FILES FOR MODIFICATION:\nThe following files are semantically relevant to the user's request. If the request involves modifying/editing code, you MUST modify these EXISTING files rather than creating new ones with different names or paths:\n${relevantFilePaths.map((p, i) => `${i + 1}. ${p}`).join('\n')}\n\nDO NOT create new files like "hero-section.tsx" or "HeroComponent.tsx" if "HeroSection.tsx" already exists above. MODIFY THE EXISTING FILE PATH EXACTLY AS SHOWN.`
-          : '';
-        
-        const existingFilesWarning = allExistingFilePaths.length > 0
-          ? `\n\n📁 ALL EXISTING FILES IN PROJECT (${allExistingFilePaths.length} files):\n${allExistingFilePaths.slice(0, 50).join('\n')}${allExistingFilePaths.length > 50 ? `\n... and ${allExistingFilePaths.length - 50} more files` : ''}\n\nBefore creating ANY new file, check if a similar file already exists in the list above. If it does, MODIFY that file instead.`
-          : '';
-        
-        const isModifyCommand = commandType === 'MODIFY_FILE' || commandType === 'REFACTOR_CODE';
-        
-        // GitHub projects get ULTRA strict modification-only instructions
-        const githubProjectWarning = projectInfo.isGitHubProject
-          ? `\n\n🚨 GITHUB PROJECT - ULTRA STRICT MODE 🚨\nThis is a CLONED GitHub project (${projectInfo.repoFullName}). You are ABSOLUTELY FORBIDDEN from creating new files unless the user EXPLICITLY says "create a new file called X".\n\nYou MUST ONLY modify existing files listed in the "Relevant Files" section. Any attempt to create new files will break the user's application.\n\nIF YOU CREATE A NEW FILE INSTEAD OF MODIFYING AN EXISTING ONE, YOU HAVE FAILED.\n\nThe "newFiles" object in your response MUST be empty {} unless the user explicitly requested a new file.`
-          : '';
-        
-        // Detect framework from project files
-        const detectedFramework = detectFramework(allExistingFilePaths, context.configFiles);
-        const frameworkRules = getFrameworkSpecificRules(detectedFramework);
-        
-        // Build project patterns context
-        const patterns = analysis.projectPatterns;
-        const projectPatternsContext = `\n\n📚 PROJECT PATTERNS & LIBRARIES (MUST FOLLOW):
-   - UI Library: ${patterns.uiLibrary} ${patterns.uiLibrary !== 'none' ? '← USE THIS for all UI components' : ''}
-   - Styling: ${patterns.styling} ${patterns.styling !== 'css' ? '← USE THIS styling approach' : ''}
-   - Forms: ${patterns.formLibrary} ${patterns.formLibrary !== 'none' ? '← USE THIS for forms' : ''}
-   - State: ${patterns.stateManagement} ← USE THIS for state management
-   - Common Components: ${patterns.commonComponents.slice(0, 5).join(', ')}
-   
-   🎨 CONSISTENCY RULES:
-   - REUSE existing components from the project (check common components above)
-   - FOLLOW the same import patterns: ${patterns.importPatterns.slice(0, 3).join(', ')}
-   - MAINTAIN the same styling approach throughout
-   - USE the same libraries that are already in the project
-   - DO NOT introduce new libraries unless absolutely necessary
-   - MATCH the existing code style and patterns`;
-        
-        // Add error-specific instructions if error detected
-        const errorInstructions = analysis.errorInfo ? `\n\n🐛 ERROR DETECTED IN USER PROMPT:
-   - Error Type: ${analysis.errorInfo.errorType}
-   - Error Message: ${analysis.errorInfo.errorMessage}
-   - File: ${analysis.errorInfo.fileName || 'Unknown'}
-   - Line: ${analysis.errorInfo.lineNumber || 'Unknown'}
-   - Suggested Fix: ${analysis.errorInfo.suggestedFix}
-   
-   🚨 CRITICAL ERROR FIXING RULES:
-   1. The user is reporting an ERROR - you MUST fix it in the EXISTING file
-   2. DO NOT create new files or documentation files
-   3. DO NOT create demo files or example files
-   4. ONLY modify the file mentioned in the error: ${analysis.errorInfo.fileName || 'the file with the error'}
-   5. Apply the suggested fix: ${analysis.errorInfo.suggestedFix}
-   6. If the error is "useForm is not a function":
-      - Add "use client" at the very top of the file
-      - Ensure react-hook-form is imported: import { useForm } from "react-hook-form"
-      - Do NOT create shader animations or unrelated components
-   7. Return ONLY the fixed file in "modifiedFiles"
-   8. DO NOT create any files in "newFiles"
-   9. Your response MUST fix the actual error, not create something unrelated` : '';
-        
-        // Determine response format based on user intent
-        const responseFormat = analysis.userIntent === 'question' 
-          ? `\n\n💬 RESPONSE FORMAT FOR QUESTIONS:
-   Since the user is asking a QUESTION (not requesting code changes), respond with:
-   {
-     "answer": "Your detailed answer to the user's question",
-     "modifiedFiles": {},
-     "newFiles": {},
-     "deletedFiles": [],
-     "changes": [],
-     "description": "Answered user's question about [topic]"
-   }
-   
-   Provide a helpful, detailed answer. DO NOT modify any files unless the user explicitly asks for changes.`
-          : `\n\n💻 RESPONSE FORMAT FOR CODE CHANGES:
-   {
-     "modifiedFiles": { "path/to/file.ext": "complete file content..." },
-     "newFiles": { "path/to/newfile.ext": "complete new file content..." },
-     "deletedFiles": ["path/to/deleted/file.ext"],
-     "changes": [{ "file": "path", "description": "what changed" }],
-     "description": "Brief summary of changes"
-   }`;
-        
-        const completion = await openaiClient.chat.completions.create({
-          model: "gpt-4o",
-          stream: true,
-          messages: [
-            {
-              role: "system",
-              content: `You are v0, an expert code iteration assistant. You help users build and modify applications with precision and intelligence.${githubProjectWarning}
 
-🎯 USER INTENT: ${analysis.userIntent.toUpperCase()}
-${analysis.userIntent === 'question' ? '→ The user is asking a QUESTION. Provide a helpful answer WITHOUT modifying files.' : '→ The user wants CODE CHANGES. Modify/create files as requested.'}
-${errorInstructions}
-
-═══════════════════════════════════════════════════════════════════════════════
-🚨 CRITICAL COMPONENT LINKING RULES - FOLLOW EXACTLY:
-═══════════════════════════════════════════════════════════════════════════════
-
-**WHEN USER SAYS: "Create X and link it to Y"**
-
-You MUST do ALL of these steps:
-
-1. **CREATE the new component** (e.g., SignInForm.tsx)
-   - Add "use client" if it uses hooks/events
-   - Import all dependencies
-   - Make it fully functional
-
-2. **FIND the parent component** (e.g., page.tsx with the button)
-   - Read the ENTIRE parent file
-   - Understand the EXISTING button/trigger
-   - Identify what needs to change
-
-3. **MODIFY the parent component** to:
-   - Import the new component at the top
-   - Add state for showing/hiding (if modal/dialog)
-   - Wire up the EXISTING button's onClick
-   - Add the new component to JSX
-   - DO NOT duplicate the button
-   - DO NOT create a new button if one exists
-
-4. **EXAMPLE - Correct Approach:**
-
-User: "Create a sign-in form and link it to the sign-in button"
-
-Step 1 - Create components/SignInForm.tsx:
-\`\`\`tsx
-"use client";
-import { useState } from "react";
-export function SignInForm({ open, onClose }: { open: boolean; onClose: () => void }) {
-  // Form implementation
-}
-\`\`\`
-
-Step 2 - Modify app/page.tsx (COMPLETE FILE):
-\`\`\`tsx
-"use client"; // <CHANGE> Added for state management
-import { useState } from "react"; // <CHANGE> Added for dialog state
-import { SignInForm } from "@/components/SignInForm"; // <CHANGE> Added import
-
-export default function Page() {
-  const [showSignIn, setShowSignIn] = useState(false); // <CHANGE> Added state
-  
-  return (
-    <div>
-      <nav>
-        {/* EXISTING button - just add onClick */}
-        <button onClick={() => setShowSignIn(true)}> {/* <CHANGE> Added onClick */}
-          Sign In
-        </button>
-      </nav>
-      
-      {/* <CHANGE> Added dialog */}
-      <SignInForm 
-        open={showSignIn} 
-        onClose={() => setShowSignIn(false)} 
-      />
-    </div>
-  );
-}
-\`\`\`
-
-═══════════════════════════════════════════════════════════════════════════════
-🚨 CRITICAL MISTAKES TO AVOID:
-═══════════════════════════════════════════════════════════════════════════════
-
-❌ **NEVER DO THIS:**
-- Create a new button when one already exists
-- Duplicate the navbar or any existing component
-- Create Button.tsx when <button> already exists
-- Forget to add onClick to existing buttons
-- Import the component but not use it
-- Use the component but not import it
-- Create the component but not link it to the parent
-
-✅ **ALWAYS DO THIS:**
-- Read the parent file FIRST before modifying
-- Find the EXISTING button/trigger element
-- Add onClick to the EXISTING element
-- Import the new component at the top
-- Add necessary state (useState for dialogs/modals)
-- Include the new component in JSX
-- Test the logic: "If user clicks button → state changes → component shows"
-
-═══════════════════════════════════════════════════════════════════════════════
-📋 STEP-BY-STEP CHECKLIST FOR LINKING:
-═══════════════════════════════════════════════════════════════════════════════
-
-When user says "create X and link to Y":
-
-□ Step 1: Create the new component X
-  - Add "use client" if needed
-  - Import dependencies
-  - Make it accept open/onClose props (for dialogs)
-
-□ Step 2: Find the parent file containing Y
-  - Search for the button/trigger
-  - Read the ENTIRE file
-  - Understand existing structure
-
-□ Step 3: Modify parent file
-  - Add "use client" at top (if adding state)
-  - Import useState (if needed)
-  - Import the new component
-  - Add state variable (e.g., const [showX, setShowX] = useState(false))
-  - Find EXISTING button Y
-  - Add onClick={() => setShowX(true)} to EXISTING button
-  - Add new component to JSX: <X open={showX} onClose={() => setShowX(false)} />
-
-□ Step 4: Verify logic
-  - User clicks button → state becomes true → component shows
-  - User closes component → state becomes false → component hides
-
-═══════════════════════════════════════════════════════════════════════════════
-GENERAL RULES:
-═══════════════════════════════════════════════════════════════════════════════
-
-1. **UNDERSTAND USER INTENT:**
-   - Questions → ANSWER without modifying files
-   - "Create and link" → CREATE + MODIFY parent to link
-   - "Change X" → MODIFY existing file
-   - "Fix error" → FIX the specific error file
-
-2. **FILE MODIFICATION RULES:**
-   ${isModifyCommand || projectInfo.isGitHubProject ? '⚠️ CRITICAL: Use EXACT file paths from "Relevant Files". DO NOT create new files with similar names.' : 'Check if similar files exist before creating new ones.'}
-
-3. ${projectInfo.isGitHubProject ? '🚨 GITHUB PROJECTS: "newFiles" MUST be empty {} unless user explicitly says "create a new file".' : 'ONLY output NEW or MODIFIED files.'}
-
-4. **FRAMEWORK-SPECIFIC RULES (${detectedFramework}):**
-${frameworkRules}
-${projectPatternsContext}
-
-5. **ERROR HANDLING:**
-   - "useForm is not a function" → Add "use client" + import
-   - "Cannot find module" → Fix import paths
-   - "X is not defined" → Import missing items
-
-6. **CODE QUALITY:**
-   - Output COMPLETE file content (not diffs)
-   - Maintain existing code style
-   - Add // <CHANGE> comments for clarity
-   - Ensure TypeScript types are correct
-   - Test logic mentally before generating
-
-${explicitFileInstructions}${existingFilesWarning}${responseFormat}
-
-═══════════════════════════════════════════════════════════════════════════════
-CURRENT CODEBASE CONTEXT:
-═══════════════════════════════════════════════════════════════════════════════
-${context.summary}
-
-═══════════════════════════════════════════════════════════════════════════════
-RESPONSE FORMAT:
-═══════════════════════════════════════════════════════════════════════════════
-You MUST respond with valid JSON in this exact structure:
-{
-  "answer": "If user asked a question, provide detailed answer here. Otherwise, leave empty.",
-  "modifiedFiles": {
-    "path/to/file.ext": "complete file content with changes..."
-  },
-  "newFiles": {
-    "path/to/newfile.ext": "complete new file content..."
-  },
-  "deletedFiles": ["path/to/deleted/file.ext"],
-  "changes": [
-    {
-      "file": "path/to/file.ext",
-      "description": "What was changed and why"
-    }
-  ],
-  "description": "Brief summary of all changes OR answer summary"
-}`,
-            },
-            { role: "user", content: enhancedPrompt }
-          ],
-          response_format: { type: "json_object" },
-        });
-
-        // Emit generation start event
-        await streamingService.emit(projectId, {
-          type: 'step:complete',
-          step: 'Planning',
-          message: 'Plan complete. Generating code...',
+        // Use Two-Agent Orchestrator for code generation
+        const result = await TwoAgentOrchestrator.execute(prompt, context as any, {
+          projectId,
           versionId,
-        });
-        
-        await streamingService.emit(projectId, {
-          type: 'step:start',
-          step: 'Generating',
-          message: 'Generating files...',
-          versionId,
-        });
-
-        // Collect streaming response from OpenAI
-        let rawOutput = '';
-        let chunkCount = 0;
-        
-        for await (const chunk of completion) {
-          const content = chunk.choices[0]?.delta?.content || '';
-          if (content) {
-            rawOutput += content;
-            chunkCount++;
-            
-            // Emit progress updates periodically
-            if (chunkCount % 10 === 0) {
-              const progress = Math.min(95, Math.round((rawOutput.length / 3000) * 100));
-              await streamingService.emit(projectId, {
-                type: 'code:chunk',
-                filename: 'Generating...',
-                chunk: '',
-                progress,
-                versionId,
-              });
-            }
-          }
-        }
-        
-        console.log("Raw OpenAI output:", rawOutput.substring(0, 500));
-        
-        try {
-          // Handle potential markdown-wrapped JSON
-          let jsonStr = rawOutput || '';
-          
-          // Prefer an explicit ```json ... ``` code block if present
-          const jsonBlockMatch = rawOutput?.match(/```json\s*([\s\S]*?)\s*```/i);
-          if (jsonBlockMatch) {
-            jsonStr = jsonBlockMatch[1];
-          } else {
-            // Fallback: try to extract the first top-level JSON object
-            const firstBrace = jsonStr.indexOf('{');
-            const lastBrace = jsonStr.lastIndexOf('}');
-            if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-              jsonStr = jsonStr.slice(firstBrace, lastBrace + 1);
-            }
-          }
-          
-          jsonStr = jsonStr.trim();
-          const parsed = JSON.parse(jsonStr);
-          
-          // Check if this is a question response (answer field present and no file changes)
-          const isQuestionResponse = parsed.answer && 
-            (!parsed.modifiedFiles || Object.keys(parsed.modifiedFiles).length === 0) &&
-            (!parsed.newFiles || Object.keys(parsed.newFiles).length === 0);
-          
-          if (isQuestionResponse) {
-            console.log('📝 AI provided an answer to user question (no code changes)');
-            
-            // Save answer as assistant message
-            const { MessageService } = await import('../modules/messages/service');
-            await MessageService.saveResult({
-              content: parsed.answer,
-              role: 'assistant',
-              type: 'text',
-              project_id: projectId,
-            });
-            
-            // Emit answer to frontend
+          isGitHubProject: projectInfo.isGitHubProject,
+          repoFullName: projectInfo.repoFullName,
+          onProgress: async (stage: string, message: string) => {
             await streamingService.emit(projectId, {
-              type: 'complete',
-              summary: parsed.description || 'Question answered',
-              totalFiles: 0,
+              type: 'step:start',
+              step: stage,
+              message,
               versionId,
             });
-            
-            // Return early - no file changes needed
-            return {
-              state: {
-                data: {
-                  summary: parsed.answer,
-                  files: {},
-                  requirements: [],
-                  isAnswer: true,
-                } as AgentState
-              }
-            };
-          }
-          
-          // Merge with parent version files
-          const parentFiles = context.previousFiles || {};
-          let modifiedFiles: Record<string, string> = parsed.modifiedFiles || {};
-          let newFiles: Record<string, string> = parsed.newFiles || {};
-          let deletedFiles: string[] = parsed.deletedFiles || [];
+          },
+        });
 
-          // If this is a modify/refactor command and the AI created new TS/TSX files,
-          // try to map them onto an existing relevant component instead of introducing
-          // entirely new components that are not referenced anywhere.
-          if ((commandType === 'MODIFY_FILE' || commandType === 'REFACTOR_CODE') && Object.keys(newFiles).length > 0) {
-            const relevantFilesMap: Record<string, any> = (context as any).relevantFiles || {};
-            const relevantPaths = Object.keys(relevantFilesMap);
-            const componentCandidates = relevantPaths.filter(p => p.endsWith('.tsx') || p.endsWith('.jsx') || p.endsWith('.ts') || p.endsWith('.js'));
-
-            if (componentCandidates.length === 1) {
-              const targetPath = componentCandidates[0];
-              const newEntries = { ...newFiles };
-
-              for (const [newPath, content] of Object.entries(newEntries)) {
-                const text = typeof content === 'string' ? content : JSON.stringify(content);
-                const looksLikeComponent = /React|export default function|function\s+\w+\s*\(/.test(text);
-
-                if (looksLikeComponent) {
-                  // Treat this "new" component as a modification of the existing target file
-                  modifiedFiles[targetPath] = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
-                  delete newFiles[newPath];
-                  deletedFiles = [...deletedFiles, newPath];
-                }
-              }
-            }
-          }
-
-          // Reconcile "new" files that actually correspond to existing files
-          // e.g. AI creates components/landing/hero-section.tsx when
-          // components/landing/HeroSection.tsx already exists.
-          const reconciledModified: Record<string, string> = { ...modifiedFiles };
-          const reconciledNew: Record<string, string> = {};
-          const aliasDeletions: string[] = [];
-
-          // Enhanced normalization function that handles more edge cases
-          const normalizePath = (p: string): string => {
-            const parts = p.split('/');
-            const file = parts.pop() || '';
-            const lastDot = file.lastIndexOf('.');
-            const name = lastDot === -1 ? file : file.slice(0, lastDot);
-            const ext = lastDot === -1 ? '' : file.slice(lastDot);
-            // Remove hyphens, underscores, and convert to lowercase for comparison
-            const normalizedName = name.toLowerCase().replace(/[-_]/g, '');
-            return [...parts.map(p => p.toLowerCase()), normalizedName + ext.toLowerCase()].join('/');
-          };
-
-          // Build a map of normalized paths to actual paths for faster lookup
-          const normalizedToActual = new Map<string, string>();
-          for (const existingPath of Object.keys(parentFiles)) {
-            const normalized = normalizePath(existingPath);
-            normalizedToActual.set(normalized, existingPath);
-          }
-
-          for (const [newPath, content] of Object.entries(newFiles)) {
-            // If AI put file in "newFiles" but it already exists with exact same path,
-            // it should be treated as a modification
-            if (parentFiles[newPath]) {
-              console.log(`✓ Reconciling: "${newPath}" already exists, treating as modification`);
-              reconciledModified[newPath] = content as string;
-              continue;
-            }
-
-            // Check if this "new" file is actually an alias of an existing file
-            // (e.g., hero-section.tsx vs HeroSection.tsx, Hero.tsx vs HeroSection.tsx)
-            const norm = normalizePath(newPath);
-            const candidate = normalizedToActual.get(norm);
-
-            if (candidate && candidate !== newPath) {
-              // Treat as modification of the existing file path instead of a brand new file
-              console.log(`✓ Reconciling: "${newPath}" → "${candidate}" (alias detected)`);
-              reconciledModified[candidate] = content as string;
-              aliasDeletions.push(newPath);
-            } else {
-              // Additional fuzzy matching: check if filename matches but directory differs slightly
-              const newFileName = newPath.split('/').pop()?.toLowerCase().replace(/[-_]/g, '') || '';
-              const newExt = newPath.split('.').pop() || '';
-              
-              let fuzzyMatch: string | null = null;
-              for (const existingPath of Object.keys(parentFiles)) {
-                const existingFileName = existingPath.split('/').pop()?.toLowerCase().replace(/[-_]/g, '') || '';
-                const existingExt = existingPath.split('.').pop() || '';
-                
-                // If filename and extension match, it's likely the same file
-                if (newFileName === existingFileName && newExt === existingExt) {
-                  fuzzyMatch = existingPath;
-                  break;
-                }
-              }
-              
-              if (fuzzyMatch) {
-                console.log(`✓ Reconciling: "${newPath}" → "${fuzzyMatch}" (fuzzy filename match)`);
-                reconciledModified[fuzzyMatch] = content as string;
-                aliasDeletions.push(newPath);
-              } else {
-                // Truly new file that doesn't exist in parent
-                reconciledNew[newPath] = content as string;
-              }
-            }
-          }
-
-          modifiedFiles = reconciledModified;
-          newFiles = reconciledNew;
-          
-          // Log reconciliation results
-          if (aliasDeletions.length > 0) {
-            console.log(`📋 Reconciliation: Prevented ${aliasDeletions.length} duplicate files:`, aliasDeletions);
-          }
-          
-          // 🔧 IMMEDIATE AUTO-FIX: Apply fixes BEFORE streaming to frontend
-          console.log('🔧 Applying immediate auto-fixes to generated files...');
-          const allGeneratedFiles = { ...modifiedFiles, ...newFiles };
-          
-          for (const [filePath, content] of Object.entries(allGeneratedFiles)) {
-            if (typeof content !== 'string') continue;
-            if (!filePath.endsWith('.tsx') && !filePath.endsWith('.jsx')) continue;
-            
-            let fixedContent = content;
-            let wasFixed = false;
-            
-            // Fix 1: Missing "use client" for hooks/events
-            const hasHooks = /use(State|Effect|Form|Callback|Memo|Ref|Context|Reducer)\s*\(/.test(content);
-            const hasEventHandlers = /on(Click|Change|Submit|KeyDown|KeyUp|MouseEnter|MouseLeave|Focus|Blur)\s*=/.test(content);
-            const hasBrowserAPIs = /\b(window|document|localStorage|sessionStorage)\b/.test(content);
-            const hasUseClient = /^["']use client["'];?\s*$/m.test(content);
-            
-            if ((hasHooks || hasEventHandlers || hasBrowserAPIs) && !hasUseClient) {
-              // Remove any existing incorrect "use client" imports
-              fixedContent = fixedContent.replace(/import\s+["']use client["'];?\s*\n?/g, '');
-              fixedContent = fixedContent.replace(/import\s+"use client";?\s*\/\/[^\n]*\n?/g, '');
-              
-              // Add "use client" as the FIRST line (it's a directive, not an import)
-              fixedContent = `"use client";\n\n${fixedContent}`;
-              wasFixed = true;
-              console.log(`✓ Auto-fix: Added "use client" directive to ${filePath}`);
-            }
-            
-            // Fix 2: Missing imports
-            const missingImports: string[] = [];
-            
-            if (/\buseState\b/.test(fixedContent) && !/import.*\{[^}]*useState[^}]*\}.*from\s+['"]react['"]/.test(fixedContent)) {
-              if (!/import.*from\s+['"]react['"]/.test(fixedContent)) {
-                missingImports.push(`import { useState } from "react";`);
-              }
-            }
-            
-            if (/\buseEffect\b/.test(fixedContent) && !/import.*\{[^}]*useEffect[^}]*\}.*from\s+['"]react['"]/.test(fixedContent)) {
-              if (!/import.*from\s+['"]react['"]/.test(fixedContent)) {
-                missingImports.push(`import { useEffect } from "react";`);
-              }
-            }
-            
-            if (/\buseForm\b/.test(fixedContent) && !/import.*useForm.*from\s+['"]react-hook-form['"]/.test(fixedContent)) {
-              missingImports.push(`import { useForm } from "react-hook-form";`);
-            }
-            
-            if (missingImports.length > 0) {
-              // Add imports after "use client" if present
-              const useClientMatch = fixedContent.match(/^["']use client["'];?\s*\n/m);
-              if (useClientMatch) {
-                const afterUseClient = fixedContent.substring(useClientMatch[0].length);
-                fixedContent = `${useClientMatch[0]}\n${missingImports.join('\n')}\n${afterUseClient}`;
-              } else {
-                fixedContent = `${missingImports.join('\n')}\n\n${fixedContent}`;
-              }
-              wasFixed = true;
-              console.log(`✓ Auto-fix: Added missing imports to ${filePath}`);
-            }
-            
-            // Apply fixes
-            if (wasFixed) {
-              if (modifiedFiles[filePath]) {
-                modifiedFiles[filePath] = fixedContent;
-              } else if (newFiles[filePath]) {
-                newFiles[filePath] = fixedContent;
-              }
-            }
-          }
-          
-          // 🚨 GITHUB PROJECT SAFETY CHECK: Prevent creating new files unless explicitly requested
-          if (projectInfo.isGitHubProject && Object.keys(newFiles).length > 0) {
-            console.warn(`⚠️ GitHub project detected! AI attempted to create ${Object.keys(newFiles).length} new files:`);
-            console.warn(Object.keys(newFiles));
-            
-            // Check if user prompt explicitly mentions creating new files
-            const explicitCreate = /create\s+(?:a\s+)?new\s+file|add\s+(?:a\s+)?new\s+file|new\s+file\s+called/i.test(prompt);
-            
-            if (!explicitCreate) {
-              console.warn('⚠️ User did NOT explicitly request new files. Moving all to modifiedFiles for safety.');
-              
-              // Move all "new" files to modified files
-              for (const [path, content] of Object.entries(newFiles)) {
-                modifiedFiles[path] = content as string;
-              }
-              newFiles = {}; // Clear new files
-              
-              // Emit warning to user
-              await streamingService.emit(projectId, {
-                type: 'warning',
-                message: `Note: Modified existing files instead of creating new ones (GitHub project mode)`,
-                versionId,
-              });
-            } else {
-              console.log('✓ User explicitly requested new file creation. Allowing.');
-            }
-          }
-          
-          // Combine all file changes
-          const allChanges = { ...modifiedFiles, ...newFiles };
-          
-          // 📊 Log final file categorization for debugging
-          console.log(`📋 Final file changes:`);
-          console.log(`   ✓ Modified files (${Object.keys(modifiedFiles).length}):`, Object.keys(modifiedFiles));
-          console.log(`   + New files (${Object.keys(newFiles).length}):`, Object.keys(newFiles));
-          console.log(`   - Deleted files (${deletedFiles.length}):`, deletedFiles);
-          
-          // Emit summary to user interface
-          if (projectInfo.isGitHubProject) {
-            const summary = [
-              `📋 GitHub Project - File Changes:`,
-              Object.keys(modifiedFiles).length > 0 ? `   ✓ Modified: ${Object.keys(modifiedFiles).join(', ')}` : null,
-              Object.keys(newFiles).length > 0 ? `   + New: ${Object.keys(newFiles).join(', ')}` : null,
-              deletedFiles.length > 0 ? `   - Deleted: ${deletedFiles.join(', ')}` : null,
-            ].filter(Boolean).join('\n');
-            
-            await streamingService.emit(projectId, {
-              type: 'info',
-              message: summary,
-              versionId,
-            });
-          }
-          
-          // Remove deleted files from parent (including aliases we collapsed)
-          const updatedParentFiles = { ...parentFiles };
-          for (const deletedFile of deletedFiles) {
-            delete updatedParentFiles[deletedFile];
-          }
-          for (const alias of aliasDeletions) {
-            delete updatedParentFiles[alias];
-          }
-          
-          // Combine with modified/new files
-          const combinedFiles = { ...updatedParentFiles, ...allChanges };
-          
-          // Stream individual files to frontend
-          if (Object.keys(allChanges).length > 0) {
-            for (const [filename, content] of Object.entries(allChanges)) {
-              // Emit file generating event
-              await streamingService.emit(projectId, {
-                type: 'file:generating',
-                filename,
-                path: filename,
-                versionId,
-              });
-              
-              await new Promise(resolve => setTimeout(resolve, 100));
-              
-              // Stream code in chunks
-              const fileContent = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
-              const chunkSize = 50;
-              for (let i = 0; i < fileContent.length; i += chunkSize) {
-                const chunk = fileContent.slice(i, i + chunkSize);
-                const progress = Math.round(((i + chunkSize) / fileContent.length) * 100);
-                
-                await streamingService.emit(projectId, {
-                  type: 'code:chunk',
-                  filename,
-                  chunk,
-                  progress: Math.min(progress, 100),
-                  versionId,
-                });
-                
-                await new Promise(resolve => setTimeout(resolve, 30));
-              }
-              
-              // Emit file complete event
-              await streamingService.emit(projectId, {
-                type: 'file:complete',
-                filename,
-                content: fileContent,
-                path: filename,
-                versionId,
-              });
-              
-              await new Promise(resolve => setTimeout(resolve, 300));
-            }
-          }
-          
-          const requirements = Array.isArray(parsed.requirements) ? parsed.requirements : [];
-          
-          const result: AIResult = {
+        // Handle question responses (no code changes)
+        if (result.isAnswer) {
+          return {
             state: {
               data: {
-                summary: parsed.description || "",
-                files: combinedFiles,
-                requirements: requirements
+                summary: result.answer || 'Question answered',
+                files: {},
+                requirements: [],
+                isAnswer: true,
               } as AgentState
             }
           };
-          
-          return result;
-        } catch (error) {
-          console.error("Failed to parse generated API code:", error);
-          throw error;
         }
+
+        // Merge new and modified files
+        const combinedFiles = { ...result.newFiles, ...result.modifiedFiles };
+
+        // Return in expected format
+        return {
+          state: {
+            data: {
+              summary: result.description || 'Code updated successfully',
+              files: combinedFiles,
+              requirements: [],
+            } as AgentState
+          }
+        };
       });
       
       // Step 4: Apply changes to sandbox and restart dev server
@@ -3338,7 +2696,7 @@ You MUST respond with valid JSON in this exact structure:
         return fixedFiles;
       });
       
-      // Step 8: Update version with validated/fixed files
+      // Step 8: Update version with validated/fixed files (MERGED with parent)
       await step.run("update-version", async () => {
         if (!('state' in apiResult) || !apiResult.state?.data) {
           throw new Error('Invalid API result structure');
@@ -3346,8 +2704,7 @@ You MUST respond with valid JSON in this exact structure:
         
         // Skip version update if this was a question response
         if ((apiResult.state.data as any).isAnswer) {
-          console.log('⏭️ Skipping version update - this was a question response');
-          // Mark version as complete but with no files
+          console.log('⏭️  Skipping version update - this was a question response');
           await VersionManager.updateVersion(versionId!, {
             files: {},
             status: 'complete',
@@ -3360,11 +2717,21 @@ You MUST respond with valid JSON in this exact structure:
           return;
         }
         
+        // CRITICAL: Merge parent version files with new/modified files
+        // This ensures the new version contains ALL files, not just changed ones
+        const parentFiles = context.previousFiles || {};
+        const allFiles = {
+          ...parentFiles,        // Start with all parent files
+          ...validatedFiles,     // Override with new/modified files
+        };
+        
+        console.log(`📦 Version file count: ${Object.keys(parentFiles).length} parent + ${Object.keys(validatedFiles).length} changed = ${Object.keys(allFiles).length} total`);
+        
         await VersionManager.updateVersion(versionId!, {
-          files: validatedFiles,
+          files: allFiles,
           status: 'complete',
           metadata: {
-            requirements: apiResult.state.data.requirements,
+            requirements: [],
             summary: apiResult.state.data.summary,
           },
         });
@@ -4018,7 +3385,7 @@ const savedResult = await step.run("save-repository-files", async () => {
             name: versionName,
             description: `Cloned ${frameworkInfo.framework} project from GitHub: ${repoFullName}`,
             files: repoFiles || {},
-            command_type: 'CLONE_REPO',
+            command_type: 'CREATE', // Cloning a repo is treated as creating a new project
             prompt: `Clone and preview GitHub repository: ${repoFullName}`,
             parent_version_id: undefined, // First version has no parent
             status: 'complete',
