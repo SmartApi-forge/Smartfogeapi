@@ -16,6 +16,10 @@ export const ProjectSchema = z.object({
   code_url: z.string().url().optional(),
   prompt: z.string().optional(),
   advanced: z.boolean().default(false),
+  sandbox_url: z.string().optional(),
+  metadata: z.object({
+    sandboxId: z.string().optional(),
+  }).passthrough().optional(),
 })
 
 // Input schemas for TRPC procedures

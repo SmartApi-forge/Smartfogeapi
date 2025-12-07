@@ -114,9 +114,13 @@ export async function getWorkspace(sandboxId: string): Promise<Sandbox> {
     // Debug: Log available methods on daytona object
     console.log('Available Daytona methods:', Object.keys(daytona).filter(key => typeof (daytona as any)[key] === 'function'));
     
-    // Try getSandbox first (from official docs)
-    if (typeof daytona.getSandbox === 'function') {
-      return await daytona.getSandbox(sandboxId);
+    // Try getCurrentSandbox first (from official docs)
+    if (typeof (daytona as any).getCurrentSandbox === 'function') {
+      return await (daytona as any).getCurrentSandbox(sandboxId);
+    }
+    // Try findSandbox method
+    if (typeof (daytona as any).findSandbox === 'function') {
+      return await (daytona as any).findSandbox(sandboxId);
     }
     // Try get method as alternative
     if (typeof (daytona as any).get === 'function') {
@@ -133,7 +137,7 @@ export async function getWorkspace(sandboxId: string): Promise<Sandbox> {
     console.error('1. @daytonaio/sdk package not installed - run: npm install @daytonaio/sdk');
     console.error('2. SDK version mismatch - check package.json');
     console.error('3. Method name in SDK is different from documentation');
-    throw new Error('Daytona SDK does not have getSandbox, get, or connect method. See logs above for debugging.');
+    throw new Error('Daytona SDK does not have getCurrentSandbox, findSandbox, get, or connect method. See logs above for debugging.');
   } catch (error) {
     console.error('Failed to get workspace:', error);
     throw new Error(`Cannot reconnect to Daytona workspace ${sandboxId}: ${error}`);
@@ -194,7 +198,7 @@ export async function ensureSandboxRunning(sandboxId: string): Promise<Sandbox> 
     // If SDK doesn't provide status, we can try to make an API call and catch errors
     try {
       // Try to ping the sandbox by listing files (lightweight operation)
-      await sandbox.fs.listDir('/');
+      await (sandbox.fs as any).list('/');
       console.log(`✅ Sandbox ${sandboxId} is running`);
       return sandbox;
     } catch (error) {
@@ -221,7 +225,7 @@ export async function keepSandboxAlive(sandboxId: string): Promise<void> {
     
     // Make a lightweight API call to reset the auto-stop timer
     // Just listing the root directory is enough
-    await sandbox.fs.listDir('/');
+    await (sandbox.fs as any).list('/');
     console.log(`💓 Keep-alive ping sent to sandbox ${sandboxId}`);
   } catch (error) {
     console.error(`Failed to keep sandbox ${sandboxId} alive:`, error);
@@ -234,5 +238,13 @@ export async function keepSandboxAlive(sandboxId: string): Promise<void> {
  */
 export async function listWorkspaces(): Promise<any[]> {
   const daytona = getDaytonaClient();
-  return await daytona.listSandboxes();
+  // Try different method names for listing sandboxes
+  if (typeof (daytona as any).list === 'function') {
+    return await (daytona as any).list();
+  }
+  if (typeof (daytona as any).listSandboxes === 'function') {
+    return await (daytona as any).listSandboxes();
+  }
+  console.warn('No list method found on Daytona client');
+  return [];
 }

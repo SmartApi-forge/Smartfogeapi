@@ -121,15 +121,18 @@ export async function sendInvitationEmailFallback({
   projectName,
   inviterName,
   inviteToken,
+  projectId,
 }: Omit<SendInvitationEmailParams, 'accessLevel'>) {
   // Fallback for development or when Resend is not configured
   const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/invite/${inviteToken}`;
+  const projectUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/projects/${projectId}`;
   
   console.log('\n=== EMAIL INVITATION (DEV MODE) ===');
   console.log(`To: ${to}`);
   console.log(`From: ${inviterName}`);
   console.log(`Project: ${projectName}`);
   console.log(`Invitation URL: ${inviteUrl}`);
+  console.log(`Project URL: ${projectUrl}`);
   console.log('===================================\n');
   
   return { success: true, messageId: 'dev-mode' };

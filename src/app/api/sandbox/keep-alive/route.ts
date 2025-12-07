@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { keepSandboxAlive } from '@/lib/daytona-client';
+import { keepSandboxAlive } from '@/src/lib/daytona-client';
 import { createClient } from '@supabase/supabase-js';
 
 export async function POST(request: NextRequest) {

@@ -199,6 +199,50 @@ ${patterns.importPatterns.slice(0, 3).join('\n')}
 
     systemPrompt += contextAdditions;
 
+    // Add React/UI best practices
+    const reactBestPractices = `
+
+═══════════════════════════════════════════════════════════════════════════════
+REACT & UI BEST PRACTICES (CRITICAL)
+═══════════════════════════════════════════════════════════════════════════════
+
+1. DIALOG/MODAL PLACEMENT:
+   - NEVER place Dialog, Modal, Popover, or Sheet components INSIDE header, nav, or footer elements
+   - These components have z-index issues when nested inside layout elements
+   - ALWAYS use React fragments (<></>) to place them OUTSIDE the parent element
+   
+   ❌ WRONG:
+   <header>
+     <nav>...</nav>
+     <LoginDialog open={open} />  // Inside header - will have z-index issues!
+   </header>
+   
+   ✅ CORRECT:
+   <>
+     <header>
+       <nav>...</nav>
+     </header>
+     <LoginDialog open={open} />  // Outside header - renders properly!
+   </>
+
+2. BUTTON CLICK HANDLERS:
+   - Ensure onClick handlers are properly attached to Button components
+   - Use arrow functions for state setters: onClick={() => setOpen(true)}
+   - Don't forget to add "use client" directive for components with interactivity
+
+3. COMPONENT IMPORTS:
+   - Always import Dialog components from the correct path (e.g., @/components/ui/dialog)
+   - Ensure all required sub-components are imported (DialogContent, DialogHeader, etc.)
+
+4. STATE MANAGEMENT:
+   - Define state hooks at the top of the component
+   - Pass state and setters as props when needed
+
+═══════════════════════════════════════════════════════════════════════════════
+`;
+
+    systemPrompt += reactBestPractices;
+
     // Build user prompt with file contents
     const enhancedPrompt = SmartContextBuilder.formatForPrompt(context, userPrompt);
 

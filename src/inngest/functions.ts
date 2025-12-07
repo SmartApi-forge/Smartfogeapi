@@ -1,7 +1,7 @@
 import { inngest } from "./client";
 import OpenAI from 'openai';
 import type { Sandbox } from '../lib/daytona-client';
-import { daytona, createWorkspace, getWorkspace, deleteWorkspace, ensureSandboxRunning } from '../lib/daytona-client';
+import { createWorkspace, getWorkspace, deleteWorkspace, ensureSandboxRunning } from '../lib/daytona-client';
 import { Octokit } from '@octokit/rest';
 import { createClient } from '@supabase/supabase-js';
 import { AgentState, AIResult } from './types';
@@ -13,7 +13,7 @@ import { EmbeddingService } from '../services/embedding-service';
 import { TwoAgentOrchestrator } from '../services/two-agent-orchestrator';
 import { DecisionAgent } from '../services/decision-agent';
 import { PromptLoader } from '../services/prompt-loader';
-import { SANDBOX_DEFAULT_TIMEOUT_MS, getSandboxTimeout } from '../config/sandbox';
+import { getSandboxTimeout } from '../config/sandbox';
 
 // Clear prompt cache on server start to ensure fresh prompts are loaded
 PromptLoader.clearCache();
@@ -270,7 +270,7 @@ export const generateAPI = inngest.createFunction(
           // Analyze package.json if it exists
           let packageInfo = null;
           try {
-            const packageJsonContent = await sandbox.fs.readFile(`${repoPath}/package.json`);
+            const packageJsonContent = await sandbox.fs.downloadFile(`${repoPath}/package.json`);
             packageInfo = JSON.parse(packageJsonContent.toString('utf-8'));
           } catch (error) {
             console.log('No package.json found or invalid JSON');
@@ -287,7 +287,7 @@ export const generateAPI = inngest.createFunction(
           
           for (const file of commonFiles) {
             try {
-              const content = await sandbox.fs.readFile(`${repoPath}/${file}`);
+              const content = await sandbox.fs.downloadFile(`${repoPath}/${file}`);
               if (content) {
                 mainFiles.push({ file, content: content.toString('utf-8').substring(0, 1000) }); // First 1000 chars
               }
@@ -299,11 +299,11 @@ export const generateAPI = inngest.createFunction(
           // Read README if exists
           let readme = null;
           try {
-            const readmeContent = await sandbox.fs.readFile(`${repoPath}/README.md`);
+            const readmeContent = await sandbox.fs.downloadFile(`${repoPath}/README.md`);
             readme = readmeContent.toString('utf-8');
           } catch (error) {
             try {
-              const readmeContent = await sandbox.fs.readFile(`${repoPath}/readme.md`);
+              const readmeContent = await sandbox.fs.downloadFile(`${repoPath}/readme.md`);
               readme = readmeContent.toString('utf-8');
             } catch (error) {
               // No README found
@@ -2268,7 +2268,9 @@ Provide a clear, concise answer. Be specific and helpful.`
       });
       
       // Step 4: Build smart context using semantic search
-      const context = await step.run("build-smart-context", async () => {
+      // IMPORTANT: We DON'T return the full context from this step to avoid Inngest's 4MB limit
+      // Instead, we return only lightweight metadata and fetch full data inside steps that need it
+      const contextMetadata = await step.run("build-smart-context", async () => {
         // Extract error file name if present in prompt
         const errorFileMatch = prompt.match(/SignupDialog\.tsx|([A-Z]\w+\.tsx)/);
         const errorFileName = errorFileMatch ? errorFileMatch[0] : null;
@@ -2277,23 +2279,53 @@ Provide a clear, concise answer. Be specific and helpful.`
           console.log(`🐛 Error detected in file: ${errorFileName}`);
         }
         
-        return await SmartContextBuilder.buildSmartContext(
+        const context = await SmartContextBuilder.buildSmartContext(
           projectId,
           prompt,
           {
-            messageLimit: 20,
-            maxFiles: 15,
+            messageLimit: 5,  // Reduced to stay under OpenAI rate limits
+            maxFiles: 3,      // Focus on most relevant files only
             includeTests: false,
-            isGitHubProject: projectInfo.isGitHubProject, // Pass this flag
-            errorFileName, // Pass error file name for prioritization
+            isGitHubProject: projectInfo.isGitHubProject,
+            errorFileName,
           }
         );
+        
+        // Return ONLY lightweight metadata - not the full file contents
+        // This prevents exceeding Inngest's 4MB step output limit
+        return {
+          previousVersionId: context.previousVersion?.id || null,
+          relevantFilePaths: Object.keys(context.relevantFiles),
+          dependencyFilePaths: Object.keys(context.dependencyFiles),
+          configFilePaths: Object.keys(context.configFiles),
+          conversationHistory: context.conversationHistory.slice(-10), // Last 10 messages only
+          stats: context.stats,
+          summary: context.summary,
+        };
       });
       
       // Step 5: Analyze user intent and project patterns
+      // Fetch files fresh inside this step to avoid passing large data between steps
       const analysis = await step.run("analyze-intent-and-patterns", async () => {
         const userIntent = classifyUserIntent(prompt);
-        const projectPatterns = analyzeProjectPatterns(context.previousFiles || {}, context.configFiles);
+        
+        // Fetch version files directly instead of using passed context
+        const previousVersion = contextMetadata.previousVersionId 
+          ? await VersionManager.getVersion(contextMetadata.previousVersionId)
+          : await VersionManager.getLatestVersion(projectId);
+        
+        const previousFiles = previousVersion?.files || {};
+        
+        // Extract config files from previous files
+        const configPatterns = ['package.json', 'tsconfig.json', 'next.config', 'vite.config', 'tailwind.config'];
+        const configFiles: Record<string, string> = {};
+        for (const [path, content] of Object.entries(previousFiles)) {
+          if (configPatterns.some(pattern => path.includes(pattern))) {
+            configFiles[path] = content;
+          }
+        }
+        
+        const projectPatterns = analyzeProjectPatterns(previousFiles, configFiles);
         
         // Extract error information if present
         const errorInfo = extractErrorInfo(prompt);
@@ -2314,6 +2346,7 @@ Provide a clear, concise answer. Be specific and helpful.`
       });
       
       // Step 6: Generate code using TWO-AGENT SYSTEM
+      // Rebuild full context inside this step to avoid Inngest's 4MB step output limit
       const apiResult = await step.run("generate-api-code", async () => {
         // Emit step start event
         await streamingService.emit(projectId, {
@@ -2323,8 +2356,21 @@ Provide a clear, concise answer. Be specific and helpful.`
           versionId,
         });
 
+        // Rebuild full context inside this step (not passed between steps)
+        // Use minimal context to stay under OpenAI's 30K TPM rate limit
+        const fullContext = await SmartContextBuilder.buildSmartContext(
+          projectId,
+          prompt,
+          {
+            messageLimit: 5,   // Reduced for rate limits
+            maxFiles: 3,       // Focus on most relevant files only
+            includeTests: false,
+            isGitHubProject: projectInfo.isGitHubProject,
+          }
+        );
+
         // Use Two-Agent Orchestrator for code generation
-        const result = await TwoAgentOrchestrator.execute(prompt, context as any, {
+        const result = await TwoAgentOrchestrator.execute(prompt, fullContext as any, {
           projectId,
           versionId,
           isGitHubProject: projectInfo.isGitHubProject,
@@ -2356,7 +2402,8 @@ Provide a clear, concise answer. Be specific and helpful.`
         // Merge new and modified files
         const combinedFiles = { ...result.newFiles, ...result.modifiedFiles };
 
-        // Return in expected format
+        // Return ONLY the changed files, not the full context
+        // This keeps step output small
         return {
           state: {
             data: {
@@ -2368,197 +2415,31 @@ Provide a clear, concise answer. Be specific and helpful.`
         };
       });
       
-      // Step 4: Apply changes to sandbox and restart dev server
-      const sandboxUpdateResult = await step.run("apply-changes-to-sandbox", async () => {
-        try {
-          // Get project to find sandbox_id
-          const { data: project } = await supabase
-            .from('projects')
-            .select('metadata, sandbox_url')
-            .eq('id', projectId)
-            .single();
-          
-          const metadata = project?.metadata as any || {};
-          const sandboxId = metadata?.sandboxId;
-          
-          if (!sandboxId) {
-            console.warn('⚠️ No sandbox ID found in project metadata - skipping live update');
-            return {
-              success: false,
-              skipped: true,
-              reason: 'No sandbox ID in project metadata',
-            };
-          }
-          
-          // Derive repo path and server configuration from metadata with safe fallbacks
-          const repoPath = metadata.repoPath || 'workspace/repo';
-          const port = metadata.port || 3000;
-          const packageManager = metadata.packageManager || 'npm';
-          const startCommand = metadata.startCommand || (
-            packageManager === 'pnpm'
-              ? 'pnpm run dev'
-              : packageManager === 'yarn'
-                ? 'yarn dev'
-                : 'npm run dev'
-          );
-          
-          await streamingService.emit(projectId, {
-            type: 'step:start',
-            step: 'Applying Changes',
-            message: 'Applying changes to sandbox...',
-            versionId,
-          });
-          
-          // Get the sandbox and ensure it's running (restart if stopped)
-          const sandbox = await ensureSandboxRunning(sandboxId);
-          
-          if (!('state' in apiResult) || !apiResult.state?.data) {
-            throw new Error('Invalid API result structure');
-          }
-          
-          // Get the changes from the combined files
-          // We need to determine which files were modified vs new by comparing with parent
-          const parentFiles = context.previousFiles || {};
-          const currentFiles = apiResult.state.data.files || {};
-          
-          const modifiedFiles: Record<string, string> = {};
-          const newFiles: Record<string, string> = {};
-          
-          // Categorize files as modified or new (only when content actually changes)
-          for (const [filePath, content] of Object.entries(currentFiles)) {
-            const parentContent = parentFiles[filePath];
-            if (parentContent === undefined) {
-              // Truly new file
-              newFiles[filePath] = content as string;
-            } else if (parentContent !== content) {
-              // File existed before and content changed
-              modifiedFiles[filePath] = content as string;
-            }
-          }
-
-          console.log('Sandbox update - modified files:', Object.keys(modifiedFiles));
-          console.log('Sandbox update - new files:', Object.keys(newFiles));
-          
-          // Find deleted files (existed in parent but not in current)
-          const deletedFiles: string[] = [];
-          for (const filePath of Object.keys(parentFiles)) {
-            if (!currentFiles[filePath]) {
-              deletedFiles.push(filePath);
-            }
-          }
-          
-          let filesApplied = 0;
-          let filesDeleted = 0;
-          
-          // Apply modified files
-          for (const [filePath, content] of Object.entries(modifiedFiles)) {
-            const fullPath = `${repoPath}/${filePath}`;
-            await sandbox.fs.uploadFile(Buffer.from(content as string, 'utf-8'), fullPath);
-            filesApplied++;
-            console.log(`✓ Modified: ${filePath}`);
-          }
-          
-          // Apply new files
-          for (const [filePath, content] of Object.entries(newFiles)) {
-            const fullPath = `${repoPath}/${filePath}`;
-            await sandbox.fs.uploadFile(Buffer.from(content as string, 'utf-8'), fullPath);
-            filesApplied++;
-            console.log(`✓ Created: ${filePath}`);
-          }
-          
-          // Delete files
-          for (const filePath of deletedFiles) {
-            const fullPath = `${repoPath}/${filePath}`;
-            try {
-              await sandbox.process.executeCommand(`rm -f "${fullPath}"`);
-              filesDeleted++;
-              console.log(`✓ Deleted: ${filePath}`);
-            } catch (error) {
-              console.warn(`Could not delete ${filePath}:`, error);
-            }
-          }
-          
-          await streamingService.emit(projectId, {
-            type: 'step:complete',
-            step: 'Applying Changes',
-            message: `Applied ${filesApplied} files, deleted ${filesDeleted} files`,
-            versionId,
-          });
-          
-          // Restart dev server
-          await streamingService.emit(projectId, {
-            type: 'step:start',
-            step: 'Restarting Server',
-            message: 'Restarting development server...',
-            versionId,
-          });
-          
-          // Kill existing dev server process (best-effort)
-          await sandbox.process.executeCommand('pkill -f "npm.*start" || pkill -f "node" || true', repoPath);
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          // Restart dev server using the same start command and port as initial preview
-          const startCmd = `HOST=0.0.0.0 PORT=${port} ${startCommand} > server.log 2>&1 & echo $!`;
-          console.log('Restarting dev server with command:', startCmd, 'in', repoPath);
-          const startResult = await sandbox.process.executeCommand(
-            startCmd,
-            repoPath,
-            {},
-            10
-          );
-          
-          // Wait for server to start
-          await new Promise(resolve => setTimeout(resolve, 5000));
-          
-          // Verify server is running
-          const healthCheck = await sandbox.process.executeCommand(
-            `curl -f -m 5 http://localhost:${port}/health 2>/dev/null || curl -f -m 5 http://localhost:${port}/ 2>/dev/null || echo "server_not_ready"`,
-            undefined,
-            {},
-            10
-          );
-          
-          const serverReady = !healthCheck.result?.includes('server_not_ready');
-          if (!serverReady) {
-            // Log last lines from server.log to help debug 502s
-            try {
-              const logs = await sandbox.process.executeCommand('tail -80 server.log 2>/dev/null || echo "no_server_log"', repoPath);
-              console.log('Dev server logs after restart:', logs.result);
-            } catch (logError) {
-              console.log('Failed to read server.log after restart:', logError);
-            }
-          }
-          
-          await streamingService.emit(projectId, {
-            type: 'step:complete',
-            step: 'Restarting Server',
-            message: serverReady ? 'Server restarted successfully!' : 'Server restarted (may need a moment to fully load)',
-            versionId,
-          });
-          
-          return {
-            success: true,
-            filesApplied,
-            filesDeleted,
-            serverRestarted: true,
-            serverReady,
-          };
-        } catch (error) {
-          console.error('Failed to apply changes to sandbox:', error);
-          
-          await streamingService.emit(projectId, {
-            type: 'step:complete',
-            step: 'Applying Changes',
-            message: `Changes applied to version but sandbox update failed: ${(error as Error).message}`,
-            versionId,
-          });
-          
-          return {
-            success: false,
-            error: (error as Error).message,
-            skipped: false,
-          };
+      // Step 4: REMOVED - File application now happens ONLY in Step 9 after validation
+      // This prevents applying broken code before validation fixes it
+      const sandboxUpdateResult = await step.run("prepare-sandbox-update", async () => {
+        // Just log what files will be applied after validation
+        if (!('state' in apiResult) || !apiResult.state?.data) {
+          return { skipped: true, reason: 'No API result' };
         }
+        
+        const currentFiles = apiResult.state.data.files || {};
+        const fileCount = Object.keys(currentFiles).length;
+        
+        console.log(`📋 Files to apply after validation: ${fileCount}`);
+        console.log(`   Files: ${Object.keys(currentFiles).join(', ')}`);
+        
+        await streamingService.emit(projectId, {
+          type: 'step:start',
+          step: 'Validating',
+          message: `Validating ${fileCount} file(s) before applying to sandbox...`,
+          versionId,
+        });
+        
+        return {
+          success: true,
+          filesToApply: fileCount,
+        };
       });
       
       // Step 7: Validate and auto-fix errors + check component linking
@@ -2619,8 +2500,23 @@ Provide a clear, concise answer. Be specific and helpful.`
         }
         
         // Detect framework for validation
-        const allFiles = Object.keys(context.previousFiles || {});
-        const framework = detectFramework(allFiles, context.configFiles);
+        // Fetch previous version files directly to avoid Inngest's 4MB step output limit
+        const previousVersion = contextMetadata.previousVersionId 
+          ? await VersionManager.getVersion(contextMetadata.previousVersionId)
+          : await VersionManager.getLatestVersion(projectId);
+        const previousFiles = previousVersion?.files || {};
+        
+        // Extract config files from previous files
+        const configPatterns = ['package.json', 'tsconfig.json', 'next.config', 'vite.config', 'tailwind.config'];
+        const configFiles: Record<string, string> = {};
+        for (const [path, content] of Object.entries(previousFiles)) {
+          if (configPatterns.some(pattern => path.includes(pattern))) {
+            configFiles[path] = content;
+          }
+        }
+        
+        const allFiles = Object.keys(previousFiles);
+        const framework = detectFramework(allFiles, configFiles);
         
         // Check for common errors in generated files
         for (const [filePath, content] of Object.entries(files)) {
@@ -2671,6 +2567,44 @@ Provide a clear, concise answer. Be specific and helpful.`
             console.log(`✓ Auto-fix: Added missing imports to ${filePath}`);
           }
           
+          // Check 3: Dialog/Modal inside header/nav (causes z-index issues)
+          // This is a common mistake that makes buttons unclickable
+          if (filePath.includes('header') || filePath.includes('nav')) {
+            const fileContent = fixes[filePath] || content;
+            // Check if there's a Dialog/Modal component inside header/nav
+            const hasDialogInside = /<(Dialog|Modal|Sheet|Popover)[^>]*>/.test(fileContent);
+            const isInsideHeader = /<header[^>]*>[\s\S]*<(Dialog|Modal|Sheet|Popover)/.test(fileContent);
+            const isInsideNav = /<nav[^>]*>[\s\S]*<(Dialog|Modal|Sheet|Popover)/.test(fileContent);
+            
+            if (hasDialogInside && (isInsideHeader || isInsideNav)) {
+              fileErrors.push('Dialog/Modal component inside header/nav - may cause z-index issues');
+              console.log(`⚠️ ${filePath}: Dialog/Modal inside header/nav detected - should be moved outside`);
+              
+              // Auto-fix: Wrap with fragment and move Dialog outside
+              // Find the closing </header> or </nav> tag and move Dialog after it
+              let fixedContent = fileContent;
+              
+              // Extract Dialog component
+              const dialogMatch = fixedContent.match(/(\s*<(Dialog|Modal|Sheet|Popover)[^]*?<\/\2>)/);
+              if (dialogMatch) {
+                const dialogComponent = dialogMatch[1];
+                // Remove Dialog from inside header/nav
+                fixedContent = fixedContent.replace(dialogComponent, '');
+                
+                // Find the return statement and wrap with fragment
+                if (!fixedContent.includes('return (\n    <>')) {
+                  // Add fragment wrapper and move Dialog outside
+                  fixedContent = fixedContent
+                    .replace(/return\s*\(\s*\n?\s*(<header|<nav)/g, 'return (\n    <>\n      $1')
+                    .replace(/(<\/header>|<\/nav>)\s*\n?\s*\);?\s*\n?\s*\}/g, `$1\n      ${dialogComponent.trim()}\n    </>\n  );\n}`);
+                }
+                
+                fixes[filePath] = fixedContent;
+                console.log(`✓ Auto-fix: Moved Dialog outside header/nav in ${filePath}`);
+              }
+            }
+          }
+          
           if (fileErrors.length > 0) {
             errors.push(`${filePath}: ${fileErrors.join(', ')}`);
           }
@@ -2719,7 +2653,11 @@ Provide a clear, concise answer. Be specific and helpful.`
         
         // CRITICAL: Merge parent version files with new/modified files
         // This ensures the new version contains ALL files, not just changed ones
-        const parentFiles = context.previousFiles || {};
+        // Fetch parent files directly to avoid Inngest's 4MB step output limit
+        const previousVersion = contextMetadata.previousVersionId 
+          ? await VersionManager.getVersion(contextMetadata.previousVersionId)
+          : await VersionManager.getLatestVersion(projectId);
+        const parentFiles = previousVersion?.files || {};
         const allFiles = {
           ...parentFiles,        // Start with all parent files
           ...validatedFiles,     // Override with new/modified files
@@ -2737,7 +2675,193 @@ Provide a clear, concise answer. Be specific and helpful.`
         });
       });
       
-      // Step 9: Update message with version_id
+      // Step 9: Apply VALIDATED files to sandbox AND restart server
+      // This is the CRITICAL step that makes changes visible in the preview
+      await step.run("apply-validated-to-sandbox", async () => {
+        console.log('🔄 Step 9: apply-validated-to-sandbox starting...');
+        console.log(`   validatedFiles count: ${Object.keys(validatedFiles || {}).length}`);
+        console.log(`   validatedFiles keys: ${Object.keys(validatedFiles || {}).join(', ')}`);
+        
+        // Even if no files changed, we should still check if server needs restart
+        const hasFilesToApply = validatedFiles && Object.keys(validatedFiles).length > 0;
+        
+        try {
+          const { data: project } = await supabase
+            .from('projects')
+            .select('metadata, sandbox_url')
+            .eq('id', projectId)
+            .single();
+          
+          const metadata = project?.metadata as any || {};
+          const sandboxId = metadata?.sandboxId;
+          const sandboxUrl = project?.sandbox_url;
+          
+          console.log(`   sandboxId: ${sandboxId || 'NOT FOUND'}`);
+          console.log(`   metadata: ${JSON.stringify(metadata)}`);
+          
+          if (!sandboxId) {
+            console.log('⏭️ No sandbox ID in project metadata - cannot update sandbox');
+            return { skipped: true, reason: 'No sandboxId in metadata' };
+          }
+          
+          const repoPath = metadata.repoPath || 'workspace/repo';
+          const port = metadata.port || 3000;
+          const packageManager = metadata.packageManager || 'npm';
+          const startCommand = metadata.startCommand || (
+            packageManager === 'pnpm' ? 'pnpm run dev' :
+            packageManager === 'yarn' ? 'yarn dev' : 'npm run dev'
+          );
+          
+          console.log(`   repoPath: ${repoPath}`);
+          console.log(`   port: ${port}`);
+          console.log(`   startCommand: ${startCommand}`);
+          
+          // Get sandbox
+          console.log('🔌 Getting sandbox...');
+          const sandbox = await ensureSandboxRunning(sandboxId);
+          console.log('✅ Sandbox connected');
+          
+          // Apply validated files if any
+          let filesApplied = 0;
+          if (hasFilesToApply) {
+            console.log('📁 Applying validated files to sandbox...');
+            for (const [filePath, content] of Object.entries(validatedFiles)) {
+              if (typeof content === 'string') {
+                const fullPath = `${repoPath}/${filePath}`;
+                console.log(`   Uploading: ${fullPath}`);
+                await sandbox.fs.uploadFile(Buffer.from(content, 'utf-8'), fullPath);
+                filesApplied++;
+              }
+            }
+            console.log(`✅ Applied ${filesApplied} files to sandbox`);
+          } else {
+            console.log('⏭️ No files to apply, but will still restart server');
+          }
+          
+          // ALWAYS restart dev server after changes
+          console.log('🔄 RESTARTING DEV SERVER...');
+          
+          // Emit server:restarting event so frontend shows loading state
+          await streamingService.emit(projectId, {
+            type: 'server:restarting',
+            message: '🔄 Restarting server to apply changes...',
+            versionId,
+          });
+          
+          // Also emit step:start for backward compatibility
+          await streamingService.emit(projectId, {
+            type: 'step:start',
+            step: 'Restarting Server',
+            message: 'Restarting development server with updated code...',
+            versionId,
+          });
+          
+          // Step 1: Kill ALL processes on the port
+          console.log(`   Killing processes on port ${port}...`);
+          try {
+            const killResult = await sandbox.process.executeCommand(
+              `fuser -k ${port}/tcp 2>/dev/null || lsof -ti:${port} | xargs -r kill -9 2>/dev/null || true`,
+              repoPath, {}, 15
+            );
+            console.log(`   Kill result: ${killResult.result || 'done'}`);
+          } catch (e) {
+            console.log(`   Kill error (ignored): ${e}`);
+          }
+          
+          // Step 2: Kill any dev server processes by name
+          console.log('   Killing dev server processes...');
+          try {
+            await sandbox.process.executeCommand(
+              `pkill -9 -f "next" 2>/dev/null; pkill -9 -f "vite" 2>/dev/null; pkill -9 -f "react-scripts" 2>/dev/null; pkill -9 -f "node.*dev" 2>/dev/null; true`,
+              repoPath, {}, 15
+            );
+          } catch (e) { /* ignore */ }
+          
+          // Step 3: Wait for processes to die
+          console.log('   Waiting 5 seconds for processes to terminate...');
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          
+          // Step 4: Clear cache
+          if (startCommand.includes('next')) {
+            console.log('🧹 Clearing Next.js cache...');
+            try {
+              await sandbox.process.executeCommand(`rm -rf ${repoPath}/.next/cache 2>/dev/null || true`, undefined, {}, 10);
+            } catch (e) { /* ignore */ }
+          }
+          
+          // Step 5: Start server with explicit environment
+          const startCmd = `cd ${repoPath} && HOST=0.0.0.0 PORT=${port} nohup ${startCommand} > ${repoPath}/server.log 2>&1 &`;
+          console.log(`🚀 Starting server: ${startCmd}`);
+          try {
+            const startResult = await sandbox.process.executeCommand(startCmd, undefined, {}, 15);
+            console.log(`   Start result: ${startResult.result || 'started'}`);
+          } catch (e) {
+            console.log(`   Start error: ${e}`);
+          }
+          
+          // Wait for server to start (Next.js needs time to compile)
+          console.log('⏳ Waiting 15 seconds for server to start...');
+          await new Promise(resolve => setTimeout(resolve, 15000));
+          
+          // Verify server is running
+          let serverReady = false;
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              const healthCheck = await sandbox.process.executeCommand(
+                `curl -s -o /dev/null -w "%{http_code}" -m 10 http://localhost:${port}/ 2>/dev/null || echo "000"`,
+                undefined, {}, 15
+              );
+              const statusCode = healthCheck.result?.trim();
+              if (statusCode && (statusCode.startsWith('2') || statusCode.startsWith('3'))) {
+                serverReady = true;
+                console.log(`✅ Server ready (status: ${statusCode})`);
+                break;
+              }
+              console.log(`   Attempt ${attempt}: status ${statusCode}`);
+            } catch (e) { /* ignore */ }
+            
+            if (attempt < 3) {
+              await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+          }
+          
+          if (!serverReady) {
+            // Check logs for errors
+            try {
+              const logs = await sandbox.process.executeCommand('tail -50 server.log 2>/dev/null', repoPath, {}, 10);
+              console.log('📋 Server logs:', logs.result);
+              if (logs.result?.includes('ready') || logs.result?.includes('started')) {
+                serverReady = true;
+              }
+            } catch (e) { /* ignore */ }
+          }
+          
+          console.log(serverReady ? '✅ Server is ready!' : '⚠️ Server may still be starting...');
+          
+          // Emit server:ready event so frontend can refresh preview
+          await streamingService.emit(projectId, {
+            type: 'server:ready',
+            message: serverReady ? '✅ Server ready! Preview updated.' : '⚠️ Server starting... Preview will update shortly.',
+            previewUrl: sandboxUrl || undefined,
+            versionId,
+          });
+          
+          // Also emit step:complete for backward compatibility
+          await streamingService.emit(projectId, {
+            type: 'step:complete',
+            step: 'Restarting Server',
+            message: serverReady ? '✅ Server restarted successfully!' : '⚠️ Server restarting (may take a moment)...',
+            versionId,
+          });
+          
+          return { success: true, filesApplied, serverReady };
+        } catch (error) {
+          console.error('Failed to apply validated files to sandbox:', error);
+          return { success: false, error: (error as Error).message };
+        }
+      });
+      
+      // Step 10: Update message with version_id
       await step.run("link-message-to-version", async () => {
         await supabase
           .from('messages')
@@ -2745,7 +2869,7 @@ Provide a clear, concise answer. Be specific and helpful.`
           .eq('id', messageId);
       });
       
-      // Step 10: Emit completion event
+      // Step 11: Emit completion event
       await step.run("emit-complete", async () => {
         if (!('state' in apiResult) || !apiResult.state?.data) {
           throw new Error('Invalid API result structure');

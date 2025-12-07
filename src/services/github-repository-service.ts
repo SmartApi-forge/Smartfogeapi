@@ -156,11 +156,12 @@ export class GitHubRepositoryService {
         // Detect package manager using Daytona fs.findFiles
         let packageManager: 'npm' | 'yarn' | 'pnpm' = 'npm';
         const files = await sandbox.fs.findFiles(repoPath, '*lock*');
-        const fileNames = files;
+        // Convert Match objects to file names (handle both string[] and Match[] return types)
+        const fileNames = files.map((f: any) => typeof f === 'string' ? f : (f.file || f.path || f.name || String(f)));
         
-        if (fileNames.includes('pnpm-lock.yaml')) {
+        if (fileNames.some((name: string) => name.includes('pnpm-lock.yaml'))) {
           packageManager = 'pnpm';
-        } else if (fileNames.includes('yarn.lock')) {
+        } else if (fileNames.some((name: string) => name.includes('yarn.lock'))) {
           packageManager = 'yarn';
         }
 
@@ -520,17 +521,22 @@ export class GitHubRepositoryService {
       
       // Get session command logs for debugging
       try {
-        console.log(`📜 Getting command logs for command ID: ${command.cmdId}`);
-        const logs = await sandbox.process.getSessionCommandLogs(sessionId, command.cmdId);
-        console.log('📝 STDOUT:', logs.stdout?.substring(0, 500));
-        console.log('🔴 STDERR:', logs.stderr?.substring(0, 500));
-        
-        // Check for common errors
-        if (logs.stderr && logs.stderr.includes('EADDRINUSE')) {
-          console.error('⚠️ Port already in use!');
-        }
-        if (logs.stderr && logs.stderr.includes('Cannot find module')) {
-          console.error('⚠️ Missing dependencies!');
+        const cmdId = (command as any).cmdId || (command as any).id;
+        if (cmdId) {
+          console.log(`📜 Getting command logs for command ID: ${cmdId}`);
+          const logs = await sandbox.process.getSessionCommandLogs(sessionId, cmdId);
+          console.log('📝 STDOUT:', logs.stdout?.substring(0, 500));
+          console.log('🔴 STDERR:', logs.stderr?.substring(0, 500));
+          
+          // Check for common errors
+          if (logs.stderr && logs.stderr.includes('EADDRINUSE')) {
+            console.error('⚠️ Port already in use!');
+          }
+          if (logs.stderr && logs.stderr.includes('Cannot find module')) {
+            console.error('⚠️ Missing dependencies!');
+          }
+        } else {
+          console.log('📜 No command ID available for logs');
         }
       } catch (logError) {
         console.error('Could not get session logs:', logError);

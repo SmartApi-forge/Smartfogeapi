@@ -15,7 +15,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useSandboxKeepAlive } from '@/hooks/use-sandbox-keep-alive';
+import { useSandboxKeepAlive } from '@/src/hooks/use-sandbox-keep-alive';
 
 interface SandboxStatusIndicatorProps {
   projectId: string;
@@ -33,7 +33,7 @@ export function SandboxStatusIndicator({
 
   const { isVisible } = useSandboxKeepAlive(projectId, {
     onSuccess: () => setLastPing(new Date()),
-    onVisibilityChange: (visible) => {
+    onVisibilityChange: (visible: boolean) => {
       setStatus(visible ? 'active' : 'inactive');
     },
   });
@@ -90,7 +90,7 @@ export function SandboxStatusDot({ projectId }: { projectId: string }) {
   const [status, setStatus] = useState<'active' | 'inactive'>('active');
 
   useSandboxKeepAlive(projectId, {
-    onVisibilityChange: (visible) => {
+    onVisibilityChange: (visible: boolean) => {
       setStatus(visible ? 'active' : 'inactive');
     },
   });

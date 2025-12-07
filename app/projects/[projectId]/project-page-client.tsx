@@ -989,6 +989,17 @@ export function ProjectPageClient({
         } else {
           stepStatusMap.set(stepKey, { start: null, complete: event });
         }
+      } else if (event.type === 'server:restarting') {
+        // Server restart started - show in steps
+        stepStatusMap.set('Server Restart', { start: event, complete: null });
+      } else if (event.type === 'server:ready') {
+        // Server is ready - mark step complete and trigger preview refresh
+        const existing = stepStatusMap.get('Server Restart');
+        if (existing) {
+          existing.complete = event;
+        } else {
+          stepStatusMap.set('Server Restart', { start: null, complete: event });
+        }
       }
     });
     
@@ -1215,6 +1226,24 @@ export function ProjectPageClient({
     
     return combined;
   }, [sortedMessages, streamingMessages, persistedEventMessages, versions, streamState.isStreaming, streamState.events.length]);
+
+  // Auto-refresh preview when server:ready event is received
+  useEffect(() => {
+    const serverReadyEvent = streamState.events.find(
+      (event) => event.type === 'server:ready'
+    );
+    
+    if (serverReadyEvent) {
+      console.log('[AUTO-REFRESH] Server ready event received, refreshing preview...');
+      // Small delay to ensure server is fully ready
+      const timer = setTimeout(() => {
+        setRefreshKey(prev => prev + 1);
+        console.log('[AUTO-REFRESH] Preview refreshed!');
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [streamState.events]);
 
   // Extract project files for GitHub push
   const projectFiles = useMemo(() => {

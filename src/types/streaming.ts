@@ -102,6 +102,17 @@ export type StreamEvent =
       progress: number;
       message?: string;
       versionId?: string;
+    }
+  | {
+      type: 'server:restarting';
+      message: string;
+      versionId?: string;
+    }
+  | {
+      type: 'server:ready';
+      message: string;
+      previewUrl?: string;
+      versionId?: string;
     };
 
 export type StreamEventWithTimestamp = StreamEvent & {

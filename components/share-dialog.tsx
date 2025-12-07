@@ -336,16 +336,13 @@ export function ShareDialog({
                 });
                 
                 // Persist visibility to database
-                api.projects.updateVisibility.mutate(
-                  { projectId, visibility: value },
-                  {
-                    onError: (error) => {
-                      console.error('Failed to update visibility:', error);
-                      setAccessLevel(previousAccessLevel || 'public');
-                      toast.error('Failed to update visibility');
-                    }
-                  }
-                );
+                api.projects.updateVisibility.useMutation().mutateAsync(
+                  { projectId, visibility: value }
+                ).catch((error: Error) => {
+                  console.error('Failed to update visibility:', error);
+                  setAccessLevel((previousAccessLevel as "public" | "workspace" | "personal" | "business") || 'public');
+                  toast.error('Failed to update visibility');
+                });
               }}>
                 <SelectTrigger className="w-[140px] bg-background dark:bg-[#0E100F]">
                   <SelectValue />

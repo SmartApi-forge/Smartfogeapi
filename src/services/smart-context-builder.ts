@@ -10,7 +10,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const MAX_CONTEXT_TOKENS = 100000; // ~75K for context
+// Reduced to stay under OpenAI's 30K TPM rate limit
+// Reserve ~8K for system prompt + response, leaving ~20K for context
+const MAX_CONTEXT_TOKENS = 20000;
 const CHARS_PER_TOKEN = 4;
 const MAX_CONTEXT_CHARS = MAX_CONTEXT_TOKENS * CHARS_PER_TOKEN;
 
@@ -56,7 +58,8 @@ export class SmartContextBuilder {
     } = {}
   ): Promise<SmartGenerationContext> {
     const startTime = Date.now();
-    const { messageLimit = 20, maxFiles = 15, includeTests = false, isGitHubProject = false, errorFileName = null } = options;
+    // Reduced defaults to stay under OpenAI rate limits
+    const { messageLimit = 10, maxFiles = 5, includeTests = false, isGitHubProject = false, errorFileName = null } = options;
     
     console.log(`🔧 Building smart context for project ${projectId}`);
     console.log(`📝 User prompt: "${userPrompt}"`);
@@ -314,17 +317,17 @@ export class SmartContextBuilder {
     configFiles: Record<string, string>;
     conversationHistory: Array<{ role: string; content: string }>;
   }) {
-    // Allocate token budget:
-    // - 20% for conversation
-    // - 10% for config files
-    // - 40% for highly relevant files
-    // - 20% for dependency files
+    // Allocate token budget - OPTIMIZED for 30K TPM rate limit:
+    // - 10% for conversation (reduced)
+    // - 5% for config files (reduced)
+    // - 70% for highly relevant files (increased - most important)
+    // - 5% for dependency files (reduced)
     // - 10% buffer
     
-    const historyBudget = Math.floor(MAX_CONTEXT_CHARS * 0.20);
-    const configBudget = Math.floor(MAX_CONTEXT_CHARS * 0.10);
-    const relevantBudget = Math.floor(MAX_CONTEXT_CHARS * 0.40);
-    const dependencyBudget = Math.floor(MAX_CONTEXT_CHARS * 0.20);
+    const historyBudget = Math.floor(MAX_CONTEXT_CHARS * 0.10);
+    const configBudget = Math.floor(MAX_CONTEXT_CHARS * 0.05);
+    const relevantBudget = Math.floor(MAX_CONTEXT_CHARS * 0.70);
+    const dependencyBudget = Math.floor(MAX_CONTEXT_CHARS * 0.05);
     
     // Truncate each category
     const truncatedHistory = this.truncateHistory(context.conversationHistory, historyBudget);
@@ -544,46 +547,59 @@ export class SmartContextBuilder {
   
   /**
    * Format context for AI prompt
+   * OPTIMIZED: Aggressive truncation to stay under OpenAI rate limits
    */
   static formatForPrompt(context: SmartGenerationContext, newPrompt: string): string {
     const sections: string[] = [];
+    const MAX_FILE_CONTENT = 3000; // Max chars per file to include
+    const MAX_TOTAL_CHARS = 60000; // ~15K tokens max for context
+    let totalChars = 0;
     
-    // Add stats
-    sections.push(`# Context Summary\n${context.summary}\n`);
+    // Add stats (minimal)
+    sections.push(`# Context: ${context.summary}\n`);
+    totalChars += sections[sections.length - 1].length;
     
-    // Add conversation history (last 5 messages)
+    // Add conversation history (last 3 messages only, truncated)
     if (context.conversationHistory.length > 0) {
       sections.push('## Recent Conversation\n');
-      context.conversationHistory.slice(-5).forEach(msg => {
-        sections.push(`**${msg.role}**: ${msg.content}\n`);
+      context.conversationHistory.slice(-3).forEach(msg => {
+        const truncatedContent = msg.content.length > 500 
+          ? msg.content.substring(0, 500) + '...' 
+          : msg.content;
+        sections.push(`**${msg.role}**: ${truncatedContent}\n`);
       });
+      totalChars += sections.slice(-4).reduce((sum, s) => sum + s.length, 0);
     }
     
-    // Add config files
-    if (Object.keys(context.configFiles).length > 0) {
-      sections.push('\n## Configuration Files\n');
-      Object.entries(context.configFiles).forEach(([filename, content]) => {
-        sections.push(`### ${filename}\n\`\`\`\n${content}\n\`\`\`\n`);
-      });
+    // Skip config files to save tokens - they're usually not needed for edits
+    // Only include package.json if it exists and is small
+    const packageJson = context.configFiles['package.json'];
+    if (packageJson && packageJson.length < 1000) {
+      sections.push('\n## package.json (dependencies)\n```\n' + packageJson + '\n```\n');
+      totalChars += sections[sections.length - 1].length;
     }
     
-    // Add relevant files with reasons
+    // Add ONLY the most relevant files (top 3 max), heavily truncated
     if (Object.keys(context.relevantFiles).length > 0) {
-      sections.push('\n## Relevant Files (Semantic Search Results)\n');
-      Object.entries(context.relevantFiles)
+      sections.push('\n## Files to Modify\n');
+      const sortedFiles = Object.entries(context.relevantFiles)
         .sort(([, a], [, b]) => b.relevance - a.relevance)
-        .forEach(([filename, data]) => {
-          sections.push(`### ${filename}\n*${data.reason}*\n\`\`\`\n${data.content}\n\`\`\`\n`);
-        });
+        .slice(0, 3); // Max 3 files
+      
+      for (const [filename, data] of sortedFiles) {
+        if (totalChars > MAX_TOTAL_CHARS) break;
+        
+        const truncatedContent = data.content.length > MAX_FILE_CONTENT
+          ? data.content.substring(0, MAX_FILE_CONTENT) + '\n\n[... truncated for brevity ...]'
+          : data.content;
+        
+        const fileSection = `### ${filename}\n\`\`\`\n${truncatedContent}\n\`\`\`\n`;
+        sections.push(fileSection);
+        totalChars += fileSection.length;
+      }
     }
     
-    // Add dependency files
-    if (Object.keys(context.dependencyFiles).length > 0) {
-      sections.push('\n## Related Dependencies\n');
-      Object.entries(context.dependencyFiles).forEach(([filename, content]) => {
-        sections.push(`### ${filename}\n\`\`\`\n${content}\n\`\`\`\n`);
-      });
-    }
+    // Skip dependency files to save tokens - AI can infer imports
     
     // Add new request
     sections.push('\n## New Request\n');

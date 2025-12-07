@@ -102,10 +102,8 @@ export async function POST(req: NextRequest) {
     if (project.github_mode && project.repo_url) {
       // For GitHub projects, fetch files from the GitHub repository
       try {
-        const { getGitHubOAuthService } = await import('@/lib/github-oauth');
+        const { githubOAuth } = await import('@/lib/github-oauth');
         const { Octokit } = await import('@octokit/rest');
-        
-        const githubOAuth = getGitHubOAuthService();
         const integration = await githubOAuth.getUserIntegration(user.id);
         
         if (!integration?.access_token) {
