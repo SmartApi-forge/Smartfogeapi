@@ -32,7 +32,7 @@ interface NavItem {
 interface Message {
   id: string;
   content: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   created_at: string;
   project_id?: string;
 }

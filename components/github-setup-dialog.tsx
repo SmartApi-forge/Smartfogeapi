@@ -241,6 +241,7 @@ export function GitHubSetupDialog({
       const response = await fetch('/api/github/push-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           projectId,
           repoFullName,

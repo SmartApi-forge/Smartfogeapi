@@ -54,6 +54,7 @@ export function NewFileDialog({
       const response = await fetch('/api/sandbox/file/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           sandboxId,
           projectId,

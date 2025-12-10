@@ -113,6 +113,46 @@ export type StreamEvent =
       message: string;
       previewUrl?: string;
       versionId?: string;
+    }
+  | {
+      type: 'sandbox:sync:start';
+      fileCount: number;
+      message: string;
+      versionId?: string;
+    }
+  | {
+      type: 'sandbox:sync:progress';
+      syncedCount: number;
+      totalCount: number;
+      currentFile: string;
+      progress: number; // 0-100
+      versionId?: string;
+    }
+  | {
+      type: 'sandbox:sync:complete';
+      syncedFiles: string[];
+      failedFiles: string[];
+      duration: number;
+      message: string;
+      versionId?: string;
+    }
+  | {
+      type: 'sandbox:sync:error';
+      message: string;
+      failedFiles: string[];
+      recoverySuggestions: string[];
+      versionId?: string;
+    }
+  | {
+      type: 'preview:updating';
+      message: string;
+      versionId?: string;
+    }
+  | {
+      type: 'preview:ready';
+      previewUrl: string;
+      message: string;
+      versionId?: string;
     };
 
 export type StreamEventWithTimestamp = StreamEvent & {
@@ -120,7 +160,7 @@ export type StreamEventWithTimestamp = StreamEvent & {
 };
 
 export interface GenerationState {
-  status: 'idle' | 'initializing' | 'generating' | 'validating' | 'complete' | 'error';
+  status: 'idle' | 'initializing' | 'generating' | 'validating' | 'syncing' | 'complete' | 'error';
   currentStep?: string;
   currentFile?: string;
   generatedFiles: GeneratedFile[];

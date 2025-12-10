@@ -95,6 +95,53 @@ export interface FileDiff {
   newContent?: string;
 }
 
+/**
+ * Line-level diff entry for detailed version comparison
+ * Requirements: 5.2
+ */
+export interface LineDiff {
+  lineNumber: number;
+  type: 'added' | 'removed' | 'unchanged';
+  content: string;
+  oldLineNumber?: number; // For removed/unchanged lines
+  newLineNumber?: number; // For added/unchanged lines
+}
+
+/**
+ * Detailed file diff with line-level changes
+ * Requirements: 5.2
+ */
+export interface DetailedFileDiff {
+  filename: string;
+  status: 'added' | 'modified' | 'deleted' | 'unchanged';
+  oldContent?: string;
+  newContent?: string;
+  lineDiffs: LineDiff[];
+  stats: {
+    linesAdded: number;
+    linesRemoved: number;
+    linesUnchanged: number;
+  };
+}
+
+/**
+ * Enhanced version comparison with line-level diffs
+ * Requirements: 5.2
+ */
+export interface DetailedVersionComparison {
+  version1: Version;
+  version2: Version;
+  diffs: DetailedFileDiff[];
+  summary: {
+    filesAdded: number;
+    filesModified: number;
+    filesDeleted: number;
+    filesUnchanged: number;
+    totalLinesAdded: number;
+    totalLinesRemoved: number;
+  };
+}
+
 export interface VersionComparison {
   version1: Version;
   version2: Version;
@@ -105,5 +152,29 @@ export interface VersionComparison {
     filesDeleted: number;
     filesUnchanged: number;
   };
+}
+
+/**
+ * Input for creating a version with complete snapshot
+ * Requirements: 5.1
+ */
+export interface CreateCompleteVersionInput {
+  project_id: string;
+  name: string;
+  description?: string;
+  changes: Record<string, string>; // Only the changed/new files
+  deletedFiles?: string[]; // Files to remove from parent
+  command_type?: CommandType;
+  prompt: string;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Input for restoring a version
+ * Requirements: 5.3
+ */
+export interface RestoreVersionInput {
+  versionId: string;
+  prompt?: string;
 }
 

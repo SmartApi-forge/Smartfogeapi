@@ -51,6 +51,7 @@ export function useSandboxKeepAlive(
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({ projectId }),
       });
 
@@ -128,6 +129,7 @@ export async function sendSandboxKeepAlive(projectId: string): Promise<void> {
     headers: {
       'Content-Type': 'application/json',
     },
+    credentials: 'include',
     body: JSON.stringify({ projectId }),
   });
 

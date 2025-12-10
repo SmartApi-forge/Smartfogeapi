@@ -10,6 +10,10 @@ Create new components, pages, or features based on the user's request.
 3. **Follow Patterns**: Match the project's existing style and conventions
 4. **Make it Beautiful**: Use modern UI patterns and best practices
 5. **Make it Functional**: Ensure all features work out of the box
+6. **CRITICAL - Verify Imports**: ONLY import from paths that exist in the project's file tree!
+   - Check the file tree before importing from `@/components/ui/...`
+   - If a component doesn't exist, use plain HTML/Tailwind instead
+   - NEVER assume shadcn components are installed
 </rules>
 
 <component_structure>

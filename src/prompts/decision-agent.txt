@@ -137,6 +137,67 @@ Example: "Add user profile, settings page, and logout button"
 
 </decomposition_rules>
 
+<file_targeting_rules>
+
+## CRITICAL: File Selection Rules
+
+When determining which files to create or modify, follow these rules:
+
+### Rule 1: DO NOT Match Files by Keywords
+WRONG: Prompt says "create a pricing page" → Target app/page.tsx because it has "page"
+RIGHT: Create a NEW file app/pricing/page.tsx
+
+WRONG: Prompt says "add authentication" → Modify app/page.tsx because "auth" appears somewhere
+RIGHT: Create components/auth-dialog.tsx or modify a specific auth-related file if it exists
+
+### Rule 2: CREATE New Files for New Features
+- If user asks to "create", "add", "build", or "make" a new feature/component:
+  - Put it in "fileTargets.toCreate"
+  - Components go in: components/{name}.tsx
+  - Pages go in: app/{name}/page.tsx
+  - API routes go in: app/api/{name}/route.ts
+
+### Rule 3: MODIFY Only Semantically Related Files
+- Only include files in "fileTargets.toModify" if they are DIRECTLY related to the change
+- app/page.tsx should ONLY be modified if user explicitly mentions:
+  - "homepage"
+  - "main page"
+  - "landing page"
+  - "modify the home page"
+
+### Rule 4: For CREATE_AND_LINK Intent
+- ALWAYS have at least one file in toCreate
+- ALWAYS have at least one file in toModify (the parent that needs to link to the new component)
+- The toModify file should be where the linking happens (navbar, header, layout, etc.)
+
+### Examples of Correct File Targeting:
+
+Prompt: "Create a contact form"
+fileTargets: {
+  toCreate: ["components/contact-form.tsx"],
+  toModify: []  // No files to modify unless linking
+}
+
+Prompt: "Create a contact page and add it to the navbar"
+fileTargets: {
+  toCreate: ["app/contact/page.tsx"],
+  toModify: ["components/navbar.tsx"]  // The navbar needs to link to the new page
+}
+
+Prompt: "Add dark mode toggle to the header"
+fileTargets: {
+  toCreate: [],
+  toModify: ["components/header.tsx"]  // Existing header gets the toggle
+}
+
+Prompt: "Create a user profile component and show it when clicking the avatar"
+fileTargets: {
+  toCreate: ["components/user-profile.tsx"],
+  toModify: ["components/header.tsx"]  // Where the avatar is
+}
+
+</file_targeting_rules>
+
 <output_format>
 Return JSON in this EXACT structure:
 
@@ -357,44 +418,85 @@ Response:
   "mode": "api_generation_mode"
 }
 
-Example 5: UI Component Linking
-User: "Create an auth page and link it to the sign-in button"
+Example 5: UI Component Linking - Sign-In PAGE
+User: "Create a sign-in page and link it to the sign-in button"
 
 Response:
 {
   "intent": "CREATE_AND_LINK",
   "confidence": 0.98,
-  "summary": "Create authentication page component and connect it to existing sign-in button",
+  "summary": "Create sign-in page and link it to existing sign-in button using Next.js routing",
   "entities": {
-    "toCreate": ["auth-page"],
+    "toCreate": ["sign-in-page"],
     "toModify": ["main-page"],
     "toLink": {
-      "source": "auth-page",
+      "source": "sign-in-page",
       "target": "sign-in button",
       "parentFile": "unknown (must search)"
     }
   },
   "tasks": [
-    "1. CREATE: components/auth-page.tsx with form UI",
+    "1. CREATE: app/sign-in/page.tsx with sign-in form UI (this is a NEW PAGE, not a component)",
     "2. SEARCH: Find file containing 'sign-in button' (likely app/page.tsx, app/layout.tsx, or components/navbar.tsx)",
-    "3. MODIFY: Import AuthPage at top of parent file",
+    "3. MODIFY: Import Link from 'next/link' at top of parent file",
+    "4. MODIFY: Find EXISTING sign-in button element",
+    "5. MODIFY: Wrap button with Link: <Link href=\"/sign-in\"><button>Sign In</button></Link>",
+    "6. VERIFY: Clicking button should navigate to /sign-in page"
+  ],
+  "criticalReminders": [
+    "🚨 This is a CREATE + LINK task - do NOT only create the page!",
+    "🚨 Create a NEW PAGE at app/sign-in/page.tsx (NOT a component)",
+    "🚨 Use Next.js Link component for navigation (NOT onClick + state)",
+    "🚨 MUST find and modify the parent component with the button",
+    "🚨 DO NOT create a dialog/modal - create a separate PAGE",
+    "🚨 DO NOT inline the page code in app/page.tsx"
+  ],
+  "fileTargets": {
+    "toCreate": ["app/sign-in/page.tsx"],
+    "toModify": ["app/page.tsx OR components/navbar.tsx (search required)"]
+  },
+  "mode": "link_mode"
+}
+
+Example 6: UI Component Linking - Sign-In DIALOG
+User: "Create a sign-in dialog and link it to the sign-in button"
+
+Response:
+{
+  "intent": "CREATE_AND_LINK",
+  "confidence": 0.98,
+  "summary": "Create sign-in dialog component and connect it to existing sign-in button",
+  "entities": {
+    "toCreate": ["sign-in-dialog"],
+    "toModify": ["main-page"],
+    "toLink": {
+      "source": "sign-in-dialog",
+      "target": "sign-in button",
+      "parentFile": "unknown (must search)"
+    }
+  },
+  "tasks": [
+    "1. CREATE: components/sign-in-dialog.tsx with dialog form UI",
+    "2. SEARCH: Find file containing 'sign-in button' (likely app/page.tsx, app/layout.tsx, or components/navbar.tsx)",
+    "3. MODIFY: Import SignInDialog at top of parent file",
     "4. MODIFY: Add 'use client' to parent if adding state",
-    "5. MODIFY: Add useState for dialog: const [showAuth, setShowAuth] = useState(false)",
+    "5. MODIFY: Add useState for dialog: const [showSignIn, setShowSignIn] = useState(false)",
     "6. MODIFY: Find EXISTING button element",
-    "7. MODIFY: Add onClick to button: onClick={() => setShowAuth(true)}",
-    "8. MODIFY: Add component to JSX: <AuthPage open={showAuth} onClose={() => setShowAuth(false)} />",
-    "9. VERIFY: Clicking button should open the auth dialog"
+    "7. MODIFY: Add onClick to button: onClick={() => setShowSignIn(true)}",
+    "8. MODIFY: Add component to JSX: <SignInDialog open={showSignIn} onClose={() => setShowSignIn(false)} />",
+    "9. VERIFY: Clicking button should open the sign-in dialog"
   ],
   "criticalReminders": [
     "🚨 This is a CREATE + LINK task - do NOT only create the component!",
     "🚨 MUST find and modify the parent component with the button",
-    "🚨 MUST add import: import { AuthPage } from '@/components/auth-page'",
-    "🚨 MUST add state: const [showAuth, setShowAuth] = useState(false)",
+    "🚨 MUST add import: import { SignInDialog } from '@/components/sign-in-dialog'",
+    "🚨 MUST add state: const [showSignIn, setShowSignIn] = useState(false)",
     "🚨 MUST wire existing button: Find it first, then add onClick",
-    "🚨 DO NOT create a NEW button - modify the EXISTING one"
+    "🚨 DO NOT create a NEW button - modify the EXISTING one",
+    "🚨 DO NOT inline the dialog code in app/page.tsx"
   ],
   "fileTargets": {
-    "toCreate": ["components/auth-page.tsx"],
+    "toCreate": ["components/sign-in-dialog.tsx"],
     "toModify": ["app/page.tsx OR components/navbar.tsx (search required)"]
   },
   "mode": "link_mode"

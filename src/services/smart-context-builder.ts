@@ -100,10 +100,18 @@ export class SmartContextBuilder {
       console.log(`   Matched files: ${keywordMatches.join(', ')}`);
     }
     
+    // Step 2.5.5: 🚨 CRITICAL - Search for UI elements mentioned in prompt within file CONTENTS
+    // This finds files containing "sign in button", "login button", etc. even if filename doesn't match
+    const uiElementMatches = this.findFilesContainingUIElements(userPrompt, allFiles);
+    console.log(`🎯 UI element content matches: ${uiElementMatches.length} files`);
+    if (uiElementMatches.length > 0) {
+      console.log(`   Files containing UI elements: ${uiElementMatches.join(', ')}`);
+    }
+    
     // Step 2.6: For GitHub projects, be extra aggressive about finding relevant files
     // Look for files that might be related even if not explicitly mentioned
     let contextualMatches: string[] = [];
-    if (isGitHubProject && keywordMatches.length === 0) {
+    if (isGitHubProject && keywordMatches.length === 0 && uiElementMatches.length === 0) {
       console.log(`🔍 GitHub project with no keyword matches - searching for contextual files...`);
       contextualMatches = this.findContextualFiles(userPrompt, allFiles);
       console.log(`📍 Contextual matches: ${contextualMatches.length} files`);
@@ -168,6 +176,18 @@ export class SmartContextBuilder {
       }
     }
     
+    // Step 4b.5: Add UI element content matches with HIGHEST relevance (0.98)
+    // These are files that CONTAIN the actual UI element mentioned (e.g., "sign in button")
+    for (const filePath of uiElementMatches) {
+      if (allFiles[filePath] && !relevantFiles[filePath]) {
+        relevantFiles[filePath] = {
+          content: allFiles[filePath],
+          relevance: 0.98, // Highest relevance - file contains the actual element to modify
+          reason: 'Contains UI element mentioned in prompt - THIS FILE NEEDS MODIFICATION',
+        };
+      }
+    }
+    
     // Step 4a.5: Add contextual matches with high relevance (0.92)
     for (const filePath of contextualMatches) {
       if (allFiles[filePath] && !relevantFiles[filePath]) {
@@ -202,7 +222,8 @@ export class SmartContextBuilder {
       }
     }
     
-    console.log(`📊 Total relevant files: ${Object.keys(relevantFiles).length} (${keywordMatches.length} keyword + ${contentMatches.length} content + ${Object.keys(relevantFiles).length - keywordMatches.length - contentMatches.length} semantic)`);
+    console.log(`📊 Total relevant files: ${Object.keys(relevantFiles).length}`);
+    console.log(`   Breakdown: ${keywordMatches.length} keyword + ${uiElementMatches.length} UI element + ${contentMatches.length} content + ${contextualMatches.length} contextual + ${searchResults.length} semantic`);
     if (Object.keys(relevantFiles).length > 0) {
       console.log(`   Files: ${Object.keys(relevantFiles).join(', ')}`);
     }
@@ -772,6 +793,146 @@ export class SmartContextBuilder {
     }
     
     return keywords;
+  }
+  
+  /**
+   * 🚨 CRITICAL: Find files that CONTAIN specific UI elements mentioned in the prompt
+   * This searches file CONTENTS, not just filenames
+   * 
+   * Example: "link sign in button to sign in page"
+   * - Extracts: "sign in button", "sign in"
+   * - Searches all files for: <button>Sign In</button>, onClick, "Sign In", etc.
+   * - Returns files that actually contain the button, not just files named "button.tsx"
+   */
+  private static findFilesContainingUIElements(
+    prompt: string,
+    allFiles: Record<string, string>
+  ): string[] {
+    const matches: Array<{ path: string; score: number; reason: string }> = [];
+    const promptLower = prompt.toLowerCase();
+    
+    // Extract UI element phrases from prompt
+    // Look for patterns like "sign in button", "login button", "submit button", "navbar", etc.
+    const uiElementPatterns = [
+      // Button patterns
+      /(?:the\s+)?(\w+(?:\s+\w+)?)\s+button/gi,
+      // Link patterns  
+      /(?:the\s+)?(\w+(?:\s+\w+)?)\s+link/gi,
+      // Generic element patterns
+      /(?:the\s+)?(\w+)\s+(?:in|on|at)\s+(?:the\s+)?(\w+)/gi,
+    ];
+    
+    const extractedElements: string[] = [];
+    
+    // Extract element names from prompt
+    for (const pattern of uiElementPatterns) {
+      let match;
+      while ((match = pattern.exec(prompt)) !== null) {
+        if (match[1]) {
+          extractedElements.push(match[1].toLowerCase());
+        }
+        if (match[2]) {
+          extractedElements.push(match[2].toLowerCase());
+        }
+      }
+    }
+    
+    // Also extract common UI terms directly mentioned
+    const commonUITerms = [
+      'sign in', 'signin', 'sign-in', 'login', 'log in', 'log-in',
+      'sign up', 'signup', 'sign-up', 'register',
+      'logout', 'log out', 'log-out', 'sign out', 'signout',
+      'navbar', 'nav bar', 'navigation', 'header', 'footer',
+      'sidebar', 'menu', 'dropdown', 'modal', 'dialog', 'popup',
+      'form', 'input', 'submit', 'cancel', 'close', 'open',
+      'hero', 'banner', 'card', 'list', 'table', 'grid'
+    ];
+    
+    for (const term of commonUITerms) {
+      if (promptLower.includes(term)) {
+        extractedElements.push(term);
+      }
+    }
+    
+    // Remove duplicates
+    const uniqueElements = [...new Set(extractedElements)];
+    
+    if (uniqueElements.length === 0) {
+      return [];
+    }
+    
+    console.log(`🔍 Searching file contents for UI elements: ${uniqueElements.join(', ')}`);
+    
+    // Search each file's CONTENT for these elements
+    for (const [filePath, content] of Object.entries(allFiles)) {
+      // Only search component/page files
+      if (!filePath.match(/\.(tsx|jsx|ts|js|vue|svelte)$/)) {
+        continue;
+      }
+      
+      if (typeof content !== 'string') continue;
+      
+      const contentLower = content.toLowerCase();
+      let score = 0;
+      const foundElements: string[] = [];
+      
+      for (const element of uniqueElements) {
+        const elementLower = element.toLowerCase();
+        
+        // Check for various patterns in the file content
+        const patterns = [
+          // JSX text content: >Sign In<
+          new RegExp(`>\\s*${this.escapeRegex(element)}\\s*<`, 'i'),
+          // String literals: "Sign In", 'Sign In'
+          new RegExp(`["']${this.escapeRegex(element)}["']`, 'i'),
+          // Variable/prop names: signIn, SignIn, sign_in
+          new RegExp(`\\b${element.replace(/\s+/g, '[-_]?')}\\b`, 'i'),
+          // className or id containing the term
+          new RegExp(`(?:className|id)=["'][^"']*${this.escapeRegex(element)}[^"']*["']`, 'i'),
+          // Button/Link with text
+          new RegExp(`<(?:button|Button|Link|a)[^>]*>\\s*${this.escapeRegex(element)}`, 'i'),
+        ];
+        
+        for (const pattern of patterns) {
+          if (pattern.test(content)) {
+            score += 20;
+            if (!foundElements.includes(element)) {
+              foundElements.push(element);
+            }
+          }
+        }
+        
+        // Also check for simple substring match (lower priority)
+        if (contentLower.includes(elementLower)) {
+          score += 5;
+          if (!foundElements.includes(element)) {
+            foundElements.push(element);
+          }
+        }
+      }
+      
+      if (score > 0) {
+        matches.push({
+          path: filePath,
+          score,
+          reason: `Contains: ${foundElements.join(', ')}`,
+        });
+        console.log(`   ✓ Found "${foundElements.join(', ')}" in ${filePath} (score: ${score})`);
+      }
+    }
+    
+    // Sort by score descending and return top matches
+    return matches
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5) // Top 5 files
+      .map(m => m.path);
+  }
+  
+  /**
+   * Escape special regex characters in a string
+   */
+  private static escapeRegex(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
   
   /**

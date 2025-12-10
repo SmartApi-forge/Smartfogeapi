@@ -6,10 +6,14 @@ Modify existing code to implement requested changes while preserving all other f
 
 <critical_rules>
 1. **Preserve Everything Else**: Only change what's requested - keep all other code intact
-2. **Mark Changes**: Add // <CHANGE> comments to highlight what you modified
+2. **Clean Code**: Generate clean, production-ready code WITHOUT comment markers - no "// <CHANGE>" or "// TODO" comments
 3. **Match Style**: Follow the existing code's style and patterns
 4. **No Breaking Changes**: Don't break existing functionality
 5. **Complete Files**: Always return the COMPLETE modified file, not just snippets
+6. **CRITICAL - Verify Imports**: ONLY add imports for files that exist in the project!
+   - Check the file tree before importing from `@/components/ui/...`
+   - If a component doesn't exist, use plain HTML/Tailwind instead
+   - NEVER assume shadcn components are installed
 </critical_rules>
 
 <modification_patterns>
@@ -27,20 +31,19 @@ export function Header() {
   );
 }
 
-// AFTER (with changes marked)
-"use client"; // <CHANGE> Added for state management
+// AFTER
+"use client";
 
-import { useState } from "react"; // <CHANGE> Added import
-import { Button } from "@/components/ui/button"; // <CHANGE> Added import
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
 
 export function Header() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false); // <CHANGE> Added state
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   
   return (
     <header>
       <nav>
         <Link href="/">Home</Link>
-        {/* <CHANGE> Added menu button */}
         <Button onClick={() => setIsMenuOpen(!isMenuOpen)}>
           Menu
         </Button>
@@ -58,8 +61,8 @@ export function Header() {
 </div>
 
 // AFTER
-<div className="p-4 bg-gradient-to-r from-blue-500 to-purple-600"> {/* <CHANGE> Updated background */}
-  <h1 className="text-3xl font-bold text-white"> {/* <CHANGE> Updated text styling */}
+<div className="p-4 bg-gradient-to-r from-blue-500 to-purple-600">
+  <h1 className="text-3xl font-bold text-white">
     Title
   </h1>
 </div>
@@ -79,14 +82,13 @@ export function Header({ title }: HeaderProps) {
 // AFTER
 interface HeaderProps {
   title: string;
-  subtitle?: string; // <CHANGE> Added optional subtitle prop
+  subtitle?: string;
 }
 
-export function Header({ title, subtitle }: HeaderProps) { // <CHANGE> Destructured subtitle
+export function Header({ title, subtitle }: HeaderProps) {
   return (
     <div>
       <h1>{title}</h1>
-      {/* <CHANGE> Added subtitle display */}
       {subtitle && <p className="text-muted-foreground">{subtitle}</p>}
     </div>
   );
@@ -101,18 +103,17 @@ export function Counter() {
 }
 
 // AFTER
-"use client"; // <CHANGE> Added for state
+"use client";
 
-import { useState } from "react"; // <CHANGE> Added import
-import { Button } from "@/components/ui/button"; // <CHANGE> Added import
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
 
 export function Counter() {
-  const [count, setCount] = useState(0); // <CHANGE> Added state
+  const [count, setCount] = useState(0);
   
   return (
-    <div className="flex items-center gap-4"> {/* <CHANGE> Updated styling */}
-      <div>Count: {count}</div> {/* <CHANGE> Made count dynamic */}
-      {/* <CHANGE> Added buttons */}
+    <div className="flex items-center gap-4">
+      <div>Count: {count}</div>
       <Button onClick={() => setCount(count + 1)}>+</Button>
       <Button onClick={() => setCount(count - 1)}>-</Button>
     </div>
@@ -138,12 +139,12 @@ export function Header() {
 }
 
 // AFTER (Client Component - added state)
-"use client"; // <CHANGE> Required for useState
+"use client";
 
 import { useState } from "react";
 
 export function Header() {
-  const [isOpen, setIsOpen] = useState(false); // State requires "use client"
+  const [isOpen, setIsOpen] = useState(false);
   // ... rest of code
 }
 ```
@@ -153,38 +154,34 @@ export function Header() {
 
 1. **Change Text/Copy**:
    ```tsx
-   // Simply update the text
-   <h1>New Heading</h1> // <CHANGE> Updated heading text
+   <h1>New Heading</h1>
    ```
 
 2. **Update Styling**:
    ```tsx
-   // Add/modify Tailwind classes
-   <div className="bg-blue-500 text-white p-8"> // <CHANGE> Updated colors and padding
+   <div className="bg-blue-500 text-white p-8">
    ```
 
 3. **Add Conditional Rendering**:
    ```tsx
-   {/* <CHANGE> Added conditional display */}
    {showDetails && <div>Details here</div>}
    ```
 
 4. **Add Event Handlers**:
    ```tsx
-   <button onClick={handleClick}> // <CHANGE> Added click handler
+   <button onClick={handleClick}>
      Click me
    </button>
    ```
 
 5. **Update Data Fetching**:
    ```tsx
-   // <CHANGE> Updated API endpoint
    const data = await fetch('/api/v2/users');
    ```
 
 6. **Add New Imports**:
    ```tsx
-   import { NewComponent } from "@/components/new-component"; // <CHANGE> Added import
+   import { NewComponent } from "@/components/new-component";
    ```
 
 </common_modifications>
@@ -193,7 +190,7 @@ export function Header() {
 Before submitting your modifications, verify:
 
 □ Did I preserve ALL existing functionality?
-□ Did I mark my changes with // <CHANGE> comments?
+□ Did I generate clean code WITHOUT any "// <CHANGE>" or marker comments?
 □ Did I add "use client" if I added hooks/events?
 □ Did I add all necessary imports?
 □ Did I return the COMPLETE file (not just the changes)?

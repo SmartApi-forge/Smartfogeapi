@@ -1,6 +1,17 @@
 import { Button } from '@/components/ui/button'
 import { Check, Sparkles, Star } from 'lucide-react'
 import Link from 'next/link'
+import { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Pricing Plans - Compare Features',
+  description: 'Compare SmartAPIForge pricing plans. From free Starter to Pro with unlimited API generation. Find the perfect plan for your API development needs.',
+  keywords: ['API pricing', 'no-code API plans', 'API builder pricing', 'SmartAPIForge plans'],
+  openGraph: {
+    title: 'SmartAPIForge Pricing - Plans for Every Developer',
+    description: 'Compare our Starter, Developer, and Pro plans. Start free, scale as you grow.',
+  },
+}
 
 const tableData = [
   { feature: 'API generation/month', starter: '10', developer: '100', pro: 'Unlimited' },

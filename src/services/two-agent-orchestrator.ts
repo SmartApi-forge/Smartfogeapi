@@ -16,15 +16,8 @@ export interface TwoAgentResult {
   answer?: string;
 }
 
-/**
- * Two-Agent Orchestrator
- * Coordinates Decision Agent and Coding Agent for better code generation
- */
 export class TwoAgentOrchestrator {
   
-  /**
-   * Execute the two-agent workflow
-   */
   static async execute(
     userPrompt: string,
     context: SmartGenerationContext,
@@ -38,7 +31,6 @@ export class TwoAgentOrchestrator {
   ): Promise<TwoAgentResult> {
     const { projectId, versionId, isGitHubProject = false, repoFullName, onProgress } = options;
 
-    // STAGE 1: Decision Agent - Analyze request and create plan
     if (onProgress) await onProgress('Planning', 'Analyzing your request...');
     
     console.log('🤖 Stage 1: Decision Agent analyzing request...');
@@ -53,29 +45,15 @@ export class TwoAgentOrchestrator {
     console.log(`  Tasks: ${decisionResult.tasks.length} steps`);
     console.log(`  Critical reminders: ${decisionResult.criticalReminders.length}`);
 
-    // If it's a question, just answer it (no code generation)
     if (decisionResult.mode === 'question_mode') {
       if (onProgress) await onProgress('Answering', 'Generating answer...');
       return await this.answerQuestion(userPrompt, context, decisionResult);
     }
 
-    // STAGE 2: Coding Agent - Generate/modify code based on plan
-    if (onProgress) await onProgress('Generating', 'Generating code...');
-    
-    console.log('🤖 Stage 2: Coding Agent generating code...');
-    
-    return await this.generateCode(userPrompt, context, decisionResult, {
-      projectId,
-      versionId,
-      isGitHubProject,
-      repoFullName,
-      onProgress,
-    });
+    if (onProgress) await onProgress('Generating', 'Creating code changes...');
+    return await this.generateCode(userPrompt, context, decisionResult, options);
   }
 
-  /**
-   * Answer a question (no code generation)
-   */
   private static async answerQuestion(
     userPrompt: string,
     context: SmartGenerationContext,
@@ -115,9 +93,6 @@ export class TwoAgentOrchestrator {
     };
   }
 
-  /**
-   * Generate or modify code based on decision
-   */
   private static async generateCode(
     userPrompt: string,
     context: SmartGenerationContext,
@@ -125,14 +100,13 @@ export class TwoAgentOrchestrator {
     options: {
       projectId: string;
       versionId?: string;
-      isGitHubProject: boolean;
+      isGitHubProject?: boolean;
       repoFullName?: string;
       onProgress?: (stage: string, message: string) => Promise<void>;
     }
   ): Promise<TwoAgentResult> {
-    const { isGitHubProject, repoFullName, onProgress } = options;
+    const { isGitHubProject = false, repoFullName, onProgress } = options;
 
-    // Build system prompt based on mode
     const patterns = this.analyzeProjectPatterns(context);
     const framework = this.detectFramework(context);
     
@@ -147,7 +121,6 @@ export class TwoAgentOrchestrator {
       }
     );
 
-    // Add GitHub project warning if applicable
     if (isGitHubProject) {
       systemPrompt = `${systemPrompt}
 
@@ -167,9 +140,19 @@ IF YOU CREATE A NEW FILE INSTEAD OF MODIFYING EXISTING ONES, YOU HAVE FAILED.
 `;
     }
 
-    // Add project-specific context
     const relevantFilePaths = Object.keys(context.relevantFiles || {});
     const allExistingFilePaths = Object.keys(context.previousFiles || {});
+    
+    const uiComponents = allExistingFilePaths
+      .filter(f => f.includes('components/ui/') && (f.endsWith('.tsx') || f.endsWith('.ts')))
+      .map(f => f.split('/').pop()?.replace(/\.(tsx|ts)$/, ''))
+      .filter(Boolean);
+    
+    const availableComponentsStr = uiComponents.length > 0
+      ? `AVAILABLE UI COMPONENTS (you can import these from @/components/ui/...):\n${uiComponents.map(c => `  - ${c}`).join('\n')}`
+      : `⚠️ NO UI COMPONENTS FOUND in components/ui/ - use plain HTML with Tailwind CSS instead of shadcn imports`;
+
+    const fileTargetingRules = this.buildFileTargetingRules(decisionResult, allExistingFilePaths, userPrompt);
     
     const contextAdditions = `
 
@@ -183,6 +166,10 @@ ${relevantFilePaths.length > 0 ? relevantFilePaths.map((p, i) => `${i + 1}. ${p}
 All Existing Files (${allExistingFilePaths.length} total):
 ${allExistingFilePaths.slice(0, 30).join('\n')}
 ${allExistingFilePaths.length > 30 ? `... and ${allExistingFilePaths.length - 30} more files` : ''}
+
+${availableComponentsStr}
+
+${fileTargetingRules}
 
 Project Patterns:
 - UI Library: ${patterns.uiLibrary}
@@ -199,341 +186,192 @@ ${patterns.importPatterns.slice(0, 3).join('\n')}
 
     systemPrompt += contextAdditions;
 
-    // Add React/UI best practices
-    const reactBestPractices = `
+    const enhancedPrompt = SmartContextBuilder.formatForPrompt(context, userPrompt);
 
+    console.log('🤖 Stage 2: Coding Agent generating code...');
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: enhancedPrompt },
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.3,
+    });
+
+    const rawResult = JSON.parse(completion.choices[0].message.content || '{}');
+    
+    const validatedResult = this.postProcessResult(rawResult, decisionResult, allExistingFilePaths, userPrompt);
+
+    console.log(`✓ Coding Agent generated:`);
+    console.log(`  - Modified files: ${Object.keys(validatedResult.modifiedFiles || {}).length}`);
+    console.log(`  - New files: ${Object.keys(validatedResult.newFiles || {}).length}`);
+
+    return {
+      modifiedFiles: validatedResult.modifiedFiles || {},
+      newFiles: validatedResult.newFiles || {},
+      deletedFiles: validatedResult.deletedFiles || [],
+      changes: validatedResult.changes || [],
+      description: validatedResult.description || 'Code changes generated',
+    };
+  }
+
+  private static buildFileTargetingRules(
+    decisionResult: DecisionResult,
+    existingFiles: string[],
+    userPrompt: string
+  ): string {
+    const promptLower = userPrompt.toLowerCase();
+    
+    let rules = `
 ═══════════════════════════════════════════════════════════════════════════════
-REACT & UI BEST PRACTICES (CRITICAL)
+🎯 FILE TARGETING RULES (CRITICAL - READ CAREFULLY)
 ═══════════════════════════════════════════════════════════════════════════════
 
-1. DIALOG/MODAL PLACEMENT:
-   - NEVER place Dialog, Modal, Popover, or Sheet components INSIDE header, nav, or footer elements
-   - These components have z-index issues when nested inside layout elements
-   - ALWAYS use React fragments (<></>) to place them OUTSIDE the parent element
-   
-   ❌ WRONG:
-   <header>
-     <nav>...</nav>
-     <LoginDialog open={open} />  // Inside header - will have z-index issues!
-   </header>
-   
-   ✅ CORRECT:
-   <>
-     <header>
-       <nav>...</nav>
-     </header>
-     <LoginDialog open={open} />  // Outside header - renders properly!
-   </>
+`;
+    
+    if (decisionResult.intent === 'CREATE' || decisionResult.intent === 'CREATE_AND_LINK') {
+      const componentFiles = existingFiles.filter(f => f.includes('components/'));
+      const pageFiles = existingFiles.filter(f => f.includes('app/') && f.endsWith('page.tsx'));
+      
+      rules += `INTENT: ${decisionResult.intent} - You MUST create new files!
 
-2. BUTTON CLICK HANDLERS:
-   - Ensure onClick handlers are properly attached to Button components
-   - Use arrow functions for state setters: onClick={() => setOpen(true)}
-   - Don't forget to add "use client" directive for components with interactivity
+🚨 CRITICAL CREATE RULES:
+1. CREATE NEW FILE(S) in the "newFiles" object - do NOT put new code in "modifiedFiles"
+2. New components go in: components/ directory
+3. New pages go in: app/{page-name}/page.tsx
+4. DO NOT inline new component code into app/page.tsx or other existing files
 
-3. COMPONENT IMPORTS:
-   - Always import Dialog components from the correct path (e.g., @/components/ui/dialog)
-   - Ensure all required sub-components are imported (DialogContent, DialogHeader, etc.)
+Suggested file targets from Decision Agent:
+- Files to CREATE: ${decisionResult.fileTargets?.toCreate?.join(', ') || 'Determine from prompt'}
+- Files to MODIFY (for linking only): ${decisionResult.fileTargets?.toModify?.join(', ') || 'Only if linking needed'}
 
-4. STATE MANAGEMENT:
-   - Define state hooks at the top of the component
-   - Pass state and setters as props when needed
+Existing component files (for reference, NOT for inlining new code):
+${componentFiles.slice(0, 10).join('\n') || 'None'}
+
+`;
+    } else if (decisionResult.intent === 'MODIFY') {
+      rules += `INTENT: MODIFY - You should ONLY modify existing files!
+
+🚨 CRITICAL MODIFY RULES:
+1. ONLY edit files listed in "Relevant Files" section above
+2. DO NOT create new files - put changes in "modifiedFiles" only
+3. "newFiles" should be empty {}
+4. Preserve ALL existing code that isn't being changed
+
+Files you CAN modify:
+${decisionResult.fileTargets?.toModify?.join('\n') || 'Files from Relevant Files section'}
+
+`;
+    } else if (decisionResult.intent === 'FIX_ERROR') {
+      rules += `INTENT: FIX_ERROR - Minimal changes only!
+
+🚨 CRITICAL ERROR FIX RULES:
+1. ONLY modify the file with the error
+2. Make MINIMAL changes to fix the issue
+3. DO NOT add new features or refactor
+4. DO NOT create new files
+
+Target file: ${decisionResult.entities?.errorFile || 'See error message'}
+
+`;
+    }
+    
+    rules += `
+═══════════════════════════════════════════════════════════════════════════════
+⚠️ KEYWORD MATCHING WARNING
+═══════════════════════════════════════════════════════════════════════════════
+
+DO NOT modify files just because their names match keywords in the prompt!
+
+Examples of WRONG behavior:
+- Prompt says "create a pricing page" → DO NOT modify app/page.tsx just because it contains "page"
+- Prompt says "add authentication" → DO NOT modify app/page.tsx just because it's a page
+- Prompt says "create user profile component" → DO NOT modify components/header.tsx just because it's a component
+
+CORRECT behavior:
+- "create a pricing page" → CREATE new file: app/pricing/page.tsx
+- "add authentication" → CREATE new file: components/auth-dialog.tsx (or modify specific auth file if exists)
+- "create user profile component" → CREATE new file: components/user-profile.tsx
+
+Only modify app/page.tsx if the user EXPLICITLY says:
+- "modify the homepage"
+- "change the main page"
+- "update the landing page"
+- "add X to the homepage"
 
 ═══════════════════════════════════════════════════════════════════════════════
 `;
-
-    systemPrompt += reactBestPractices;
-
-    // Build user prompt with file contents
-    const enhancedPrompt = SmartContextBuilder.formatForPrompt(context, userPrompt);
-
-    // Generate code with streaming - IMPROVED with better error handling
-    let completion;
-    let rawOutput = '';
-    let chunkCount = 0;
-    const startTime = Date.now();
     
-    try {
-      completion = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        stream: true,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: enhancedPrompt },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.7,
-        stream_options: { include_usage: true }, // Get token usage
-      });
-
-      // Immediately report streaming started
-      if (onProgress) {
-        await onProgress('Streaming', 'AI response started...');
-      }
-
-      // Collect streaming response with faster progress updates
-      for await (const chunk of completion) {
-        const content = chunk.choices[0]?.delta?.content || '';
-        if (content) {
-          rawOutput += content;
-          chunkCount++;
-          
-          // Report progress MORE FREQUENTLY for better UX (every 5 chunks instead of 20)
-          if (onProgress && chunkCount % 5 === 0) {
-            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-            await onProgress('Generating', `Generating code... (${elapsed}s, ${chunkCount} chunks)`);
-          }
-        }
-        
-        // Also report on finish reason
-        if (chunk.choices[0]?.finish_reason) {
-          if (onProgress) {
-            await onProgress('Processing', 'Finalizing response...');
-          }
-        }
-      }
-      
-      // Final progress update
-      if (onProgress) {
-        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-        await onProgress('Complete', `Generated ${rawOutput.length} characters in ${elapsed}s`);
-      }
-      
-    } catch (streamError: any) {
-      console.error('Streaming error:', streamError);
-      
-      // Report streaming error to user
-      if (onProgress) {
-        await onProgress('Error', `Streaming failed: ${streamError.message}`);
-      }
-      
-      // If streaming fails, try non-streaming as fallback
-      console.log('Retrying without streaming...');
-      if (onProgress) {
-        await onProgress('Retrying', 'Retrying without streaming...');
-      }
-      
-      const fallbackResponse = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        stream: false,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: enhancedPrompt },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.7,
-      });
-      
-      rawOutput = fallbackResponse.choices[0].message.content || '';
-      
-      if (onProgress) {
-        await onProgress('Complete', 'Generated response (non-streaming)');
-      }
-    }
-
-    // Parse JSON response
-    const jsonMatch = rawOutput.match(/\{[\s\S]*\}/);
-    const jsonStr = jsonMatch ? jsonMatch[0] : rawOutput;
-    const result = JSON.parse(jsonStr);
-
-    // Post-process results
-    return this.postProcessResults(result, context, decisionResult);
+    return rules;
   }
 
-  /**
-   * Post-process generated code results
-   */
-  private static postProcessResults(
+  private static postProcessResult(
     result: any,
-    context: SmartGenerationContext,
-    decisionResult: DecisionResult
-  ): TwoAgentResult {
-    let modifiedFiles = result.modifiedFiles || {};
-    let newFiles = result.newFiles || {};
-    const deletedFiles = result.deletedFiles || [];
-
-    // Reconcile duplicate files (e.g., AI creates "hero-section.tsx" when "HeroSection.tsx" exists)
-    const parentFiles = context.previousFiles || {};
-    const reconciledModified: Record<string, string> = { ...modifiedFiles };
-    const reconciledNew: Record<string, string> = {};
+    decisionResult: DecisionResult,
+    existingFiles: string[],
+    userPrompt: string
+  ): any {
+    const validated = { ...result };
+    const promptLower = userPrompt.toLowerCase();
     
-    const normalizePath = (p: string): string => {
-      const parts = p.split('/');
-      const file = parts.pop() || '';
-      const name = file.replace(/\.[^.]+$/, '');
-      const ext = file.substring(file.lastIndexOf('.'));
-      const normalized = name.toLowerCase().replace(/[-_]/g, '');
-      return [...parts.map(p => p.toLowerCase()), normalized + ext.toLowerCase()].join('/');
-    };
-
-    const normalizedToActual = new Map<string, string>();
-    for (const existingPath of Object.keys(parentFiles)) {
-      const normalized = normalizePath(existingPath);
-      normalizedToActual.set(normalized, existingPath);
-    }
-
-    for (const [newPath, content] of Object.entries(newFiles)) {
-      // If file already exists with exact path, treat as modification
-      if (parentFiles[newPath]) {
-        console.log(`✓ Reconciling: "${newPath}" already exists, treating as modification`);
-        reconciledModified[newPath] = content as string;
-        continue;
-      }
-
-      // Check for aliases (different naming but same file)
-      const norm = normalizePath(newPath);
-      const candidate = normalizedToActual.get(norm);
-
-      if (candidate && candidate !== newPath) {
-        console.log(`✓ Reconciling: "${newPath}" → "${candidate}" (alias detected)`);
-        reconciledModified[candidate] = content as string;
-      } else {
-        // Truly new file
-        reconciledNew[newPath] = content as string;
-      }
-    }
-
-    modifiedFiles = reconciledModified;
-    newFiles = reconciledNew;
-
-    // ✨ NEW: Validate and auto-fix all generated files
-    const allGeneratedFiles = { ...modifiedFiles, ...newFiles };
-    const validatedModified: Record<string, string> = {};
-    const validatedNew: Record<string, string> = {};
-    let totalFixedImports = 0;
-
-    console.log(`🔍 Validating ${Object.keys(allGeneratedFiles).length} generated files...`);
-
-    // 🚨 CRITICAL: Check for inline component anti-pattern (CREATE_AND_LINK mode only)
-    if (decisionResult.mode === 'link_mode') {
-      // Check if component was inlined in parent file instead of created separately
-      for (const [filepath, code] of Object.entries(modifiedFiles)) {
-        const codeStr = code as string;
-        
-        // Detect component definitions in modified files (bad for link mode)
-        const componentMatch = codeStr.match(/function\s+([A-Z][a-zA-Z]*)\s*\(/);
-        const isAppPage = filepath.includes('app/page.tsx') || filepath.includes('app\\page.tsx');
-        
-        if (componentMatch && isAppPage && Object.keys(newFiles).length === 0) {
-          console.warn('⚠️  AI inlined component instead of creating separate file!');
-          console.warn('   Auto-extracting component to separate file...');
-          
-          const componentName = componentMatch[1];
-          
-          // Extract the component code
-          const componentExtracted = this.extractInlineComponent(codeStr, componentName);
-          
-          if (componentExtracted) {
-            console.log(`✓ Extracted ${componentName} to components/${this.toKebabCase(componentName)}.tsx`);
-            
-            // Add to newFiles
-            newFiles[`components/${this.toKebabCase(componentName)}.tsx`] = componentExtracted.componentCode;
-            
-            // Update modifiedFiles with cleaned code (component removed + import added)
-            modifiedFiles[filepath] = componentExtracted.cleanedParentCode;
-            
-            console.log(`✓ Auto-corrected inline component issue`);
-          } else {
-            console.error('❌ Failed to extract inline component automatically');
-            console.error('   Please check the AI generation logic');
+    if (decisionResult.intent === 'CREATE' || decisionResult.intent === 'CREATE_AND_LINK') {
+      if (validated.modifiedFiles && Object.keys(validated.modifiedFiles).length > 0) {
+        const homePage = validated.modifiedFiles['app/page.tsx'];
+        if (homePage && !promptLower.includes('homepage') && !promptLower.includes('main page') && !promptLower.includes('landing page')) {
+          const originalHomePage = existingFiles.includes('app/page.tsx');
+          if (originalHomePage) {
+            console.log('⚠️ Post-processing: Removing app/page.tsx modification (not explicitly requested)');
+            delete validated.modifiedFiles['app/page.tsx'];
           }
         }
       }
+      
+      if (!validated.newFiles || Object.keys(validated.newFiles).length === 0) {
+        console.log('⚠️ Warning: CREATE intent but no new files generated');
+      }
     }
-
-    for (const [filepath, code] of Object.entries(modifiedFiles)) {
-      const validation = CodeValidator.validateAndFix(
-        code as string,
-        filepath,
-        { ...parentFiles, ...allGeneratedFiles }
-      );
-
-      if (validation.addedImports.length > 0) {
-        console.log(`✓ Auto-fixed ${filepath}:`);
-        validation.addedImports.forEach((imp) => console.log(`  + ${imp}`));
-        totalFixedImports += validation.addedImports.length;
+    
+    if (decisionResult.intent === 'MODIFY' || decisionResult.intent === 'FIX_ERROR') {
+      if (validated.newFiles && Object.keys(validated.newFiles).length > 0) {
+        console.log('⚠️ Post-processing: Clearing newFiles for MODIFY/FIX_ERROR intent');
+        validated.newFiles = {};
       }
-
-      if (validation.warnings.length > 0) {
-        validation.warnings.forEach((warning) => console.log(`  ⚠️  ${warning}`));
-      }
-
-      if (validation.errors.length > 0) {
-        validation.errors.forEach((error) => console.log(`  ❌ ${error}`));
-      }
-
-      validatedModified[filepath] = validation.fixedCode;
     }
-
-    for (const [filepath, code] of Object.entries(newFiles)) {
-      const validation = CodeValidator.validateAndFix(
-        code as string,
-        filepath,
-        { ...parentFiles, ...allGeneratedFiles }
-      );
-
-      if (validation.addedImports.length > 0) {
-        console.log(`✓ Auto-fixed ${filepath}:`);
-        validation.addedImports.forEach((imp) => console.log(`  + ${imp}`));
-        totalFixedImports += validation.addedImports.length;
-      }
-
-      if (validation.warnings.length > 0) {
-        validation.warnings.forEach((warning) => console.log(`  ⚠️  ${warning}`));
-      }
-
-      if (validation.errors.length > 0) {
-        validation.errors.forEach((error) => console.log(`  ❌ ${error}`));
-      }
-
-      validatedNew[filepath] = validation.fixedCode;
-    }
-
-    if (totalFixedImports > 0) {
-      console.log(`✅ Auto-fixed ${totalFixedImports} missing imports across all files`);
-    }
-
-    return {
-      modifiedFiles: validatedModified,
-      newFiles: validatedNew,
-      deletedFiles,
-      changes: result.changes || [],
-      description: result.description || 'Generated code',
-    };
+    
+    return validated;
   }
 
-  /**
-   * Detect project type from context
-   */
   private static detectProjectType(context: SmartGenerationContext): string {
     const files = Object.keys(context.previousFiles || {});
     
-    if (files.some(f => f.includes('next.config'))) return 'Next.js';
-    if (files.some(f => f.includes('vite.config'))) return 'React (Vite)';
-    if (files.some(f => f.includes('vue.config'))) return 'Vue.js';
-    if (files.some(f => f.includes('angular.json'))) return 'Angular';
-    
-    return 'Next.js'; // Default
-  }
-
-  /**
-   * Detect framework from context
-   */
-  private static detectFramework(context: SmartGenerationContext): string {
-    const files = Object.keys(context.previousFiles || {});
-    
-    if (files.some(f => f.startsWith('app/') && f.endsWith('/page.tsx'))) {
+    if (files.some(f => f.includes('app/') && f.endsWith('page.tsx'))) {
       return 'Next.js App Router';
     }
-    if (files.some(f => f.startsWith('pages/') && f.endsWith('.tsx'))) {
+    if (files.some(f => f.includes('pages/') && f.endsWith('.tsx'))) {
       return 'Next.js Pages Router';
     }
+    if (files.some(f => f.includes('src/App.tsx') || f.includes('src/main.tsx'))) {
+      return 'React with Vite';
+    }
     
-    return 'Next.js App Router'; // Default
+    return 'Next.js App Router';
   }
 
-  /**
-   * Analyze project patterns
-   */
+  private static detectFramework(context: SmartGenerationContext): string {
+    const packageJson = context.previousFiles?.['package.json'];
+    if (packageJson) {
+      try {
+        const pkg = JSON.parse(packageJson);
+        if (pkg.dependencies?.next) return 'Next.js';
+        if (pkg.dependencies?.react) return 'React';
+        if (pkg.dependencies?.vue) return 'Vue';
+      } catch (e) {}
+    }
+    return 'Next.js';
+  }
+
   private static analyzeProjectPatterns(context: SmartGenerationContext): {
     uiLibrary: string;
     styling: string;
@@ -543,128 +381,48 @@ REACT & UI BEST PRACTICES (CRITICAL)
     importPatterns: string[];
   } {
     const files = context.previousFiles || {};
-    const allContent = Object.values(files).join('\n');
-
+    const fileContents = Object.values(files).join('\n');
+    
+    let uiLibrary = 'None detected';
+    if (fileContents.includes('@/components/ui/')) uiLibrary = 'shadcn/ui';
+    else if (fileContents.includes('@chakra-ui')) uiLibrary = 'Chakra UI';
+    else if (fileContents.includes('@mui/material')) uiLibrary = 'Material UI';
+    
+    let styling = 'Tailwind CSS';
+    if (fileContents.includes('styled-components')) styling = 'styled-components';
+    else if (fileContents.includes('@emotion')) styling = 'Emotion';
+    
+    let formLibrary = 'None detected';
+    if (fileContents.includes('react-hook-form')) formLibrary = 'react-hook-form';
+    else if (fileContents.includes('formik')) formLibrary = 'Formik';
+    
+    let stateManagement = 'React useState';
+    if (fileContents.includes('zustand')) stateManagement = 'Zustand';
+    else if (fileContents.includes('redux')) stateManagement = 'Redux';
+    else if (fileContents.includes('jotai')) stateManagement = 'Jotai';
+    
+    const componentFiles = Object.keys(files).filter(f => f.includes('components/'));
+    const commonComponents = componentFiles
+      .map(f => f.split('/').pop()?.replace(/\.(tsx|ts)$/, ''))
+      .filter(Boolean) as string[];
+    
+    const importPatterns: string[] = [];
+    const importRegex = /^import .+ from ['"](.+)['"];?$/gm;
+    let match;
+    const sampleFile = Object.values(files)[0] || '';
+    while ((match = importRegex.exec(sampleFile)) !== null) {
+      if (importPatterns.length < 5) {
+        importPatterns.push(match[0]);
+      }
+    }
+    
     return {
-      uiLibrary: allContent.includes('shadcn') || allContent.includes('@/components/ui') ? 'shadcn/ui' : 'none',
-      styling: allContent.includes('tailwindcss') || allContent.includes('className=') ? 'Tailwind CSS' : 'CSS',
-      formLibrary: allContent.includes('react-hook-form') ? 'react-hook-form' : 'none',
-      stateManagement: allContent.includes('zustand') ? 'Zustand' : 'React hooks',
-      commonComponents: Object.keys(files).filter(f => f.includes('components/')).slice(0, 10),
-      importPatterns: this.extractImportPatterns(files),
+      uiLibrary,
+      styling,
+      formLibrary,
+      stateManagement,
+      commonComponents,
+      importPatterns,
     };
-  }
-
-  /**
-   * Extract common import patterns
-   */
-  private static extractImportPatterns(files: Record<string, string>): string[] {
-    const imports = new Set<string>();
-    const importRegex = /import\s+.*\s+from\s+['"]([^'"]+)['"]/g;
-    
-    for (const content of Object.values(files)) {
-      if (typeof content !== 'string') continue;
-      let match;
-      while ((match = importRegex.exec(content)) !== null) {
-        if (match[1].startsWith('@/') || match[1].startsWith('./')) {
-          imports.add(match[1]);
-        }
-      }
-    }
-    
-    return Array.from(imports).slice(0, 10);
-  }
-
-  /**
-   * Extract inline component from parent file and create separate file
-   */
-  private static extractInlineComponent(
-    code: string,
-    componentName: string
-  ): { componentCode: string; cleanedParentCode: string } | null {
-    try {
-      // Find the component function definition
-      const componentRegex = new RegExp(
-        `function\\s+${componentName}\\s*\\([^)]*\\)[^{]*\\{`,
-        'g'
-      );
-      
-      const match = componentRegex.exec(code);
-      if (!match) return null;
-      
-      // Find the start of the component
-      const startIndex = match.index;
-      
-      // Find the matching closing brace
-      let braceCount = 0;
-      let inComponent = false;
-      let endIndex = startIndex;
-      
-      for (let i = startIndex; i < code.length; i++) {
-        if (code[i] === '{') {
-          braceCount++;
-          inComponent = true;
-        } else if (code[i] === '}') {
-          braceCount--;
-          if (inComponent && braceCount === 0) {
-            endIndex = i + 1;
-            break;
-          }
-        }
-      }
-      
-      // Extract component code
-      const componentFunction = code.substring(startIndex, endIndex);
-      
-      // Create component file with proper structure
-      const componentCode = `"use client";
-
-import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-
-export ${componentFunction}
-`;
-      
-      // Remove component from parent and add import
-      const beforeComponent = code.substring(0, startIndex);
-      const afterComponent = code.substring(endIndex);
-      
-      // Find where to insert import (after existing imports)
-      const lines = beforeComponent.split('\n');
-      let importInsertIndex = 0;
-      
-      for (let i = lines.length - 1; i >= 0; i--) {
-        if (lines[i].includes('import ') || lines[i].includes('"use client"') || lines[i].includes("'use client'")) {
-          importInsertIndex = i + 1;
-          break;
-        }
-      }
-      
-      // Add import statement
-      const importStatement = `import { ${componentName} } from "@/components/${this.toKebabCase(componentName)}";`;
-      lines.splice(importInsertIndex, 0, importStatement);
-      
-      const cleanedParentCode = lines.join('\n') + afterComponent;
-      
-      return {
-        componentCode,
-        cleanedParentCode,
-      };
-    } catch (error) {
-      console.error('Error extracting component:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Convert PascalCase to kebab-case
-   */
-  private static toKebabCase(str: string): string {
-    return str
-      .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-      .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
-      .toLowerCase();
   }
 }

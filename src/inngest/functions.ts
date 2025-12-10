@@ -15,6 +15,14 @@ import { DecisionAgent } from '../services/decision-agent';
 import { PromptLoader } from '../services/prompt-loader';
 import { getSandboxTimeout } from '../config/sandbox';
 
+// Enhanced Context Management Services (Requirements: 8.1, 8.2, 8.3, 8.4)
+import { ContextManager } from '../services/context-manager';
+import { PlanningAgent } from '../services/planning-agent';
+import { ExecutionAgent } from '../services/execution-agent';
+import { ValidationAgent } from '../services/validation-agent';
+import { createStreamingEventEmitter } from '../services/streaming-event-emitter';
+import type { GenerationContext, ExecutionPlan } from '../types/context-management';
+
 // Clear prompt cache on server start to ensure fresh prompts are loaded
 PromptLoader.clearCache();
 
@@ -2231,12 +2239,13 @@ Provide a clear, concise answer. Be specific and helpful.`
         const words = prompt.trim().split(/\s+/).slice(0, 3);
         const versionName = words.map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         
-        // Create version
+        // Create version with the prompt as description (not "Generated from:")
+        const shortPrompt = prompt.length > 150 ? prompt.substring(0, 150) + '...' : prompt;
         const version = await VersionManager.createVersion({
           project_id: projectId,
           version_number: versionNumber,
           name: versionName,
-          description: `Generated from: ${prompt}`,
+          description: shortPrompt,
           files: {}, // Will be populated during generation
           command_type: commandType,
           prompt,
@@ -2721,6 +2730,20 @@ Provide a clear, concise answer. Be specific and helpful.`
           const sandbox = await ensureSandboxRunning(sandboxId);
           console.log('✅ Sandbox connected');
           
+          // Check if dev server is currently running
+          let serverWasRunning = false;
+          try {
+            const checkServer = await sandbox.process.executeCommand(
+              `curl -s -o /dev/null -w "%{http_code}" -m 5 http://localhost:${port}/ 2>/dev/null || echo "000"`,
+              undefined, {}, 10
+            );
+            const statusCode = checkServer.result?.trim();
+            serverWasRunning = !!(statusCode && (statusCode.startsWith('2') || statusCode.startsWith('3')));
+            console.log(`   Server status before changes: ${serverWasRunning ? 'RUNNING' : 'NOT RUNNING'} (status: ${statusCode})`);
+          } catch (e) {
+            console.log('   Could not check server status:', e);
+          }
+          
           // Apply validated files if any
           let filesApplied = 0;
           if (hasFilesToApply) {
@@ -2789,19 +2812,58 @@ Provide a clear, concise answer. Be specific and helpful.`
             } catch (e) { /* ignore */ }
           }
           
-          // Step 5: Start server with explicit environment
-          const startCmd = `cd ${repoPath} && HOST=0.0.0.0 PORT=${port} nohup ${startCommand} > ${repoPath}/server.log 2>&1 &`;
-          console.log(`🚀 Starting server: ${startCmd}`);
+          // Step 5: Start server using Daytona session (same as initial clone)
+          // This is the CORRECT way to start background processes in Daytona
+          const sessionId = `dev-server-restart-${Date.now()}`;
+          const fullCommand = `cd ${repoPath} && HOST=0.0.0.0 PORT=${port} ${startCommand}`;
+          
+          console.log(`🚀 Creating session: ${sessionId}`);
+          console.log(`🚀 Starting server: ${fullCommand}`);
+          
           try {
-            const startResult = await sandbox.process.executeCommand(startCmd, undefined, {}, 15);
-            console.log(`   Start result: ${startResult.result || 'started'}`);
+            // Create a new session for the dev server
+            await sandbox.process.createSession(sessionId);
+            
+            // Start server in background using session
+            const command = await sandbox.process.executeSessionCommand(sessionId, {
+              command: fullCommand,
+              runAsync: true, // Don't wait for completion - run in background
+            });
+            
+            console.log(`✅ Server started with command ID: ${(command as any).cmdId || 'unknown'}`);
           } catch (e) {
             console.log(`   Start error: ${e}`);
+            // Fallback to nohup if session fails
+            console.log('⚠️ Session failed, trying nohup fallback...');
+            try {
+              const fallbackCmd = `cd ${repoPath} && HOST=0.0.0.0 PORT=${port} nohup ${startCommand} > ${repoPath}/server.log 2>&1 &`;
+              await sandbox.process.executeCommand(fallbackCmd, undefined, {}, 15);
+            } catch (e2) {
+              console.log(`   Fallback also failed: ${e2}`);
+            }
           }
           
           // Wait for server to start (Next.js needs time to compile)
-          console.log('⏳ Waiting 15 seconds for server to start...');
-          await new Promise(resolve => setTimeout(resolve, 15000));
+          console.log('⏳ Waiting 20 seconds for server to start...');
+          await new Promise(resolve => setTimeout(resolve, 20000));
+          
+          // Check if process is running
+          try {
+            const checkProcess = await sandbox.process.executeCommand(
+              `ps aux | grep -E "(next|vite|node)" | grep -v grep | head -5 || echo "no_process"`,
+              undefined, {}, 10
+            );
+            console.log('📋 Running processes:', checkProcess.result?.substring(0, 300));
+            
+            // Also check if port is listening
+            const portCheck = await sandbox.process.executeCommand(
+              `netstat -tuln 2>/dev/null | grep :${port} || ss -tuln 2>/dev/null | grep :${port} || echo "port_not_listening"`,
+              undefined, {}, 10
+            );
+            console.log(`📋 Port ${port} status:`, portCheck.result?.trim());
+          } catch (e) {
+            console.log('   Could not check process status:', e);
+          }
           
           // Verify server is running
           let serverReady = false;
@@ -2888,6 +2950,49 @@ Provide a clear, concise answer. Be specific and helpful.`
         streamingService.closeProject(projectId);
       });
       
+      // Step 11.5: Save assistant response message with summary of changes (like v0/Loveable)
+      await step.run("save-assistant-response", async () => {
+        try {
+          const { MessageService } = await import('../modules/messages/service');
+          
+          if (!('state' in apiResult) || !apiResult.state?.data) {
+            return;
+          }
+          
+          // Build a nice summary like v0/Loveable does
+          const filesList = Object.keys(validatedFiles || {});
+          const summary = apiResult.state.data.summary || 'Changes applied successfully';
+          
+          // Build the final message content
+          const responseContent = `✅ **${summary}**
+
+**Files updated:**
+${filesList.map(f => `  • \`${f}\``).join('\n')}
+
+_Preview has been updated with ${filesList.length} file${filesList.length > 1 ? 's' : ''}._`;
+          
+          // Save the message
+          const result = await MessageService.saveResult({
+            content: responseContent,
+            role: 'assistant',
+            type: 'result',
+            project_id: projectId,
+          });
+          
+          // Link the message to the version
+          if (result?.message?.id && versionId) {
+            await supabase
+              .from('messages')
+              .update({ version_id: versionId })
+              .eq('id', result.message.id);
+          }
+          
+          console.log('💬 Saved assistant response message with change summary');
+        } catch (error) {
+          console.error('Failed to save assistant response:', error);
+        }
+      });
+      
       return {
         success: true,
         versionId,
@@ -2908,6 +3013,645 @@ Provide a clear, concise answer. Be specific and helpful.`
       // Emit error event
       await streamingService.emit(projectId, {
         type: 'error',
+        message: (error as Error).message || 'An error occurred during iteration',
+        stage: 'Iteration',
+        versionId,
+      });
+      
+      // Close streaming connection
+      streamingService.closeProject(projectId);
+      
+      throw error;
+    }
+  }
+);
+
+/**
+ * Enhanced iterateAPI function using the new context management system
+ * 
+ * This function integrates:
+ * - ContextManager for hybrid memory system (Requirements: 1.1, 1.2, 1.3, 1.4, 1.5)
+ * - PlanningAgent for intent analysis and task breakdown (Requirements: 8.1, 8.2)
+ * - ExecutionAgent for code generation with retry logic (Requirements: 8.3, 4.1, 4.2, 4.3)
+ * - ValidationAgent for code validation and auto-fixes (Requirements: 8.4, 12.1, 12.2)
+ * 
+ * @see .kiro/specs/enhanced-context-management/design.md
+ */
+export const iterateAPIEnhanced = inngest.createFunction(
+  { id: "iterate-api-enhanced" },
+  { event: "api/iterate-enhanced" },
+  async ({ event, step }) => {
+    const { projectId, messageId, prompt, commandType, shouldCreateNewVersion, parentVersionId, conversationHistory } = event.data;
+    
+    let versionId: string | undefined;
+    
+    // Initialize services
+    const contextManager = new ContextManager();
+    const planningAgent = new PlanningAgent();
+    const executionAgent = new ExecutionAgent();
+    const validationAgent = new ValidationAgent();
+    
+    try {
+      // Step 1: Check project type (GitHub cloned vs new)
+      const projectInfo = await step.run("check-project-type", async () => {
+        const { data: project } = await supabase
+          .from('projects')
+          .select('github_repo_id, repo_url, metadata')
+          .eq('id', projectId)
+          .single();
+        
+        const isGitHubProject = !!(project?.github_repo_id || project?.repo_url);
+        const repoFullName = (project?.metadata as any)?.repoFullName || 'Unknown';
+        
+        console.log(`📋 Project Type: ${isGitHubProject ? 'GitHub Cloned' : 'New Generated'}`);
+        if (isGitHubProject) {
+          console.log(`   Repo: ${repoFullName}`);
+        }
+        
+        return { isGitHubProject, repoFullName, metadata: project?.metadata };
+      });
+
+      // Step 2: Build context using ContextManager (Requirements: 1.1, 1.2, 1.3, 1.4, 1.5)
+      const context = await step.run("build-context", async () => {
+        // Create streaming event emitter for progress updates
+        const eventEmitter = createStreamingEventEmitter(projectId);
+        await eventEmitter.emitPhaseStart('planning');
+        
+        // Extract error file name if present in prompt
+        const errorFileMatch = prompt.match(/SignupDialog\.tsx|([A-Z]\w+\.tsx)/);
+        const errorFileName = errorFileMatch ? errorFileMatch[0] : null;
+        
+        if (errorFileName) {
+          console.log(`🐛 Error detected in file: ${errorFileName}`);
+        }
+        
+        const generationContext = await contextManager.buildContext(
+          projectId,
+          prompt,
+          {
+            messageLimit: 20, // Requirements: 1.2 - Include last 20 conversation messages
+            maxFiles: 10,
+            includeTests: false,
+            isGitHubProject: projectInfo.isGitHubProject,
+            errorFileName,
+          }
+        );
+        
+        console.log(`📊 Context built:`);
+        console.log(`   - Conversation history: ${generationContext.workingMemory.conversationHistory.length} messages`);
+        console.log(`   - Relevant files: ${generationContext.relevantFiles.length}`);
+        console.log(`   - File tree: ${generationContext.fileTree.length} files`);
+        console.log(`   - Project patterns: ${JSON.stringify(generationContext.projectPatterns)}`);
+        
+        // Return lightweight metadata to avoid Inngest's 4MB limit
+        return {
+          relevantFilePaths: generationContext.relevantFiles.map(f => f.path),
+          fileTreeCount: generationContext.fileTree.length,
+          projectPatterns: generationContext.projectPatterns,
+          conversationHistoryCount: generationContext.workingMemory.conversationHistory.length,
+        };
+      });
+
+      // Step 3: Analyze intent using PlanningAgent (Requirements: 8.1, 8.2)
+      const plan = await step.run("analyze-intent", async () => {
+        // Rebuild full context for planning (avoid passing large data between steps)
+        const fullContext = await contextManager.buildContext(projectId, prompt, {
+          messageLimit: 20,
+          maxFiles: 10,
+          includeTests: false,
+          isGitHubProject: projectInfo.isGitHubProject,
+        });
+        
+        const executionPlan = await planningAgent.analyze(prompt, fullContext);
+        
+        console.log(`🎯 Intent Analysis:`);
+        console.log(`   - Intent: ${executionPlan.intent}`);
+        console.log(`   - Confidence: ${executionPlan.confidence}%`);
+        console.log(`   - Tasks: ${executionPlan.tasks.length}`);
+        console.log(`   - File targets: ${executionPlan.fileTargets.length}`);
+        console.log(`   - Critical reminders: ${executionPlan.criticalReminders.length}`);
+        
+        // Emit planning complete
+        await streamingService.emit(projectId, {
+          type: 'step:complete',
+          step: 'Planning',
+          message: `Intent: ${executionPlan.intent} (${executionPlan.confidence}% confidence)`,
+        });
+        
+        return executionPlan;
+      });
+
+      // Step 4: Handle QUESTION intent - no code generation needed
+      if (plan.intent === 'QUESTION') {
+        console.log('📝 Question detected - answering without code changes');
+        
+        const answer = await step.run("answer-question", async () => {
+          await streamingService.emit(projectId, {
+            type: 'step:start',
+            step: 'Answering',
+            message: 'Analyzing your question...',
+          });
+          
+          // Get context for better answers
+          const latestVersion = await VersionManager.getLatestVersion(projectId);
+          const projectFiles = latestVersion?.files || {};
+          const fileList = Object.keys(projectFiles).slice(0, 20).join(', ');
+          
+          // Generate answer using AI
+          const completion = await openaiClient.chat.completions.create({
+            model: "gpt-4o",
+            messages: [
+              {
+                role: "system",
+                content: `You are a helpful technical assistant. Answer the user's question about their codebase.
+              
+Project context:
+- Total files: ${Object.keys(projectFiles).length}
+- Some files: ${fileList}
+- Project patterns: ${JSON.stringify(context.projectPatterns)}
+
+Provide a clear, concise answer. Be specific and helpful.`
+              },
+              {
+                role: "user",
+                content: prompt
+              }
+            ],
+            stream: true,
+          });
+          
+          // Stream the answer
+          let answerText = '';
+          for await (const chunk of completion) {
+            const content = chunk.choices[0]?.delta?.content || '';
+            if (content) {
+              answerText += content;
+            }
+          }
+          
+          // Save answer as message
+          const { MessageService } = await import('../modules/messages/service');
+          await MessageService.saveResult({
+            content: answerText,
+            role: 'assistant',
+            type: 'text',
+            project_id: projectId,
+          });
+          
+          return answerText;
+        });
+        
+        // Emit completion
+        await streamingService.emit(projectId, {
+          type: 'complete',
+          summary: 'Question answered',
+          totalFiles: 0,
+        });
+        
+        streamingService.closeProject(projectId);
+        
+        return {
+          success: true,
+          isQuestion: true,
+          answer,
+          projectId,
+        };
+      }
+
+      // Step 5: Create version record (only for code changes)
+      versionId = await step.run("create-version", async () => {
+        // Get parent version
+        const parentVersion = parentVersionId 
+          ? await VersionManager.getVersion(parentVersionId)
+          : await VersionManager.getLatestVersion(projectId);
+        
+        // Get next version number
+        const versionNumber = await VersionManager.getNextVersionNumber(projectId);
+        
+        // Generate version name from prompt (first 2-3 words)
+        const words = prompt.trim().split(/\s+/).slice(0, 3);
+        const versionName = words.map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        
+        // Create version with the prompt as description (not "Generated from:")
+        const shortPrompt = prompt.length > 150 ? prompt.substring(0, 150) + '...' : prompt;
+        const version = await VersionManager.createVersion({
+          project_id: projectId,
+          version_number: versionNumber,
+          name: versionName,
+          description: shortPrompt,
+          files: {}, // Will be populated during generation
+          command_type: commandType,
+          prompt,
+          parent_version_id: parentVersion?.id,
+          status: 'generating',
+          metadata: {},
+        });
+        
+        // Emit version created event
+        await streamingService.emit(projectId, {
+          type: 'version:created',
+          versionId: version.id,
+          versionNumber,
+          versionName,
+        });
+        
+        return version.id;
+      });
+
+      // Step 6: Execute plan using ExecutionAgent (Requirements: 8.3, 4.1, 4.2, 4.3)
+      const executionResult = await step.run("execute-plan", async () => {
+        await streamingService.emit(projectId, {
+          type: 'step:start',
+          step: 'Generating',
+          message: 'Generating code based on plan...',
+          versionId,
+        });
+        
+        // Rebuild full context for execution
+        const fullContext = await contextManager.buildContext(projectId, prompt, {
+          messageLimit: 20,
+          maxFiles: 10,
+          includeTests: false,
+          isGitHubProject: projectInfo.isGitHubProject,
+        });
+        
+        // Add isGitHubProject flag to context for strict mode
+        const contextWithGitHub: GenerationContext = {
+          ...fullContext,
+          isGitHubProject: projectInfo.isGitHubProject,
+        };
+        
+        // Execute the plan
+        const result = await executionAgent.execute(plan, contextWithGitHub);
+        
+        console.log(`📝 Execution Result:`);
+        console.log(`   - Modified files: ${Object.keys(result.modifiedFiles).length}`);
+        console.log(`   - New files: ${Object.keys(result.newFiles).length}`);
+        console.log(`   - Deleted files: ${result.deletedFiles.length}`);
+        console.log(`   - Changes: ${result.changes.length}`);
+        
+        // Emit file events for each generated file
+        const allFiles = { ...result.modifiedFiles, ...result.newFiles };
+        for (const [filePath, content] of Object.entries(allFiles)) {
+          await streamingService.emit(projectId, {
+            type: 'file:complete',
+            filename: filePath.split('/').pop() || filePath,
+            content: content as string,
+            path: filePath,
+            versionId,
+          });
+        }
+        
+        await streamingService.emit(projectId, {
+          type: 'step:complete',
+          step: 'Generating',
+          message: `Generated ${Object.keys(allFiles).length} file(s)`,
+          versionId,
+        });
+        
+        return result;
+      });
+
+      // Step 7: Validate generated code using ValidationAgent (Requirements: 8.4, 12.1, 12.2)
+      const validatedFiles = await step.run("validate-code", async () => {
+        await streamingService.emit(projectId, {
+          type: 'step:start',
+          step: 'Validating',
+          message: 'Validating generated code...',
+          versionId,
+        });
+        
+        const allFiles = { ...executionResult.modifiedFiles, ...executionResult.newFiles };
+        const validatedResult: Record<string, string> = {};
+        const fixes: string[] = [];
+        
+        // Determine if this is a Next.js App Router project
+        const latestVersion = await VersionManager.getLatestVersion(projectId);
+        const existingFiles = Object.keys(latestVersion?.files || {});
+        const isNextJsAppRouter = existingFiles.some(f => 
+          f.startsWith('app/') && (f.endsWith('/page.tsx') || f.endsWith('/layout.tsx'))
+        );
+        
+        for (const [filePath, content] of Object.entries(allFiles)) {
+          if (typeof content !== 'string') continue;
+          
+          const validationResult = await validationAgent.validate(
+            content,
+            filePath,
+            {
+              projectPatterns: context.projectPatterns,
+              existingImports: [],
+              isNextJsAppRouter,
+              filePath,
+              projectFiles: existingFiles,
+            }
+          );
+          
+          validatedResult[filePath] = validationResult.fixedCode;
+          
+          // Track fixes applied
+          if (validationResult.fixes.length > 0) {
+            for (const fix of validationResult.fixes) {
+              fixes.push(`${filePath}: ${fix.description}`);
+              
+              // Emit info event for each fix
+              await streamingService.emit(projectId, {
+                type: 'info',
+                message: `🔧 Auto-fixed: ${filePath} - ${fix.description}`,
+                versionId,
+              });
+            }
+          }
+        }
+        
+        console.log(`✅ Validation complete:`);
+        console.log(`   - Files validated: ${Object.keys(validatedResult).length}`);
+        console.log(`   - Fixes applied: ${fixes.length}`);
+        
+        await streamingService.emit(projectId, {
+          type: 'step:complete',
+          step: 'Validating',
+          message: `Validated ${Object.keys(validatedResult).length} file(s), applied ${fixes.length} fix(es)`,
+          versionId,
+        });
+        
+        return validatedResult;
+      });
+
+      // Step 8: Update version with validated files (merged with parent)
+      await step.run("update-version", async () => {
+        // Get parent files
+        const parentVersion = parentVersionId 
+          ? await VersionManager.getVersion(parentVersionId)
+          : await VersionManager.getLatestVersion(projectId);
+        const parentFiles = parentVersion?.files || {};
+        
+        // Merge parent files with validated files
+        const allFiles = {
+          ...parentFiles,
+          ...validatedFiles,
+        };
+        
+        // Handle deleted files
+        for (const deletedFile of executionResult.deletedFiles) {
+          delete allFiles[deletedFile];
+        }
+        
+        console.log(`📦 Version file count: ${Object.keys(parentFiles).length} parent + ${Object.keys(validatedFiles).length} changed = ${Object.keys(allFiles).length} total`);
+        
+        await VersionManager.updateVersion(versionId!, {
+          files: allFiles,
+          status: 'complete',
+          metadata: {
+            requirements: [],
+            summary: executionResult.description,
+            intent: plan.intent,
+            confidence: plan.confidence,
+          },
+        });
+      });
+
+      // Step 9: Apply validated files to sandbox
+      await step.run("apply-to-sandbox", async () => {
+        await streamingService.emit(projectId, {
+          type: 'step:start',
+          step: 'Applying',
+          message: 'Applying changes to sandbox...',
+          versionId,
+        });
+        
+        const hasFilesToApply = validatedFiles && Object.keys(validatedFiles).length > 0;
+        
+        if (!hasFilesToApply) {
+          console.log('⏭️ No files to apply to sandbox');
+          return { skipped: true, reason: 'No files to apply' };
+        }
+        
+        try {
+          const { data: project } = await supabase
+            .from('projects')
+            .select('metadata, sandbox_url')
+            .eq('id', projectId)
+            .single();
+          
+          const metadata = project?.metadata as any || {};
+          const sandboxId = metadata?.sandboxId;
+          const sandboxUrl = project?.sandbox_url;
+          
+          if (!sandboxId) {
+            console.log('⏭️ No sandbox ID in project metadata - cannot update sandbox');
+            return { skipped: true, reason: 'No sandboxId in metadata' };
+          }
+          
+          const repoPath = metadata.repoPath || 'workspace/repo';
+          const port = metadata.port || 3000;
+          const packageManager = metadata.packageManager || 'npm';
+          const startCommand = metadata.startCommand || (
+            packageManager === 'pnpm' ? 'pnpm run dev' :
+            packageManager === 'yarn' ? 'yarn dev' : 'npm run dev'
+          );
+          
+          // Get sandbox
+          const sandbox = await ensureSandboxRunning(sandboxId);
+          
+          // Apply validated files
+          let filesApplied = 0;
+          for (const [filePath, content] of Object.entries(validatedFiles)) {
+            if (typeof content === 'string') {
+              const fullPath = `${repoPath}/${filePath}`;
+              await sandbox.fs.uploadFile(Buffer.from(content, 'utf-8'), fullPath);
+              filesApplied++;
+            }
+          }
+          
+          console.log(`✅ Applied ${filesApplied} files to sandbox`);
+          
+          // Emit server restarting event
+          await streamingService.emit(projectId, {
+            type: 'server:restarting',
+            message: '🔄 Restarting server to apply changes...',
+            versionId,
+          });
+          
+          // Kill existing processes and restart server
+          try {
+            await sandbox.process.executeCommand(
+              `fuser -k ${port}/tcp 2>/dev/null || lsof -ti:${port} | xargs -r kill -9 2>/dev/null || true`,
+              repoPath, {}, 15
+            );
+          } catch (e) { /* ignore */ }
+          
+          // Wait for processes to die
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+          // Start server
+          const sessionId = `dev-server-restart-${Date.now()}`;
+          const fullCommand = `cd ${repoPath} && HOST=0.0.0.0 PORT=${port} ${startCommand}`;
+          
+          try {
+            await sandbox.process.createSession(sessionId);
+            await sandbox.process.executeSessionCommand(sessionId, {
+              command: fullCommand,
+              runAsync: true,
+            });
+          } catch (e) {
+            console.log(`   Start error: ${e}`);
+          }
+          
+          // Wait for server to start
+          await new Promise(resolve => setTimeout(resolve, 15000));
+          
+          // Emit server ready event
+          await streamingService.emit(projectId, {
+            type: 'server:ready',
+            message: '✅ Server ready! Preview updated.',
+            previewUrl: sandboxUrl || undefined,
+            versionId,
+          });
+          
+          await streamingService.emit(projectId, {
+            type: 'step:complete',
+            step: 'Applying',
+            message: `Applied ${filesApplied} file(s) to sandbox`,
+            versionId,
+          });
+          
+          return { success: true, filesApplied };
+        } catch (error) {
+          console.error('Failed to apply files to sandbox:', error);
+          return { success: false, error: (error as Error).message };
+        }
+      });
+
+      // Step 10: Update message with version_id
+      await step.run("link-message-to-version", async () => {
+        await supabase
+          .from('messages')
+          .update({ version_id: versionId })
+          .eq('id', messageId);
+      });
+
+      // Step 11: Emit completion event
+      await step.run("emit-complete", async () => {
+        const filesList = Object.keys(validatedFiles || {});
+        
+        await streamingService.emit(projectId, {
+          type: 'complete',
+          summary: executionResult.description || 'Changes applied successfully!',
+          totalFiles: filesList.length,
+          versionId,
+        });
+        
+        // Close streaming connection
+        streamingService.closeProject(projectId);
+      });
+
+      // Step 11.5: Save assistant response message with summary of changes (like v0/Loveable)
+      await step.run("save-assistant-response", async () => {
+        try {
+          const { MessageService } = await import('../modules/messages/service');
+          
+          // Build a nice summary like v0/Loveable does
+          const filesList = Object.keys(validatedFiles || {});
+          const modifiedCount = Object.keys(executionResult.modifiedFiles || {}).length;
+          const newCount = Object.keys(executionResult.newFiles || {}).length;
+          const deletedCount = (executionResult.deletedFiles || []).length;
+          
+          // Build change summary
+          const changeSummary: string[] = [];
+          
+          if (newCount > 0) {
+            const newFiles = Object.keys(executionResult.newFiles || {});
+            changeSummary.push(`**Created ${newCount} new file${newCount > 1 ? 's' : ''}:**`);
+            newFiles.forEach(f => changeSummary.push(`  • \`${f}\``));
+          }
+          
+          if (modifiedCount > 0) {
+            const modifiedFiles = Object.keys(executionResult.modifiedFiles || {});
+            changeSummary.push(`**Modified ${modifiedCount} file${modifiedCount > 1 ? 's' : ''}:**`);
+            modifiedFiles.forEach(f => changeSummary.push(`  • \`${f}\``));
+          }
+          
+          if (deletedCount > 0) {
+            changeSummary.push(`**Deleted ${deletedCount} file${deletedCount > 1 ? 's' : ''}:**`);
+            executionResult.deletedFiles.forEach((f: string) => changeSummary.push(`  • \`${f}\``));
+          }
+          
+          // Add change descriptions if available
+          if (executionResult.changes && executionResult.changes.length > 0) {
+            changeSummary.push('');
+            changeSummary.push('**Changes made:**');
+            executionResult.changes.forEach((change: { file: string; description: string }) => {
+              changeSummary.push(`  • ${change.description}`);
+            });
+          }
+          
+          // Build the final message content
+          const description = executionResult.description || 'Changes applied successfully';
+          const responseContent = `✅ **${description}**
+
+${changeSummary.join('\n')}
+
+${filesList.length > 0 ? `\n_Preview has been updated with ${filesList.length} file${filesList.length > 1 ? 's' : ''}._` : ''}`;
+          
+          // Save the message
+          const result = await MessageService.saveResult({
+            content: responseContent,
+            role: 'assistant',
+            type: 'result',
+            project_id: projectId,
+          });
+          
+          // Link the message to the version
+          if (result?.message?.id && versionId) {
+            await supabase
+              .from('messages')
+              .update({ version_id: versionId })
+              .eq('id', result.message.id);
+          }
+          
+          console.log('💬 Saved assistant response message with change summary');
+        } catch (error) {
+          console.error('Failed to save assistant response:', error);
+          // Don't fail the workflow if message saving fails
+        }
+      });
+
+      // Update long-term memory with detected patterns
+      await step.run("update-long-term-memory", async () => {
+        try {
+          if (context.projectPatterns) {
+            await contextManager.updateLongTermMemory(projectId, context.projectPatterns);
+            console.log('📚 Updated long-term memory with project patterns');
+          }
+        } catch (error) {
+          console.warn('Failed to update long-term memory:', error);
+        }
+      });
+
+      return {
+        success: true,
+        versionId,
+        projectId,
+        intent: plan.intent,
+        confidence: plan.confidence,
+        filesModified: Object.keys(validatedFiles || {}).length,
+      };
+    } catch (error) {
+      console.error('Error in iterateAPIEnhanced function:', error);
+      
+      // Mark version as failed
+      if (versionId) {
+        try {
+          await VersionManager.updateVersion(versionId, { status: 'failed' });
+        } catch (updateError) {
+          console.error('Failed to mark version as failed:', updateError);
+        }
+      }
+      
+      // Emit error event with recovery suggestions
+      const eventEmitter = createStreamingEventEmitter(projectId, versionId);
+      await eventEmitter.emitError({
         message: (error as Error).message || 'An error occurred during iteration',
         stage: 'Iteration',
         versionId,
@@ -3260,7 +4004,7 @@ export const cloneAndPreviewRepository = inngest.createFunction(
                     step: 'Generating Embeddings',
                     message: `Embedded ${completed}/${total} files (${progress}%)...`,
                     progress,
-                  }).catch(err => console.error('Failed to emit progress:', err));
+                  }).catch((err: unknown) => console.error('Failed to emit progress:', err));
                 }
               },
             }

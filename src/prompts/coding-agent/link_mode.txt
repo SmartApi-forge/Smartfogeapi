@@ -8,14 +8,26 @@ This is a TWO-PART task:
 1. CREATE the new component IN A SEPARATE FILE
 2. MODIFY the parent component to link it
 
-🚨 ABSOLUTE RULE #1: NEVER INLINE COMPONENTS
+🚨🚨🚨 ABSOLUTE RULE #1: NEVER INLINE COMPONENTS 🚨🚨🚨
 ❌ NEVER write the component code inline in the parent file
 ❌ NEVER put the component definition inside app/page.tsx
-✅ ALWAYS create a SEPARATE file in components/ directory
+❌ NEVER define function SignInPage() {} inside app/page.tsx
+❌ NEVER define const SignInPage = () => {} inside app/page.tsx
+✅ ALWAYS create a SEPARATE file in components/ or app/ directory
 ✅ ALWAYS use the newFiles object for the new component
 ✅ ALWAYS use the modifiedFiles object for the parent file
 
 IF YOU INLINE THE COMPONENT, YOU HAVE COMPLETELY FAILED THIS TASK.
+
+🚨 SPECIAL CASE: SIGN-IN / SIGN-UP / AUTH PAGES
+When user asks for "sign in page" or "sign up page" or "login page":
+1. Create a NEW PAGE at app/sign-in/page.tsx (or app/login/page.tsx)
+2. Use Next.js Link component to navigate to the new page
+3. DO NOT create a dialog/modal unless explicitly requested
+
+Example for "create sign in page and link to sign in button":
+- newFiles: { "app/sign-in/page.tsx": "... sign in page content ..." }
+- modifiedFiles: { "app/page.tsx": "... with Link to /sign-in ..." }
 
 CRITICAL: Many AI assistants fail at step 2. You MUST complete BOTH steps.
 
@@ -126,21 +138,21 @@ When user says: "Create X and link it to Y"
 9. ✅ Test the logic mentally: "If user clicks → state changes → component shows"
 
 ═══════════════════════════════════════════════════════════════════════════════
-📝 COMPLETE EXAMPLE (study this carefully)
+📝 COMPLETE EXAMPLE 1: Sign-In PAGE (study this carefully)
 ═══════════════════════════════════════════════════════════════════════════════
 
-User Request: "Create a sign-in form and link it to the sign-in button"
+User Request: "Create a sign-in page and link it to the sign-in button"
 
-STEP 1 - Create components/sign-in-form.tsx:
+STEP 1 - Create app/sign-in/page.tsx (NEW PAGE, NOT A COMPONENT):
 ```tsx
 "use client";
 
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-export function SignInForm({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function SignInPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   
@@ -148,15 +160,12 @@ export function SignInForm({ open, onClose }: { open: boolean; onClose: () => vo
     e.preventDefault();
     // Handle sign in logic
     console.log("Sign in:", email, password);
-    onClose();
   };
   
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Sign In</DialogTitle>
-        </DialogHeader>
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="w-full max-w-md p-8 space-y-6 bg-card rounded-lg shadow-lg">
+        <h1 className="text-2xl font-bold text-center">Sign In</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
             type="email"
@@ -170,6 +179,78 @@ export function SignInForm({ open, onClose }: { open: boolean; onClose: () => vo
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
+          <Button type="submit" className="w-full">Sign In</Button>
+        </form>
+        <p className="text-center text-sm text-muted-foreground">
+          <Link href="/" className="hover:underline">Back to home</Link>
+        </p>
+      </div>
+    </div>
+  );
+}
+```
+
+STEP 2 - Modify app/page.tsx to link to the new page:
+```tsx
+import Link from "next/link";
+
+export default function Page() {
+  return (
+    <div>
+      <nav className="flex items-center justify-between p-4">
+        <h1>My App</h1>
+        <div className="flex gap-2">
+          <Link href="/sign-in">
+            <button className="px-4 py-2 bg-blue-500 text-white rounded">
+              Sign In
+            </button>
+          </Link>
+        </div>
+      </nav>
+      
+      <main>
+        <h2>Welcome to the app</h2>
+        <p>Click sign in to get started</p>
+      </main>
+    </div>
+  );
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+📝 COMPLETE EXAMPLE 2: Sign-In DIALOG (when user explicitly asks for modal/dialog)
+═══════════════════════════════════════════════════════════════════════════════
+
+User Request: "Create a sign-in dialog and link it to the sign-in button"
+
+STEP 1 - Create components/sign-in-dialog.tsx:
+```tsx
+"use client";
+
+import { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
+export function SignInDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log("Sign in:", email, password);
+    onClose();
+  };
+  
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Sign In</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
           <Button type="submit">Sign In</Button>
         </form>
       </DialogContent>
@@ -178,41 +259,30 @@ export function SignInForm({ open, onClose }: { open: boolean; onClose: () => vo
 }
 ```
 
-STEP 2 - Modify app/page.tsx (COMPLETE FILE with changes marked):
+STEP 2 - Modify app/page.tsx (COMPLETE FILE):
 ```tsx
-"use client"; // <CHANGE> Added for state management
+"use client";
 
-import { useState } from "react"; // <CHANGE> Added for dialog state
-import { SignInForm } from "@/components/sign-in-form"; // <CHANGE> Added import
+import { useState } from "react";
+import { SignInDialog } from "@/components/sign-in-dialog";
 
 export default function Page() {
-  const [showSignIn, setShowSignIn] = useState(false); // <CHANGE> Added state
+  const [showSignIn, setShowSignIn] = useState(false);
   
   return (
     <div>
       <nav className="flex items-center justify-between p-4">
         <h1>My App</h1>
-        <div className="flex gap-2">
-          {/* EXISTING button - just add onClick */}
-          <button 
-            className="px-4 py-2 bg-blue-500 text-white rounded"
-            onClick={() => setShowSignIn(true)} // <CHANGE> Added onClick
-          >
-            Sign In
-          </button>
-        </div>
+        <button onClick={() => setShowSignIn(true)} className="px-4 py-2 bg-blue-500 text-white rounded">
+          Sign In
+        </button>
       </nav>
       
       <main>
         <h2>Welcome to the app</h2>
-        <p>Click sign in to get started</p>
       </main>
       
-      {/* <CHANGE> Added dialog component */}
-      <SignInForm 
-        open={showSignIn} 
-        onClose={() => setShowSignIn(false)} 
-      />
+      <SignInDialog open={showSignIn} onClose={() => setShowSignIn(false)} />
     </div>
   );
 }
@@ -244,32 +314,47 @@ If ANY check fails → fix it before responding!
 
 Return JSON with BOTH created AND modified files IN SEPARATE OBJECTS:
 
+FOR SIGN-IN/SIGN-UP PAGE (creates a new route):
+```json
 {
   "newFiles": {
-    "components/sign-in-form.tsx": "... complete NEW component file content ..."
+    "app/sign-in/page.tsx": "\"use client\";\n\nimport { useState } from \"react\";\nimport Link from \"next/link\";\n\nexport default function SignInPage() {\n  // ... complete page content\n}"
   },
   "modifiedFiles": {
-    "app/page.tsx": "... complete MODIFIED parent file content with import ..."
+    "app/page.tsx": "import Link from \"next/link\";\n\nexport default function Page() {\n  return (\n    <div>\n      <nav>\n        <Link href=\"/sign-in\">\n          <button>Sign In</button>\n        </Link>\n      </nav>\n    </div>\n  );\n}"
   },
   "changes": [
-    {
-      "file": "components/sign-in-form.tsx",
-      "description": "Created new sign-in form component"
-    },
-    {
-      "file": "app/page.tsx",
-      "description": "Added 'use client', imported SignInForm, added state, wired up sign-in button onClick, added SignInForm component to JSX"
-    }
+    { "file": "app/sign-in/page.tsx", "description": "Created new sign-in page" },
+    { "file": "app/page.tsx", "description": "Added Link to /sign-in route" }
   ],
-  "description": "Created sign-in form component and linked it to existing sign-in button in main page"
+  "description": "Created sign-in page and linked it to sign-in button"
 }
+```
+
+FOR DIALOG/MODAL COMPONENT:
+```json
+{
+  "newFiles": {
+    "components/sign-in-dialog.tsx": "\"use client\";\n\nexport function SignInDialog({ open, onClose }) { ... }"
+  },
+  "modifiedFiles": {
+    "app/page.tsx": "\"use client\";\nimport { useState } from \"react\";\nimport { SignInDialog } from \"@/components/sign-in-dialog\";\n\nexport default function Page() {\n  const [showSignIn, setShowSignIn] = useState(false);\n  return (\n    <>\n      <button onClick={() => setShowSignIn(true)}>Sign In</button>\n      <SignInDialog open={showSignIn} onClose={() => setShowSignIn(false)} />\n    </>\n  );\n}"
+  },
+  "changes": [
+    { "file": "components/sign-in-dialog.tsx", "description": "Created sign-in dialog component" },
+    { "file": "app/page.tsx", "description": "Added state, imported dialog, wired up button" }
+  ],
+  "description": "Created sign-in dialog and linked it to sign-in button"
+}
+```
 
 🚨 VALIDATION RULES:
-1. ✅ newFiles MUST contain the new component file
-2. ✅ modifiedFiles MUST contain the parent file with import statement
+1. ✅ newFiles MUST contain the new page/component file
+2. ✅ modifiedFiles MUST contain the parent file with Link or import
 3. ❌ NEVER put the component definition in modifiedFiles
 4. ❌ NEVER inline the component inside app/page.tsx
-5. ❌ NEVER put "function ComponentName() {}" inside app/page.tsx
+5. ❌ NEVER put "function SignInPage() {}" inside app/page.tsx
+6. ❌ NEVER put "const SignInPage = () => {}" inside app/page.tsx
 
 EXAMPLE OF WHAT **NOT** TO DO (WRONG):
 ```json
@@ -281,14 +366,14 @@ EXAMPLE OF WHAT **NOT** TO DO (WRONG):
 }
 ```
 
-EXAMPLE OF CORRECT RESPONSE:
+EXAMPLE OF CORRECT RESPONSE FOR SIGN-IN PAGE:
 ```json
 {
   "newFiles": {
-    "components/sign-in-page.tsx": "\"use client\";\n\nexport function SignInPage() { ... }"
+    "app/sign-in/page.tsx": "\"use client\";\n\nexport default function SignInPage() { ... }"
   },
   "modifiedFiles": {
-    "app/page.tsx": "import { SignInPage } from \"@/components/sign-in-page\";\n\n..."
+    "app/page.tsx": "import Link from \"next/link\";\n\n... <Link href=\"/sign-in\">..."
   }
 }
 ```

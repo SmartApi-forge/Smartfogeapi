@@ -521,6 +521,7 @@ function CodeViewer({
       const response = await fetch('/api/sandbox/file/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           sandboxId,
           projectId,
@@ -1659,6 +1660,7 @@ export function ProjectPageClient({
         const response = await fetch('/api/sandbox/file/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({
             sandboxId: currentProject?.metadata?.sandboxId,
             projectId,
@@ -1705,6 +1707,7 @@ export function ProjectPageClient({
         const response = await fetch('/api/sandbox/file/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({
             sandboxId: currentProject?.metadata?.sandboxId,
             projectId,
@@ -1792,6 +1795,7 @@ export function ProjectPageClient({
         await fetch('/api/sandbox/file/delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({
             sandboxId: currentProject.metadata.sandboxId,
             projectId,
