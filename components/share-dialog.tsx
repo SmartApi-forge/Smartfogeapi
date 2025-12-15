@@ -17,14 +17,14 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Globe, Link as LinkIcon, Copy, Check, X } from "lucide-react";
+import { Globe, Link as LinkIcon, Check } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/trpc-client";
 
 interface ShareDialogProps {
   children: React.ReactNode;
   projectId: string;
-  projectName: string;
+  projectName: string; // eslint-disable-line @typescript-eslint/no-unused-vars
   isGitHubProject?: boolean;
   repoUrl?: string;
   isProjectOwner?: boolean;
@@ -33,7 +33,6 @@ interface ShareDialogProps {
 export function ShareDialog({
   children,
   projectId,
-  projectName,
   isGitHubProject = false,
   repoUrl,
   isProjectOwner = true,
@@ -198,7 +197,7 @@ export function ShareDialog({
                 Database Setup Required
               </h3>
               <p className="text-xs text-yellow-800 dark:text-yellow-300 mb-3">
-                The invitation tables haven't been created yet. Please run:
+                The invitation tables haven&apos;t been created yet. Please run:
               </p>
               <code className="block bg-yellow-100 dark:bg-yellow-900/40 text-yellow-900 dark:text-yellow-200 px-3 py-2 rounded text-xs font-mono">
                 supabase db push
@@ -256,7 +255,7 @@ export function ShareDialog({
               )}
 
               {/* Collaborators */}
-              {collaboratorsData?.collaborators?.map((collab: any) => {
+              {collaboratorsData?.collaborators?.map((collab: { id: string; access_level: string; profiles?: { full_name?: string } }) => {
                 const profile = collab.profiles;
                 return (
                   <div key={collab.id} className="flex items-center gap-2 py-2">
@@ -339,7 +338,7 @@ export function ShareDialog({
                 api.projects.updateVisibility.useMutation().mutateAsync(
                   { projectId, visibility: value }
                 ).catch((error: Error) => {
-                  console.error('Failed to update visibility:', error);
+                  console.error('Failed to update visibility:', err);
                   setAccessLevel((previousAccessLevel as "public" | "workspace" | "personal" | "business") || 'public');
                   toast.error('Failed to update visibility');
                 });

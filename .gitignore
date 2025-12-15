@@ -188,8 +188,13 @@ SMART_*.md
 # ===================
 *.txt
 !LICENSE.txt
+!src/prompts/*.txt
 *.sql
 !supabase/migrations/*.sql
+
+# ===================
+# Internal Documentation (Not for repo)
+# ===================
 3000-3020.md
 line*.md
 streamlogs.md
@@ -200,12 +205,36 @@ nextjs-*.md
 optimization-*.md
 visual-reference-guide.md
 daytona-official-docs-guide.md
+daytona_init_guide.md
 "how does loveable or bolt or v0 work when user pro.md"
 "Decision-making prompt.txt"
 "PRD— SmartAPIForge.md"
 "Prompt.txt"
-"System Prompt.txt"
 Tools.json
+comparison.md
+inngest-removal.md
+migration-plan.md
+AUTO_EXTRACTION_FIX.md
+CODE_QUALITY_FIX.md
+COMPLETE_SYSTEM_GUIDE.md
+quick-ref.md
+
+# ===================
+# Debug/One-time Scripts (Not needed for collaborators)
+# ===================
+scripts/check-invitations.js
+scripts/check-token.js
+scripts/update-project-sandbox-id.ts
+scripts/test-template-local.ps1
+compile_*.sh
+create-test-data.sql
+FIX_VECTOR_SEARCH.sql
+
+# ===================
+# Backup Files
+# ===================
+*.backup
+*.bak
 
 # ===================
 # Compiled Files

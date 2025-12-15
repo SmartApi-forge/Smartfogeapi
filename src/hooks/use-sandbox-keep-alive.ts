@@ -46,13 +46,12 @@ export function useSandboxKeepAlive(
   // Function to send keep-alive ping
   const sendKeepAlive = async () => {
     try {
-      const response = await fetch('/api/sandbox/keep-alive', {
+      const response = await fetch(`/api/sandbox/keepalive/${projectId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ projectId }),
       });
 
       if (!response.ok) {
@@ -124,13 +123,12 @@ export function useSandboxKeepAlive(
  * Manual keep-alive function (can be called from anywhere)
  */
 export async function sendSandboxKeepAlive(projectId: string): Promise<void> {
-  const response = await fetch('/api/sandbox/keep-alive', {
+  const response = await fetch(`/api/sandbox/keepalive/${projectId}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     credentials: 'include',
-    body: JSON.stringify({ projectId }),
   });
 
   if (!response.ok) {

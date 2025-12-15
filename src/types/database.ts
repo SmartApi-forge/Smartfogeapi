@@ -324,6 +324,130 @@ export interface Database {
           },
         ]
       }
+      // V0/Lovable Architecture Tables (new)
+      conversation_messages: {
+        Row: {
+          id: string
+          project_id: string
+          turn_index: number
+          user_message: string
+          assistant_response: string | null
+          model: string
+          input_tokens: number | null
+          output_tokens: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          turn_index: number
+          user_message: string
+          assistant_response?: string | null
+          model?: string
+          input_tokens?: number | null
+          output_tokens?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          turn_index?: number
+          user_message?: string
+          assistant_response?: string | null
+          model?: string
+          input_tokens?: number | null
+          output_tokens?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_messages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      file_snapshots: {
+        Row: {
+          id: string
+          project_id: string
+          turn_index: number
+          files_jsonb: Json
+          file_count: number | null
+          total_size_bytes: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          turn_index: number
+          files_jsonb?: Json
+          file_count?: number | null
+          total_size_bytes?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          turn_index?: number
+          files_jsonb?: Json
+          file_count?: number | null
+          total_size_bytes?: number | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "file_snapshots_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      file_changes: {
+        Row: {
+          id: string
+          project_id: string
+          turn_index: number
+          changes: Json
+          execution_status: 'pending' | 'success' | 'failed'
+          error_message: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          turn_index: number
+          changes?: Json
+          execution_status?: 'pending' | 'success' | 'failed'
+          error_message?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          turn_index?: number
+          changes?: Json
+          execution_status?: 'pending' | 'success' | 'failed'
+          error_message?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "file_changes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -339,3 +463,48 @@ export interface Database {
     }
   }
 }
+
+
+// V0/Lovable Architecture Helper Types
+
+/**
+ * Structure for files stored in file_snapshots.files_jsonb
+ * Key is the file path, value contains file metadata
+ */
+export interface FileSnapshotData {
+  [filePath: string]: {
+    content: string
+    language: string
+    size: number
+  }
+}
+
+/**
+ * Structure for a single file change in file_changes.changes
+ */
+export interface FileChange {
+  file: string
+  action: 'create' | 'modify' | 'delete'
+  reason: string
+}
+
+/**
+ * Convenience type for conversation message row
+ */
+export type ConversationMessage = Database['public']['Tables']['conversation_messages']['Row']
+export type NewConversationMessage = Database['public']['Tables']['conversation_messages']['Insert']
+export type UpdateConversationMessage = Database['public']['Tables']['conversation_messages']['Update']
+
+/**
+ * Convenience type for file snapshot row
+ */
+export type FileSnapshot = Database['public']['Tables']['file_snapshots']['Row']
+export type NewFileSnapshot = Database['public']['Tables']['file_snapshots']['Insert']
+export type UpdateFileSnapshot = Database['public']['Tables']['file_snapshots']['Update']
+
+/**
+ * Convenience type for file changes row
+ */
+export type FileChangesRecord = Database['public']['Tables']['file_changes']['Row']
+export type NewFileChangesRecord = Database['public']['Tables']['file_changes']['Insert']
+export type UpdateFileChangesRecord = Database['public']['Tables']['file_changes']['Update']

@@ -77,7 +77,7 @@ export default function FAQSection() {
             Frequently Asked Questions
           </h2>
           <p className="text-muted-foreground mt-3 sm:mt-4 text-base sm:text-lg text-balance leading-relaxed">
-            Get answers to common questions about SmartAPIForge's AI-powered API generation platform.
+            Get answers to common questions about SmartAPIForge&apos;s AI-powered API generation platform.
           </p>
         </div>
 

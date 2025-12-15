@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -45,7 +45,10 @@ import {
   FilePlus,
   FolderPlus,
   ChevronsUpDown,
-  Trash2
+  Trash2,
+  GitBranch,
+  Package,
+  Play
 } from "lucide-react";
 import { SimpleHeader } from "@/components/simple-header";
 import { Highlight, themes } from "prism-react-renderer";
@@ -53,6 +56,8 @@ import Editor from "@monaco-editor/react";
 import { useTheme } from "next-themes";
 import { api } from "@/lib/trpc-client";
 import { useGenerationStream } from "../../../hooks/use-generation-stream";
+import { useCodeGeneration } from "../../../hooks/use-code-generation";
+import { useGitHubClone } from "../../../hooks/use-github-clone";
 import { StreamingCodeViewer } from "../../../components/streaming-code-viewer";
 import { GenerationProgressTracker } from "../../../components/generation-progress-tracker";
 import { TextShimmer } from "@/components/ui/text-shimmer";
@@ -71,6 +76,7 @@ interface Message {
   sender_id?: string;
   receiver_id?: string;
   project_id?: string;
+  version_id?: string; // Links message to a version for version card display
   fragments?: Fragment[];
 }
 
@@ -91,7 +97,7 @@ interface Project {
   name: string;
   description?: string;
   framework: 'fastapi' | 'express' | 'python' | 'nextjs' | 'react' | 'vue' | 'angular' | 'flask' | 'django' | 'unknown';
-  status: 'pending' | 'generating' | 'testing' | 'deploying' | 'deployed' | 'failed';
+  status: 'pending' | 'generating' | 'testing' | 'deploying' | 'deployed' | 'failed' | 'completed' | 'paused';
   created_at: string;
   updated_at: string;
   deploy_url?: string;
@@ -349,7 +355,8 @@ function TreeItem({
   onNewItemConfirm,
   onNewItemCancel,
   newItemName,
-  onContextMenu
+  onContextMenu,
+  modifiedFiles = []
 }: {
   node: TreeNode;
   depth?: number;
@@ -365,10 +372,15 @@ function TreeItem({
   onNewItemCancel?: () => void;
   newItemName?: string;
   onContextMenu?: (e: React.MouseEvent, fileId: string) => void;
+  modifiedFiles?: string[]; // Requirements: 18.3, 18.4 - Visual indicator for modified files
 }) {
   const isExpanded = expanded.has(node.id);
   const isSelected = selectedId === node.id;
   const isCreatingHere = creatingInFolder === node.id;
+  // Check if this file was recently modified
+  const isModified = node.type === 'file' && modifiedFiles.some(f => 
+    node.id === f || node.id.endsWith(f) || f.endsWith(node.id)
+  );
 
   return (
     <div>
@@ -402,7 +414,11 @@ function TreeItem({
         ) : (
           <span className="flex-shrink-0">{getFileIcon(node.name)}</span>
         )}
-        <span className="truncate min-w-0 font-sans text-[14px] font-normal">{node.name}</span>
+        <span className={`truncate min-w-0 font-sans text-[14px] font-normal ${isModified ? 'text-green-500 dark:text-green-400' : ''}`}>{node.name}</span>
+        {/* Requirements: 18.3, 18.4 - Visual indicator for newly created/modified files */}
+        {isModified && (
+          <span className="ml-1 w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" title="Recently modified" />
+        )}
       </div>
       
       {node.type === "folder" && isExpanded && (
@@ -459,6 +475,7 @@ function TreeItem({
               onNewItemCancel={onNewItemCancel}
               newItemName={newItemName}
               onContextMenu={onContextMenu}
+              modifiedFiles={modifiedFiles}
             />
           ))}
         </div>
@@ -694,15 +711,126 @@ export function ProjectPageClient({
   project 
 }: ProjectPageClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { theme, resolvedTheme } = useTheme();
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["src"]));
   const [selected, setSelected] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null); // Track user message during generation
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isMobileExplorerOpen, setIsMobileExplorerOpen] = useState(false);
   const [mobileView, setMobileView] = useState<'chat' | 'code'>('chat');
   const [isChatPanelCollapsed, setIsChatPanelCollapsed] = useState(false);
+  
+  // GitHub clone hook for showing progress in chat
+  const gitHubClone = useGitHubClone();
+  const [hasStartedClone, setHasStartedClone] = useState(false);
+  
+  // Track if we've started generation (use ref to survive strict mode double-render)
+  const [hasStartedGeneration, setHasStartedGeneration] = useState(false);
+  const generationStartedRef = useRef(false);
+  
+  // Check if we should start cloning (from ?clone=true query param)
+  // Only clone if project is not already completed
+  useEffect(() => {
+    const shouldClone = searchParams?.get('clone') === 'true';
+    const isProjectCompleted = project.status === 'completed' || project.status === 'deployed';
+    
+    // Remove the query param immediately to prevent re-clone on reload
+    if (shouldClone) {
+      router.replace(`/projects/${projectId}`, { scroll: false });
+    }
+    
+    // Only start clone if:
+    // 1. Clone param was present
+    // 2. Haven't started clone yet
+    // 3. Clone hook is idle
+    // 4. Project is NOT already completed (prevents re-clone on reload)
+    if (shouldClone && !hasStartedClone && gitHubClone.status === 'idle' && !isProjectCompleted) {
+      setHasStartedClone(true);
+      gitHubClone.clone(projectId);
+    }
+  }, [searchParams, hasStartedClone, gitHubClone, projectId, router, project.status]);
+
+  // Check if we should start code generation (from ?generate=true query param)
+  // This is for normal prompts (not GitHub imports)
+  useEffect(() => {
+    const shouldGenerate = searchParams?.get('generate') === 'true';
+    const isProjectCompleted = project.status === 'completed' || project.status === 'deployed';
+    
+    // Remove the query param immediately to prevent re-generation on reload
+    if (shouldGenerate) {
+      router.replace(`/projects/${projectId}`, { scroll: false });
+    }
+    
+    // Only start generation if:
+    // 1. Generate param was present
+    // 2. Haven't started generation yet (check both state and ref for strict mode)
+    // 3. Project is NOT already completed
+    // 4. Project has a prompt to generate from (use prompt field, not description which is truncated)
+    if (shouldGenerate && !hasStartedGeneration && !generationStartedRef.current && !isProjectCompleted && project.prompt) {
+      generationStartedRef.current = true; // Prevent strict mode double-call
+      setHasStartedGeneration(true);
+      
+      // Call the /api/generate endpoint with SSE streaming
+      const startGeneration = async () => {
+        try {
+          const response = await fetch('/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              projectId,
+              userMessage: project.prompt, // Use the full prompt (not description which is truncated to 200 chars)
+            }),
+          });
+          
+          if (!response.ok) {
+            console.error('Generation failed:', response.statusText);
+            return;
+          }
+          
+          // Handle SSE stream
+          const reader = response.body?.getReader();
+          const decoder = new TextDecoder();
+          
+          if (reader) {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              
+              const chunk = decoder.decode(value);
+              const lines = chunk.split('\n');
+              
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  try {
+                    const event = JSON.parse(line.slice(6));
+                    console.log('[Generate] Event:', event.type, event);
+                    
+                    // Refresh data when generation completes
+                    if (event.type === 'complete') {
+                      // Refetch messages and versions
+                      window.location.reload();
+                    }
+                  } catch (e) {
+                    // Ignore parse errors for incomplete chunks
+                  }
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Generation error:', error);
+        }
+      };
+      
+      startGeneration();
+    }
+  }, [searchParams, hasStartedGeneration, projectId, router, project.status, project.prompt]);
+
+  // Track previous clone status to detect completion
+  const wasCloning = useRef(false);
 
   // Check authentication
   useEffect(() => {
@@ -786,6 +914,10 @@ export function ProjectPageClient({
   // Use streaming hook for real-time updates
   const streamState = useGenerationStream(projectId);
   
+  // Use new code generation hook for direct SSE streaming (v0-style)
+  // Requirements: 10.1 - React hook that handles SSE streaming
+  const codeGeneration = useCodeGeneration();
+  
   // Track when stream completed to limit refetch duration
   const [completionTime, setCompletionTime] = useState<number | null>(null);
   const hasAutoSwitched = useRef(false);
@@ -866,25 +998,76 @@ export function ProjectPageClient({
     }
   );
 
-  // Refetch versions and messages when streaming completes to get the newly created version
+  // Fetch latest file snapshot (v0-style architecture)
+  // Requirements: 18.1 - Display file tree from latest file_snapshot
+  const { data: fileSnapshot, refetch: refetchSnapshot } = api.projects.getLatestSnapshot.useQuery(
+    { projectId },
+    {
+      refetchOnWindowFocus: true,
+      // Poll when streaming to catch new snapshots
+      refetchInterval: (streamState.isStreaming || codeGeneration.isGenerating) ? 3000 : false,
+    }
+  );
+
+  // Refetch versions, messages, and snapshots when streaming completes
   const wasStreaming = useRef(false);
+  const wasCodeGenerating = useRef(false);
   useEffect(() => {
+    // Handle legacy streamState completion
     if (wasStreaming.current && !streamState.isStreaming && streamState.status === 'complete') {
-      console.log('Streaming completed, refetching versions and messages...');
+      console.log('Streaming completed, refetching versions, messages, and snapshots...');
       // Refetch immediately, then again after 500ms and 1500ms to catch delayed DB writes
       refetchVersions();
       refetch(); // Refetch messages to get updated version_id links
+      refetchSnapshot(); // Refetch file snapshot
       setTimeout(() => {
         refetchVersions();
         refetch();
+        refetchSnapshot();
       }, 500);
       setTimeout(() => {
         refetchVersions();
         refetch();
+        refetchSnapshot();
       }, 1500);
     }
     wasStreaming.current = streamState.isStreaming;
-  }, [streamState.isStreaming, streamState.status, refetchVersions, refetch]);
+    
+    // Handle codeGeneration hook completion (v0-style)
+    if (wasCodeGenerating.current && !codeGeneration.isGenerating && codeGeneration.status === 'complete') {
+      console.log('Code generation completed, refetching snapshots...');
+      refetchSnapshot();
+      refetch();
+      setTimeout(() => {
+        refetchSnapshot();
+        refetch();
+      }, 500);
+    }
+    wasCodeGenerating.current = codeGeneration.isGenerating;
+    
+    // Handle GitHub clone completion
+    if (wasCloning.current && gitHubClone.status === 'complete') {
+      console.log('Clone completed, refetching messages, project, versions, and snapshots...');
+      // Refetch immediately, then again after delays to catch DB writes
+      refetch();
+      refetchProject();
+      refetchSnapshot();
+      refetchVersions(); // Also refetch versions to show the initial clone version
+      setTimeout(() => {
+        refetch();
+        refetchProject();
+        refetchSnapshot();
+        refetchVersions();
+      }, 500);
+      setTimeout(() => {
+        refetch();
+        refetchProject();
+        refetchSnapshot();
+        refetchVersions();
+      }, 1500);
+    }
+    wasCloning.current = gitHubClone.isCloning;
+  }, [streamState.isStreaming, streamState.status, refetchVersions, refetch, refetchSnapshot, codeGeneration.isGenerating, codeGeneration.status, gitHubClone.status, gitHubClone.isCloning, refetchProject]);
 
   // State for selected version - MUST be declared before useMemos that use it
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
@@ -936,10 +1119,146 @@ export function ProjectPageClient({
   // Combine streaming events with regular messages for display
   // Memoize with explicit dependencies to prevent unnecessary recalculations
   // Optimized for instant display - no debouncing
+  // Requirements: 10.2, 10.3, 10.4, 10.5 - Hook state updates for SSE events
   const streamingMessages = useMemo(() => {
     const msgs: any[] = [];
     const fileStatusMap = new Map<string, { generating: any; complete: any }>();
     const validationStatus: { start: any; complete: any } = { start: null, complete: null };
+    
+    // Show GitHub clone progress in chat ONLY when actively cloning
+    // Don't show if status is 'error' after clone failed - let user continue with prompts
+    const isActivelyCloning = gitHubClone.isCloning && 
+      gitHubClone.status !== 'idle' && 
+      gitHubClone.status !== 'complete' && 
+      gitHubClone.status !== 'error';
+    
+    if (isActivelyCloning) {
+      // Show clone status message
+      const getCloneIcon = () => {
+        switch (gitHubClone.status) {
+          case 'cloning': return 'generating';
+          case 'installing': return 'processing';
+          case 'starting_preview': return 'processing';
+          case 'creating_snapshot': return 'processing';
+          case 'error': return 'error';
+          default: return 'generating';
+        }
+      };
+      
+      msgs.push({
+        id: 'github-clone-progress',
+        content: gitHubClone.progress || 'Cloning repository...',
+        role: 'assistant' as const,
+        type: gitHubClone.status === 'error' ? 'error' as const : 'text' as const,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        isStreaming: gitHubClone.status !== 'error',
+        icon: getCloneIcon(),
+        cloneStatus: gitHubClone.status,
+        framework: gitHubClone.framework,
+      });
+      
+      // Show error details if any
+      if (gitHubClone.error) {
+        msgs.push({
+          id: 'github-clone-error',
+          content: gitHubClone.error,
+          role: 'assistant' as const,
+          type: 'error' as const,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          isStreaming: false,
+          icon: 'error',
+        });
+      }
+      
+      return msgs;
+    }
+    
+    // NEW: Show status from useCodeGeneration hook (v0-style direct streaming)
+    // Code streams to file editor, chat shows only status messages
+    if (codeGeneration.isGenerating) {
+      // Show pending user message FIRST (before assistant response)
+      if (pendingUserMessage) {
+        msgs.push({
+          id: 'pending-user-message',
+          content: pendingUserMessage,
+          role: 'user' as const,
+          type: 'text' as const,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          isStreaming: false,
+        });
+      }
+      
+      // Show thinking/status indicator
+      if (codeGeneration.status === 'thinking') {
+        msgs.push({
+          id: 'codegen-thinking',
+          content: codeGeneration.statusMessage || 'Thinking...',
+          role: 'assistant' as const,
+          type: 'text' as const,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          isStreaming: true,
+          icon: 'generating',
+        });
+      }
+      
+      // Show file reading events
+      if (codeGeneration.status === 'reading_files') {
+        const readingEvents = codeGeneration.fileReadingEvents.filter(e => e.type === 'file:reading');
+        if (readingEvents.length > 0) {
+          msgs.push({
+            id: 'codegen-reading-files',
+            content: `Reading ${readingEvents.length} file(s) for context...`,
+            role: 'assistant' as const,
+            type: 'text' as const,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            isStreaming: true,
+            icon: 'processing',
+          });
+        }
+      }
+      
+      // Show generating status (NOT the raw code output - that goes to file editor)
+      if (codeGeneration.status === 'generating') {
+        // Show status message instead of raw code
+        const fileCount = codeGeneration.filesModified.length;
+        const statusText = fileCount > 0 
+          ? `Generating code... (${fileCount} file${fileCount > 1 ? 's' : ''} modified)`
+          : 'Generating code...';
+        
+        msgs.push({
+          id: 'codegen-generating',
+          content: statusText,
+          role: 'assistant' as const,
+          type: 'text' as const,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          isStreaming: true,
+          icon: 'generating',
+        });
+      }
+      
+      return msgs;
+    }
+    
+    // Show error from codeGeneration hook
+    if (codeGeneration.error) {
+      msgs.push({
+        id: 'codegen-error',
+        content: `Error: ${codeGeneration.error}`,
+        role: 'assistant' as const,
+        type: 'error' as const,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        isStreaming: false,
+        icon: 'error',
+      });
+      return msgs;
+    }
     
     // Show immediate feedback even with no events yet
     if (streamState.isStreaming && streamState.events.length === 0 && streamState.status === 'generating') {
@@ -1091,7 +1410,7 @@ export function ProjectPageClient({
     });
     
     return msgs;
-  }, [streamState.events, streamState.isStreaming, streamState.status]); // Added dependencies for instant updates
+  }, [streamState.events, streamState.isStreaming, streamState.status, codeGeneration.isGenerating, codeGeneration.status, codeGeneration.statusMessage, codeGeneration.output, codeGeneration.filesModified, codeGeneration.fileReadingEvents, codeGeneration.error, gitHubClone.isCloning, gitHubClone.status, gitHubClone.progress, gitHubClone.error, gitHubClone.framework, pendingUserMessage]); // Added dependencies for instant updates
 
   // Convert persisted generation events from database into message format
   const persistedEventMessages = useMemo(() => {
@@ -1122,36 +1441,58 @@ export function ProjectPageClient({
     // If we have streaming events OR persisted events, filter out database messages
     const hasGenerationEvents = streamState.isStreaming || streamState.events.length > 0 || persistedEventMessages.length > 0;
     
-    const filteredDbMessages = hasGenerationEvents
-      ? sortedMessages.filter((dbMsg) => {
-          // Always keep user messages and errors
-          if (dbMsg.role === 'user') return true;
-          if (dbMsg.type === 'error') return true;
-          
-          // Filter out assistant messages that duplicate generation events
-          if (dbMsg.role === 'assistant') {
-            // Filter out messages that look like completion summaries
-            if (dbMsg.content.includes('API Generation Complete') ||
-                dbMsg.content.includes('Generated Files:') ||
-                dbMsg.content.includes('Validation:') ||
-                dbMsg.content.toLowerCase().includes('this api allows')) {
-              return false; // Skip these, we show them via generation events
-            }
-          }
-          
-          return true;
-        })
-      : sortedMessages;
+    // Add clone user message if cloning is actively in progress (not complete or idle)
+    // Once clone completes, the DB messages will be fetched and shown instead
+    const isActivelyCloning = gitHubClone.isCloning && 
+      gitHubClone.status !== 'idle' && 
+      gitHubClone.status !== 'complete' && 
+      gitHubClone.status !== 'error';
+    
+    const cloneUserMessage = isActivelyCloning && project.name ? {
+      id: 'clone-user-message',
+      content: `Clone: ${project.name}`,
+      role: 'user' as const,
+      type: 'text' as const,
+      created_at: new Date(Date.now() - 1000).toISOString(), // Slightly before clone progress
+      updated_at: new Date(Date.now() - 1000).toISOString(),
+    } : null;
+    
+    // Filter DB messages to avoid duplicates with streaming/pending messages
+    const filteredDbMessages = sortedMessages.filter((dbMsg) => {
+      // If we have a pending user message being shown in streaming, filter out
+      // the matching DB message to prevent duplicate display
+      if (pendingUserMessage && dbMsg.role === 'user' && dbMsg.content === pendingUserMessage) {
+        return false; // Skip - already shown as pending message
+      }
+      
+      // During active generation, filter out assistant messages that duplicate events
+      if (hasGenerationEvents && dbMsg.role === 'assistant') {
+        // Filter out messages that look like completion summaries
+        if (dbMsg.content.includes('API Generation Complete') ||
+            dbMsg.content.includes('Generated Files:') ||
+            dbMsg.content.includes('Validation:') ||
+            dbMsg.content.toLowerCase().includes('this api allows')) {
+          return false; // Skip these, we show them via generation events
+        }
+      }
+      
+      return true;
+    });
 
     // Combine database messages, streaming messages, and persisted generation events
-    const combined = [...filteredDbMessages, ...streamingMessages, ...persistedEventMessages];
+    const combined = [
+      ...(cloneUserMessage ? [cloneUserMessage] : []),
+      ...filteredDbMessages, 
+      ...streamingMessages, 
+      ...persistedEventMessages
+    ];
     
     // Sort by timestamp
     combined.sort((a, b) => 
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
 
-    // Inject version cards after the messages that created them
+    // Inject version cards after the ASSISTANT messages that created them
     // Only show COMPLETED versions (not generating ones) to avoid premature display
     const completedVersions = versions.filter(v => v.status === 'complete');
     
@@ -1163,34 +1504,37 @@ export function ProjectPageClient({
         messagesWithVersions.push(msg);
         
         // After each message, check if there's a version that should appear
-        // Either linked by version_id or created around the same time
+        // Only add version card after ASSISTANT messages (not user messages)
         if ('id' in msg) {
-          // Method 1: Direct link via version_id (most reliable)
-          const directLinkedVersion = completedVersions.find(v => 
-            'version_id' in msg && msg.version_id === v.id
-          );
-          
-          if (directLinkedVersion && !addedVersionIds.has(directLinkedVersion.id)) {
-            messagesWithVersions.push({
-              id: `version-card-${directLinkedVersion.id}`,
-              role: 'version' as const,
-              type: 'version-card' as const,
-              created_at: directLinkedVersion.created_at,
-              updated_at: directLinkedVersion.updated_at,
-              versionData: directLinkedVersion,
-            });
-            addedVersionIds.add(directLinkedVersion.id);
-          } else if (msg.role === 'user') {
-            // Method 2: Time-based matching for versions without direct links
+          // Method 1: Direct link via version_id on ASSISTANT message (most reliable)
+          // Version card should appear after the assistant's response, not the user's prompt
+          if (msg.role === 'assistant' && 'version_id' in msg && msg.version_id) {
+            const directLinkedVersion = completedVersions.find(v => v.id === msg.version_id);
+            
+            if (directLinkedVersion && !addedVersionIds.has(directLinkedVersion.id)) {
+              messagesWithVersions.push({
+                id: `version-card-${directLinkedVersion.id}`,
+                role: 'version' as const,
+                type: 'version-card' as const,
+                created_at: directLinkedVersion.created_at,
+                updated_at: directLinkedVersion.updated_at,
+                versionData: directLinkedVersion,
+              });
+              addedVersionIds.add(directLinkedVersion.id);
+            }
+          } 
+          // Method 2: Time-based matching for ASSISTANT messages without direct links (legacy)
+          // Version cards should appear after assistant messages, not user messages
+          else if (msg.role === 'assistant' && !('version_id' in msg && msg.version_id)) {
             const timeBasedVersions = completedVersions.filter(v => {
               if (addedVersionIds.has(v.id)) return false;
               const msgTime = new Date(msg.created_at).getTime();
               const versionTime = new Date(v.created_at).getTime();
-              // Version should be created within 10 seconds after the message
-              return versionTime >= msgTime && versionTime - msgTime < 10000;
+              // Version should be created within 60 seconds after the assistant message
+              return versionTime >= msgTime && versionTime - msgTime < 60000;
             });
             
-            // Add time-based matched versions
+            // Add time-based matched versions after assistant message
             timeBasedVersions.forEach(version => {
               messagesWithVersions.push({
                 id: `version-card-${version.id}`,
@@ -1206,7 +1550,7 @@ export function ProjectPageClient({
         }
       });
       
-      // Add any versions that haven't been added yet (orphaned versions)
+      // Add any versions that haven't been added yet (orphaned versions) at the END
       completedVersions.forEach(version => {
         if (!addedVersionIds.has(version.id)) {
           messagesWithVersions.push({
@@ -1220,16 +1564,13 @@ export function ProjectPageClient({
         }
       });
       
-      // Re-sort to ensure proper chronological order
-      messagesWithVersions.sort((a, b) => 
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-      );
-      
+      // DON'T re-sort - version cards should stay after their associated messages
+      // The insertion order is correct (version card after assistant message)
       return messagesWithVersions;
     }
     
     return combined;
-  }, [sortedMessages, streamingMessages, persistedEventMessages, versions, streamState.isStreaming, streamState.events.length]);
+  }, [sortedMessages, streamingMessages, persistedEventMessages, versions, streamState.isStreaming, streamState.events.length, gitHubClone.isCloning, gitHubClone.status, project.name, pendingUserMessage]);
 
   // Auto-refresh preview when server:ready event is received
   useEffect(() => {
@@ -1248,6 +1589,29 @@ export function ProjectPageClient({
       return () => clearTimeout(timer);
     }
   }, [streamState.events]);
+
+  // Auto-refresh preview when files are modified via codeGeneration hook (v0-style)
+  // Requirements: 5.5 - Ensure iframe refreshes when files are written
+  const prevFilesModifiedCount = useRef(0);
+  useEffect(() => {
+    // Only trigger refresh when new files are modified
+    if (codeGeneration.filesModified.length > prevFilesModifiedCount.current) {
+      console.log('[AUTO-REFRESH] Files modified via codeGeneration, refreshing preview...');
+      // Small delay to ensure files are written to Daytona
+      const timer = setTimeout(() => {
+        setRefreshKey(prev => prev + 1);
+        console.log('[AUTO-REFRESH] Preview refreshed after file:complete!');
+      }, 1500);
+      
+      prevFilesModifiedCount.current = codeGeneration.filesModified.length;
+      return () => clearTimeout(timer);
+    }
+    
+    // Reset counter when generation completes
+    if (codeGeneration.status === 'complete' || codeGeneration.status === 'idle') {
+      prevFilesModifiedCount.current = 0;
+    }
+  }, [codeGeneration.filesModified, codeGeneration.status]);
 
   // Extract project files for GitHub push
   const projectFiles = useMemo(() => {
@@ -1271,28 +1635,45 @@ export function ProjectPageClient({
     return {};
   }, [selectedVersionId, versions, streamState.generatedFiles, streamState.isStreaming]);
 
-  // Build file tree from selected version or streaming files
+  // Build file tree from file_snapshots, versions, or streaming files
+  // Requirements: 18.1, 18.2 - Display file tree from file_snapshots.files_jsonb
   const fileTree = useMemo(() => {
     let baseFiles: Record<string, any> = {};
     
-    // Priority 1: Use streaming files only while currently generating
-    if (streamState.isStreaming && streamState.generatedFiles.length > 0) {
+    // Priority 1: Use streaming files from codeGeneration hook (v0-style)
+    if (codeGeneration.isGenerating && codeGeneration.filesModified.length > 0) {
+      // Start with existing snapshot files
+      if (fileSnapshot?.files_jsonb) {
+        Object.entries(fileSnapshot.files_jsonb).forEach(([path, fileData]) => {
+          baseFiles[path] = fileData.content;
+        });
+      }
+      // Note: Modified files will be updated when snapshot is refetched
+    }
+    // Priority 2: Use streaming files from legacy streamState
+    else if (streamState.isStreaming && streamState.generatedFiles.length > 0) {
       streamState.generatedFiles.forEach(file => {
         baseFiles[file.filename] = file.content;
       });
     }
-    // Priority 2: Load from selected version if available
+    // Priority 3: Load from file_snapshots (v0-style architecture)
+    else if (fileSnapshot?.files_jsonb && Object.keys(fileSnapshot.files_jsonb).length > 0) {
+      Object.entries(fileSnapshot.files_jsonb).forEach(([path, fileData]) => {
+        baseFiles[path] = fileData.content;
+      });
+    }
+    // Priority 4: Load from selected version if available
     else if (selectedVersionId && versions.length > 0) {
       const selectedVersion = versions.find(v => v.id === selectedVersionId);
       if (selectedVersion?.files) {
         baseFiles = { ...selectedVersion.files };
       }
     }
-    // Priority 3: If streaming is active but no files yet, show empty tree
-    else if (streamState.isStreaming) {
+    // Priority 5: If streaming is active but no files yet, show empty tree
+    else if (streamState.isStreaming || codeGeneration.isGenerating) {
       baseFiles = {};
     }
-    // Priority 4: Use project messages
+    // Priority 6: Use project messages (legacy fallback)
     else {
       const tree = generateFileTreeFromProject(currentProject, sortedMessages, streamState.generatedFiles);
       // Convert tree back to flat files for merging
@@ -1315,7 +1696,7 @@ export function ProjectPageClient({
     const allFiles = { ...baseFiles, ...manuallyCreatedFiles };
     
     return buildTreeFromPaths(allFiles);
-  }, [selectedVersionId, versions, streamState.generatedFiles, streamState.isStreaming, currentProject, sortedMessages, manuallyCreatedFiles]);
+  }, [selectedVersionId, versions, streamState.generatedFiles, streamState.isStreaming, currentProject, sortedMessages, manuallyCreatedFiles, fileSnapshot, codeGeneration.isGenerating, codeGeneration.filesModified]);
 
   // When switching versions, ensure the selected file exists in that version.
   // If not, select the first file of the chosen version.
@@ -1339,6 +1720,47 @@ export function ProjectPageClient({
       setSelected(streamState.currentFile);
     }
   }, [streamState.isStreaming, streamState.currentFile]);
+
+  // Auto-open modified files during generation (v0-style)
+  // Requirements: 18.5, 19.3 - Auto-open modified files during generation
+  const prevModifiedFilesRef = useRef<string[]>([]);
+  useEffect(() => {
+    if (codeGeneration.isGenerating && codeGeneration.filesModified.length > 0) {
+      // Check if there are new modified files
+      const newFiles = codeGeneration.filesModified.filter(
+        f => !prevModifiedFilesRef.current.includes(f)
+      );
+      
+      if (newFiles.length > 0) {
+        // Select the most recently modified file
+        const latestFile = newFiles[newFiles.length - 1];
+        setSelected(latestFile);
+        
+        // Expand parent folders for the selected file
+        const pathParts = latestFile.split('/');
+        if (pathParts.length > 1) {
+          const newExpanded = new Set(expanded);
+          for (let i = 0; i < pathParts.length - 1; i++) {
+            const folderPath = pathParts.slice(0, i + 1).join('/');
+            newExpanded.add(folderPath);
+          }
+          setExpanded(newExpanded);
+        }
+        
+        // Switch to code view if not already there
+        if (viewMode !== 'code') {
+          setViewMode('code');
+        }
+      }
+      
+      prevModifiedFilesRef.current = [...codeGeneration.filesModified];
+    }
+    
+    // Reset when generation completes
+    if (!codeGeneration.isGenerating && codeGeneration.status === 'idle') {
+      prevModifiedFilesRef.current = [];
+    }
+  }, [codeGeneration.isGenerating, codeGeneration.filesModified, codeGeneration.status, expanded, viewMode]);
 
   // Auto-select default file when switching to code mode
   useEffect(() => {
@@ -1483,56 +1905,38 @@ export function ProjectPageClient({
   const select = (id: string) => setSelected(id);
 
   const send = async () => {
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || codeGeneration.isGenerating) return;
     
     setIsLoading(true);
     const messageContent = input.trim();
     setInput(""); // Clear input immediately for better UX
+    setPendingUserMessage(messageContent); // Show user message immediately in chat
     
     try {
-      // 1. Save user message
-      const message = await createMessage.mutateAsync({
-        content: messageContent,
-        role: 'user',
-        type: 'text',
-        project_id: projectId,
-      });
+      // NOTE: Don't save user message here - the generate route saves both user and assistant messages
+      // This prevents duplicate messages in the chat
       
-      // Refetch messages to show user's message
-      refetch();
+      // Use direct SSE streaming via useCodeGeneration hook
+      // Requirements: 10.1 - Hook initiates fetch request to streaming API
+      await codeGeneration.generate(messageContent, projectId, 'code');
       
-      // 2. Classify command (with current file list for context)
-      const currentFiles = selectedVersionId 
-        ? Object.keys(versions.find(v => v.id === selectedVersionId)?.files || {})
-        : [];
+      // Clear pending message IMMEDIATELY after generation completes
+      // This prevents showing duplicate when DB messages are refetched
+      setPendingUserMessage(null);
+      setIsLoading(false);
       
-      const classification = await classifyCommand.mutateAsync({
-        prompt: messageContent,
-        projectId,
-        currentFiles,
-      });
-      
-      console.log('Command classified:', classification);
-      
-      // 3. Trigger iteration workflow
-      await triggerIteration.mutateAsync({
-        projectId,
-        messageId: message.id,
-        prompt: messageContent,
-        commandType: classification.type,
-        shouldCreateNewVersion: classification.shouldCreateNewVersion,
-        parentVersionId: selectedVersionId || undefined,
-      });
-      
-      // Refetch versions to get the new one
+      // Refetch data after a short delay to allow DB writes to complete
       setTimeout(() => {
         refetchVersions();
-      }, 1000);
+        refetch();
+        refetchProject();
+        refetchSnapshot();
+      }, 500);
       
-      setIsLoading(false);
     } catch (error) {
       console.error("Error processing message:", error);
       setIsLoading(false);
+      setPendingUserMessage(null);
       // Re-add the message to input on error
       setInput(messageContent);
     }
@@ -1950,10 +2354,10 @@ export function ProjectPageClient({
         <motion.section 
           initial={false}
           animate={isMobileScreen ? {} : { 
-            // Only apply motion animations on desktop
-            width: isChatPanelCollapsed ? 0 : 'auto',
-            minWidth: isChatPanelCollapsed ? 0 : '280px',
-            maxWidth: isChatPanelCollapsed ? 0 : '420px',
+            // Only apply motion animations on desktop - use fixed width for consistency
+            width: isChatPanelCollapsed ? 0 : '320px',
+            minWidth: isChatPanelCollapsed ? 0 : '320px',
+            maxWidth: isChatPanelCollapsed ? 0 : '320px',
             opacity: isChatPanelCollapsed ? 0 : 1
           }}
           transition={{ 
@@ -1973,7 +2377,7 @@ export function ProjectPageClient({
           className={`flex-col h-full bg-[#FAFAFA] dark:bg-[#0E100F] ${
             isChatPanelCollapsed 
               ? 'overflow-hidden' 
-              : 'w-full sm:min-w-[280px] sm:max-w-[420px] overflow-hidden'
+              : 'w-full sm:w-[320px] sm:min-w-[320px] sm:max-w-[320px] overflow-hidden'
           } ${mobileView === 'chat' ? 'flex flex-1 sm:flex-none' : 'hidden sm:flex'}`}
         >
           
@@ -2087,7 +2491,7 @@ export function ProjectPageClient({
                   maxHeight: '120px',
                   height: '32px'
                 }}
-                disabled={isLoading}
+                disabled={isLoading || codeGeneration.isGenerating}
                 rows={1}
                 ref={textareaRef}
               />
@@ -2509,6 +2913,7 @@ export function ProjectPageClient({
                       e.preventDefault();
                       setContextMenu({ x: e.clientX, y: e.clientY, fileId });
                     }}
+                    modifiedFiles={codeGeneration.filesModified}
                   />
                 ))}
               </div>
@@ -2537,6 +2942,7 @@ export function ProjectPageClient({
                     <SandboxPreview 
                       sandboxUrl={
                         ('sandbox_url' in currentProject ? currentProject.sandbox_url : undefined) ||
+                        gitHubClone.sandboxUrl ||
                         currentProject.deploy_url || 
                         ''
                       }
@@ -2546,6 +2952,7 @@ export function ProjectPageClient({
                       hideHeader={true}
                       path={previewPath}
                       showTerminal={showTerminal}
+                      onRefresh={() => setRefreshKey(prev => prev + 1)}
                     />
                   </motion.div>
                 ) : (
@@ -2557,15 +2964,18 @@ export function ProjectPageClient({
                     transition={{ duration: 0.25, ease: "easeInOut" }}
                     className="absolute inset-0"
                   >
-                    {streamState.isStreaming && streamState.generatedFiles.length > 0 ? (
+                    {/* Show StreamingCodeViewer when generating via either hook */}
+                    {(streamState.isStreaming && streamState.generatedFiles.length > 0) || codeGeneration.isGenerating ? (
                       <StreamingCodeViewer
                         files={streamState.generatedFiles}
                         currentFile={streamState.currentFile}
-                        isStreaming={streamState.isStreaming}
+                        isStreaming={streamState.isStreaming || codeGeneration.isGenerating}
                         selectedFile={selected || undefined}
                         versions={versions}
                         selectedVersionId={selectedVersionId}
                         onVersionChange={setSelectedVersionId}
+                        streamingOutput={codeGeneration.output}
+                        streamingStatus={codeGeneration.status}
                       />
                     ) : (
                       <CodeViewer 
@@ -2792,6 +3202,7 @@ export function ProjectPageClient({
               <SandboxPreview 
                 sandboxUrl={
                   ('sandbox_url' in currentProject ? currentProject.sandbox_url : undefined) ||
+                  gitHubClone.sandboxUrl ||
                   currentProject.deploy_url || 
                   ''
                 }

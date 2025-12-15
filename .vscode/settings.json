@@ -1,3 +1,4 @@
 {
-    "kiroAgent.enableCodebaseIndexing": true
+    "kiroAgent.enableCodebaseIndexing": true,
+    "typescript.autoClosingTags": false
 }

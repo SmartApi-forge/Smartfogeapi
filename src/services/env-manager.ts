@@ -13,19 +13,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { EnvVariable, EnvValidationResult, IEnvManager } from '../types/context-management';
 
-/**
- * Database row type for project_env_variables table
- */
-interface EnvVariableRow {
-  id: string;
-  project_id: string;
-  key: string;
-  encrypted_value: string;
-  is_secret: boolean;
-  is_required: boolean;
-  created_at: string;
-  updated_at: string;
-}
+// Database row type for project_env_variables table is defined in types
 
 /**
  * Lazy-load supabase client to avoid initialization errors in tests
@@ -35,7 +23,7 @@ let _supabaseClient: SupabaseClient | null = null;
 function getSupabaseClient(): SupabaseClient {
   if (!_supabaseClient) {
     // Dynamic import to avoid initialization at module load time
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { supabase } = require('../../lib/supabase');
     _supabaseClient = supabase;
   }

@@ -123,7 +123,7 @@ export default function AuthDialog() {
               
               try {
                 if (auth === 'signup') {
-                  const { data, error } = await authService.signUp(email, password)
+                  const { error } = await authService.signUp(email, password)
                   if (error) throw error
                   alert('Check your email for verification link!')
                   close() // Close dialog after signup
@@ -167,8 +167,8 @@ export default function AuthDialog() {
                     throw new Error('Sign in failed - no user data received')
                   }
                 }
-              } catch (error: any) {
-                setError(error.message || 'Authentication failed')
+              } catch (err) {
+                setError(err instanceof Error ? err.message : 'Authentication failed')
               } finally {
                 setLoading(false)
               }
@@ -202,7 +202,7 @@ export default function AuthDialog() {
                 {auth === "signup" ? (
                   <>Already have an account? <Button type="button" variant="link" className="px-1 cursor-pointer" onClick={() => router.replace("/?auth=login")}>Sign In</Button></>
                 ) : (
-                  <>Don't have an account? <Button type="button" variant="link" className="px-1 cursor-pointer" onClick={() => router.replace("/?auth=signup")}>Create account</Button></>
+                  <>Don&apos;t have an account? <Button type="button" variant="link" className="px-1 cursor-pointer" onClick={() => router.replace("/?auth=signup")}>Create account</Button></>
                 )}
               </p>
             </form>
@@ -222,8 +222,8 @@ export default function AuthDialog() {
                 if (error) throw error
                 alert('Password reset link sent to your email!')
                 router.replace("/?auth=login")
-              } catch (error: any) {
-                setError(error.message || 'Failed to send reset email')
+              } catch (err) {
+                setError(err instanceof Error ? err.message : 'Failed to send reset email')
               } finally {
                 setLoading(false)
               }

@@ -12,7 +12,6 @@ import {
   CheckCircle,
   Loader2,
   Key,
-  RefreshCw,
 } from 'lucide-react';
 import {
   Dialog,
@@ -26,7 +25,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
 
 /**
  * Environment variable for display
@@ -342,7 +340,7 @@ export function EnvVariablesDialog({
             <div className="text-center py-8 text-muted-foreground">
               <Key className="size-8 mx-auto mb-2 opacity-50" />
               <p>No environment variables defined</p>
-              <p className="text-sm">Click "Add Variable" to get started</p>
+              <p className="text-sm">Click &quot;Add Variable&quot; to get started</p>
             </div>
           )}
         </div>

@@ -1,48 +1,55 @@
 "use client";
 
-import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import React, { useState, useCallback } from 'react';
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Loader2, CheckCircle2, XCircle, X } from 'lucide-react';
+import { Loader2, CheckCircle2, X } from 'lucide-react';
 import { api } from '@/lib/trpc-client';
 import { toast } from 'sonner';
 import Image from 'next/image';
 import { useTheme } from 'next-themes';
+import { useRouter } from 'next/navigation';
 
 interface GitHubRepoSelectorProps {
-  onRepositorySelected?: (repo: any) => void;
   children?: React.ReactNode;
 }
 
-export function GitHubRepoSelector({ onRepositorySelected, children }: GitHubRepoSelectorProps) {
-  const { theme, resolvedTheme } = useTheme();
+export function GitHubRepoSelector({ children }: GitHubRepoSelectorProps) {
+  const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [selectedRepoId, setSelectedRepoId] = useState<number | null>(null);
+  const [isCloning, setIsCloning] = useState(false);
 
   // Check integration status
   const { data: integrationStatus, isLoading: statusLoading } = api.github.getIntegrationStatus.useQuery();
 
   // Fetch repositories
-  const { data: repositories, isLoading: reposLoading, refetch } = api.github.listRepositories.useQuery(
+  const { data: repositories, isLoading: reposLoading } = api.github.listRepositories.useQuery(
     { page: 1, perPage: 50 },
     { enabled: integrationStatus?.connected }
   );
 
   // Connect repository and create project
+  // V0/Lovable Architecture: After creating project, redirect to loading page
+  // which will consume SSE events from /api/github/clone
+  // Requirements: 6.1, 6.2, 6.13
   const connectRepoMutation = api.github.connectRepository.useMutation({
     onSuccess: (data) => {
       toast.success('Cloning repository and starting preview...');
-      // Redirect to loading page, then to project
+      // Redirect to loading page with projectId
+      // The loading page will handle SSE streaming from /api/github/clone
       if (data.projectId) {
-        window.location.href = `/loading?projectId=${data.projectId}`;
+        router.push(`/loading?projectId=${data.projectId}`);
       }
       setOpen(false);
     },
     onError: (error) => {
       toast.error(`Failed to connect repository: ${error.message}`);
+      setIsCloning(false);
     },
   });
 
@@ -51,7 +58,7 @@ export function GitHubRepoSelector({ onRepositorySelected, children }: GitHubRep
     window.location.href = '/api/auth/github';
   };
 
-  const handleSelectRepository = () => {
+  const handleSelectRepository = useCallback(() => {
     if (!selectedRepoId) {
       toast.error('Please select a repository');
       return;
@@ -60,13 +67,17 @@ export function GitHubRepoSelector({ onRepositorySelected, children }: GitHubRep
     const repo = repositories?.find(r => r.id === selectedRepoId);
     if (!repo) return;
 
-    // Create project and trigger clone + preview workflow
+    setIsCloning(true);
+
+    // Create project - the loading page will handle SSE streaming
+    // V0/Lovable Architecture: No more Inngest, direct SSE streaming
+    // Requirements: 6.1, 6.2, 9.7
     connectRepoMutation.mutate({
       repositoryId: repo.id,
       repositoryFullName: repo.full_name,
-      createProject: true, // This will create project and trigger workflow
+      createProject: true,
     });
-  };
+  }, [selectedRepoId, repositories, connectRepoMutation]);
 
   const isLoading = statusLoading || reposLoading;
   const isConnected = integrationStatus?.connected;
@@ -175,13 +186,13 @@ export function GitHubRepoSelector({ onRepositorySelected, children }: GitHubRep
 
                 <Button
                   onClick={handleSelectRepository}
-                  disabled={!selectedRepoId || connectRepoMutation.isLoading}
+                  disabled={!selectedRepoId || connectRepoMutation.isPending || isCloning}
                   className={`w-full disabled:opacity-50 text-sm h-9 mt-2 sm:mt-3 ${isDark ? 'bg-[#EDEDED] hover:bg-[#E0E0E0] text-black' : 'bg-[#171717] hover:bg-black text-white'}`}
                 >
-                  {connectRepoMutation.isLoading ? (
+                  {connectRepoMutation.isPending || isCloning ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Connecting...
+                      {isCloning ? 'Starting clone...' : 'Connecting...'}
                     </>
                   ) : (
                     'Select Repository'

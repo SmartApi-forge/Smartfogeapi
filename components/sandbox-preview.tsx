@@ -1,14 +1,14 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { Loader2, RefreshCw, ExternalLink, AlertCircle, Monitor, RotateCw, Eye, Code2, Terminal } from 'lucide-react';
+import { Loader2, RefreshCw, ExternalLink, AlertCircle, Monitor, RotateCw, Terminal } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useSandboxManager } from '@/hooks/use-sandbox-manager';
 import { DaytonaTerminal } from './daytona-terminal';
 
 interface SandboxPreviewProps {
   sandboxUrl: string;
-  projectName?: string;
+  projectName?: string; // eslint-disable-line @typescript-eslint/no-unused-vars
   projectId?: string;
   sandboxId?: string; // Optional: Sandbox ID for terminal access
   hideHeader?: boolean; // If true, don't render the internal header (parent will handle it)
@@ -22,7 +22,7 @@ interface SandboxPreviewProps {
  * Similar to v0.app's preview functionality
  * Includes automatic sandbox keepAlive and restart capabilities
  */
-export function SandboxPreview({ sandboxUrl, projectName, projectId, sandboxId, hideHeader = false, path: externalPath, onRefresh, showTerminal: externalShowTerminal }: SandboxPreviewProps) {
+export function SandboxPreview({ sandboxUrl, projectId, sandboxId, hideHeader = false, path: externalPath, onRefresh, showTerminal: externalShowTerminal }: SandboxPreviewProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
   const [key, setKey] = useState(0); // For forcing iframe refresh
@@ -185,22 +185,32 @@ export function SandboxPreview({ sandboxUrl, projectName, projectId, sandboxId, 
     );
   }
 
-  // Show restoration UI if sandbox is being restored
-  if (sandbox.isRestarting) {
+  // Show restoration UI if sandbox is being restored or resuming
+  if (sandbox.isRestarting || sandbox.isResuming) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground bg-muted/30 dark:bg-[#1D1D1D]">
         <div className="text-center space-y-4 max-w-md px-4">
           <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
           <div className="space-y-2">
-            <p className="text-sm font-medium">Restoring sandbox...</p>
-            <div className="text-xs text-muted-foreground space-y-1">
-              <p>📦 Cloning repository</p>
-              <p>🔧 Installing dependencies</p>
-              <p>🚀 Starting dev server</p>
-            </div>
+            <p className="text-sm font-medium">
+              {sandbox.isResuming ? 'Starting sandbox...' : 'Restoring sandbox...'}
+            </p>
+            {sandbox.isRestarting && (
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>📦 Cloning repository</p>
+                <p>🔧 Installing dependencies</p>
+                <p>🚀 Starting dev server</p>
+              </div>
+            )}
+            {sandbox.isResuming && (
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>▶️ Resuming sandbox</p>
+                <p>🚀 Starting dev server</p>
+              </div>
+            )}
           </div>
           <p className="text-xs text-muted-foreground italic">
-            This may take 30-60 seconds
+            {sandbox.isResuming ? 'This may take 10-20 seconds' : 'This may take 30-60 seconds'}
           </p>
         </div>
       </div>
@@ -297,15 +307,41 @@ export function SandboxPreview({ sandboxUrl, projectName, projectId, sandboxId, 
 
         {error && (
           <div className="absolute inset-0 flex items-center justify-center bg-muted/30 dark:bg-[#1D1D1D] z-10">
-            <div className="text-center space-y-3">
-              <AlertCircle className="mx-auto h-12 w-12 text-destructive" />
-              <p className="text-sm text-muted-foreground">Failed to load preview</p>
-              <button
-                onClick={handleRefresh}
-                className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-              >
-                Try Again
-              </button>
+            <div className="text-center space-y-4">
+              <AlertCircle className="mx-auto h-12 w-12 text-yellow-500" />
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-foreground">Sandbox may have stopped</p>
+                <p className="text-xs text-muted-foreground max-w-xs">
+                  The preview server is not responding. This can happen if the sandbox was inactive for a while.
+                </p>
+              </div>
+              <div className="flex gap-2 justify-center">
+                {projectId && (
+                  <button
+                    onClick={sandbox.manualRestart}
+                    disabled={sandbox.isRestarting}
+                    className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50"
+                  >
+                    {sandbox.isRestarting ? (
+                      <>
+                        <Loader2 className="inline h-4 w-4 mr-2 animate-spin" />
+                        Restarting...
+                      </>
+                    ) : (
+                      <>
+                        <RotateCw className="inline h-4 w-4 mr-2" />
+                        Restart Sandbox
+                      </>
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={handleRefresh}
+                  className="px-4 py-2 text-sm bg-muted text-foreground rounded-md hover:bg-muted/80 transition-colors"
+                >
+                  Refresh
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -381,7 +417,7 @@ export function SandboxPreview({ sandboxUrl, projectName, projectId, sandboxId, 
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-gray-300">Terminal Not Available</p>
                     <p className="text-xs text-gray-500 max-w-md">
-                      This project doesn't have a sandbox ID. To use the terminal, re-import this repository from GitHub.
+                      This project doesn&apos;t have a sandbox ID. To use the terminal, re-import this repository from GitHub.
                     </p>
                     <p className="text-xs text-gray-600">
                       (New projects will automatically have terminal access)

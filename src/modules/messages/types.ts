@@ -26,6 +26,7 @@ export const MessageSchema = z.object({
   sender_id: z.string().uuid().optional(),
   receiver_id: z.string().uuid().optional(),
   project_id: z.string().uuid().optional(),
+  version_id: z.string().uuid().optional(), // Links message to a version for version card display
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
 })

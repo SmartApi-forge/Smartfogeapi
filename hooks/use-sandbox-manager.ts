@@ -43,12 +43,19 @@ export function useSandboxManager({ projectId, enabled, onSandboxRestored }: Use
 
   /**
    * Keep sandbox alive by sending keepAlive request
-   * If sandbox is not found, automatically triggers restoration
+   * If sandbox is stopped, the API will automatically start it
+   * If sandbox is expired, triggers full restoration
    */
   const keepAlive = useCallback(async () => {
     if (!enabled || !projectId) return { success: false, needsRestart: false };
 
     try {
+      // Show resuming state while checking (in case sandbox needs to be started)
+      setState(prev => ({
+        ...prev,
+        isResuming: isInitialCheck.current, // Only show resuming on initial check
+      }));
+
       const response = await fetch(`/api/sandbox/keepalive/${projectId}`, {
         method: 'POST',
       });
@@ -59,36 +66,52 @@ export function useSandboxManager({ projectId, enabled, onSandboxRestored }: Use
         setState(prev => ({
           ...prev,
           isAlive: true,
+          isResuming: false,
           lastKeepAlive: Date.now(),
           error: null,
+          restoredUrl: data.sandboxUrl || prev.restoredUrl,
+          resumeMethod: data.wasRestarted ? 'resume' : undefined,
         }));
+        
+        // If sandbox was auto-restarted by keepalive, notify parent of new URL
+        if (data.wasRestarted && data.sandboxUrl && onSandboxRestored) {
+          console.log(`🔄 Sandbox was auto-started, new URL: ${data.sandboxUrl}`);
+          onSandboxRestored(data.sandboxUrl);
+        }
         
         // Only log on subsequent checks, not initial
         if (!isInitialCheck.current) {
           console.log(`✅ Sandbox alive for project ${projectId}`);
         }
         
-        return { success: true, needsRestart: false };
+        return { success: true, needsRestart: false, wasRestarted: data.wasRestarted };
       } else if (data.needsRestart) {
-        // Sandbox expired - needs restoration
+        // Sandbox expired or deleted - needs full restoration
         console.log(`⚠️ Sandbox expired for project ${projectId}, will auto-restore`);
         setState(prev => ({
           ...prev,
           isAlive: false,
+          isResuming: false,
         }));
         return { success: false, needsRestart: true };
       }
       
+      // Unknown response - clear resuming state
+      setState(prev => ({
+        ...prev,
+        isResuming: false,
+      }));
       return { success: false, needsRestart: false };
     } catch (error) {
       console.error('Failed to check sandbox status:', error);
       setState(prev => ({
         ...prev,
+        isResuming: false,
         error: 'Failed to check sandbox status',
       }));
       return { success: false, needsRestart: false };
     }
-  }, [projectId, enabled]);
+  }, [projectId, enabled, onSandboxRestored]);
 
   /**
    * Restart/restore sandbox by creating a new one from GitHub repo

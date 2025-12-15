@@ -5,12 +5,14 @@ import { useRouter } from 'next/navigation';
 import { PromptInputBox } from '@/components/ui/ai-prompt-box';
 import { api } from '@/lib/trpc-client';
 import { authService } from '@/lib/auth';
+import type { Attachment } from '@/src/types/chat-ux';
+import type { AIModel } from '@/components/model-selector';
 
 /**
  * Client component that handles prompt submission logic.
  * Extracted from app/page.tsx to enable Server Component architecture.
  * 
- * Requirements: 1.2, 1.3 - Isolate interactive elements into separate Client Components
+ * Updated to use model selector instead of Ask/Code mode toggle
  */
 export function PromptInputClient() {
   const router = useRouter();
@@ -32,8 +34,8 @@ export function PromptInputClient() {
     }
   });
 
-  const handlePromptSubmit = async (prompt: string) => {
-    console.log('🚀 handlePromptSubmit called with prompt:', prompt);
+  const handlePromptSubmit = async (prompt: string, model: AIModel, attachments: Attachment[]) => {
+    console.log('🚀 handlePromptSubmit called with:', { prompt, model, attachmentCount: attachments.length });
     
     // Check if user is authenticated using Supabase session
     const { session } = await authService.getCurrentSession();
@@ -53,13 +55,16 @@ export function PromptInputClient() {
     console.log('📡 Calling generateAPI.mutate with:', {
       prompt: prompt,
       framework: 'fastapi',
-      advanced: false
+      advanced: false,
+      model,
+      attachmentCount: attachments.length
     });
     
     generateAPI.mutate({
       prompt: prompt,
       framework: 'fastapi',
-      advanced: false
+      advanced: false,
+      model: model,
     });
   };
 

@@ -9,7 +9,7 @@
  */
 
 import { streamingService } from './streaming-service';
-import type { StreamEvent } from '../types/streaming';
+import type { StreamEvent, SuggestedLibrary } from '../types/streaming';
 
 /**
  * Generation phases for step:start events
@@ -418,6 +418,387 @@ export class StreamingEventEmitter {
 
     // Return default suggestions
     return ERROR_RECOVERY_SUGGESTIONS['default'];
+  }
+
+  /**
+   * Emit tool:start event when a tool is invoked
+   * 
+   * Requirements: 15.5
+   * WHEN a tool is invoked THEN the System SHALL emit tool:start SSE event 
+   * with taskNameActive for UI display
+   * 
+   * @param toolName - The name of the tool being invoked
+   * @param taskNameActive - Short description of the task (2-5 words) for UI display
+   * @param parameters - Optional tool parameters for context
+   */
+  async emitToolStart(
+    toolName: string, 
+    taskNameActive: string,
+    parameters?: Record<string, unknown>
+  ): Promise<void> {
+    const event: StreamEvent = {
+      type: 'tool:start',
+      tool: toolName,
+      taskNameActive,
+      parameters,
+      versionId: this.versionId,
+    };
+
+    await streamingService.emit(this.projectId, event);
+    console.log(`[StreamingEventEmitter] Tool started: ${toolName} - ${taskNameActive}`);
+  }
+
+  /**
+   * Emit tool:complete event when a tool finishes execution
+   * 
+   * Requirements: 15.6
+   * WHEN a tool completes THEN the System SHALL emit tool:complete SSE event 
+   * with taskNameComplete for UI display
+   * 
+   * @param toolName - The name of the tool that completed
+   * @param taskNameComplete - Short description of completion (2-5 words) for UI display
+   * @param result - The tool execution result
+   */
+  async emitToolComplete(
+    toolName: string, 
+    taskNameComplete: string,
+    result?: unknown
+  ): Promise<void> {
+    const event: StreamEvent = {
+      type: 'tool:complete',
+      tool: toolName,
+      taskNameComplete,
+      result,
+      versionId: this.versionId,
+    };
+
+    await streamingService.emit(this.projectId, event);
+    console.log(`[StreamingEventEmitter] Tool completed: ${toolName} - ${taskNameComplete}`);
+  }
+
+  /**
+   * Emit tool:error event when a tool fails
+   * 
+   * @param toolName - The name of the tool that failed
+   * @param error - Error message
+   */
+  async emitToolError(toolName: string, error: string): Promise<void> {
+    const event: StreamEvent = {
+      type: 'tool:error',
+      tool: toolName,
+      error,
+      versionId: this.versionId,
+    };
+
+    await streamingService.emit(this.projectId, event);
+    console.log(`[StreamingEventEmitter] Tool error: ${toolName} - ${error}`);
+  }
+
+  // ============================================
+  // Scaffolding Event Methods
+  // Requirements: 5.1-5.8 (Generation Progress Tracking)
+  // ============================================
+
+  /**
+   * Emit scaffold:start event when scaffolding begins
+   * 
+   * Requirements: 5.1
+   * WHEN generation starts THEN the System SHALL display "Analyzing your request..."
+   * 
+   * @param message - Optional custom message (defaults to "Analyzing your request...")
+   */
+  async emitScaffoldStart(message?: string): Promise<void> {
+    const event: StreamEvent = {
+      type: 'scaffold:start',
+      message: message || 'Analyzing your request...',
+      timestamp: Date.now(),
+      versionId: this.versionId,
+    };
+
+    await streamingService.emit(this.projectId, event);
+    console.log(`[StreamingEventEmitter] Scaffold started: ${event.message}`);
+  }
+
+  /**
+   * Emit template:cloning event when template cloning begins
+   * 
+   * Requirements: 1.1
+   * WHEN a user creates a new project from prompt THEN the System SHALL clone a pre-built template
+   * 
+   * @param message - Optional custom message (defaults to "Cloning template...")
+   */
+  async emitTemplateCloning(message?: string): Promise<void> {
+    const event: StreamEvent = {
+      type: 'template:cloning',
+      message: message || 'Cloning template...',
+      timestamp: Date.now(),
+      versionId: this.versionId,
+    };
+
+    await streamingService.emit(this.projectId, event);
+    console.log(`[StreamingEventEmitter] Template cloning: ${event.message}`);
+  }
+
+  /**
+   * Emit template:complete event when template cloning completes
+   * 
+   * Requirements: 1.2
+   * WHEN the template is cloned THEN the System SHALL have a complete Next.js project
+   * 
+   * @param sandboxId - The sandbox ID
+   * @param sandboxUrl - The sandbox URL
+   * @param message - Optional custom message
+   */
+  async emitTemplateComplete(sandboxId?: string, sandboxUrl?: string, message?: string): Promise<void> {
+    const event: StreamEvent = {
+      type: 'template:complete',
+      message: message || 'Template cloned successfully ✓',
+      sandboxId,
+      sandboxUrl,
+      timestamp: Date.now(),
+      versionId: this.versionId,
+    };
+
+    await streamingService.emit(this.projectId, event);
+    console.log(`[StreamingEventEmitter] Template complete: ${event.message}`);
+  }
+
+  /**
+   * Emit deps:analyzing event when analyzing prompt for dependencies
+   * 
+   * Requirements: 5.1
+   * WHEN generation starts THEN the System SHALL display "Analyzing your request..."
+   * 
+   * @param message - Optional custom message
+   */
+  async emitDepsAnalyzing(message?: string): Promise<void> {
+    const event: StreamEvent = {
+      type: 'deps:analyzing',
+      message: message || 'Analyzing dependencies...',
+      timestamp: Date.now(),
+      versionId: this.versionId,
+    };
+
+    await streamingService.emit(this.projectId, event);
+    console.log(`[StreamingEventEmitter] Deps analyzing: ${event.message}`);
+  }
+
+  /**
+   * Emit deps:detected event when packages are detected from prompt
+   * 
+   * Requirements: 5.2, 3.2
+   * WHEN packages are detected from prompt THEN the System SHALL display 
+   * "Detected packages: gsap, framer-motion" in the chat interface
+   * 
+   * @param packages - Array of detected package names
+   * @param message - Optional custom message
+   */
+  async emitDepsDetected(packages: string[], message?: string): Promise<void> {
+    const defaultMessage = packages.length > 0 
+      ? `Detected packages: ${packages.join(', ')}`
+      : 'No additional packages detected';
+    
+    const event: StreamEvent = {
+      type: 'deps:detected',
+      message: message || defaultMessage,
+      packages,
+      timestamp: Date.now(),
+      versionId: this.versionId,
+    };
+
+    await streamingService.emit(this.projectId, event);
+    console.log(`[StreamingEventEmitter] Deps detected: ${event.message}`);
+  }
+
+  /**
+   * Emit deps:suggested event when libraries are suggested based on context
+   * 
+   * Requirements: 9.1-9.9
+   * WHEN suggesting a library THEN the System SHALL display 
+   * "Suggested: framer-motion for animations" in the chat before installing
+   * 
+   * @param suggestions - Array of suggested libraries with reasons
+   * @param message - Optional custom message
+   */
+  async emitDepsSuggested(suggestions: SuggestedLibrary[], message?: string): Promise<void> {
+    const defaultMessage = suggestions.length > 0
+      ? `Suggested: ${suggestions.map(s => `${s.name} for ${s.reason}`).join(', ')}`
+      : 'No additional libraries suggested';
+    
+    const event: StreamEvent = {
+      type: 'deps:suggested',
+      message: message || defaultMessage,
+      suggestions,
+      timestamp: Date.now(),
+      versionId: this.versionId,
+    };
+
+    await streamingService.emit(this.projectId, event);
+    console.log(`[StreamingEventEmitter] Deps suggested: ${event.message}`);
+  }
+
+  /**
+   * Emit deps:installing event when package installation begins
+   * 
+   * Requirements: 5.3
+   * WHEN installing dependencies THEN the System SHALL display installation progress
+   * 
+   * @param packages - Array of packages being installed
+   * @param message - Optional custom message
+   */
+  async emitDepsInstalling(packages: string[], message?: string): Promise<void> {
+    const defaultMessage = `Installing ${packages.length} package${packages.length === 1 ? '' : 's'}...`;
+    
+    const event: StreamEvent = {
+      type: 'deps:installing',
+      message: message || defaultMessage,
+      packages,
+      timestamp: Date.now(),
+      versionId: this.versionId,
+    };
+
+    await streamingService.emit(this.projectId, event);
+    console.log(`[StreamingEventEmitter] Deps installing: ${event.message}`);
+  }
+
+  /**
+   * Emit deps:progress event during package installation
+   * 
+   * Requirements: 5.3, 3.5
+   * WHEN installing dependencies THEN the System SHALL emit install:progress SSE events
+   * showing each package being installed (e.g., "Installing gsap@3.12.5...")
+   * 
+   * @param currentPackage - The package currently being installed
+   * @param installedCount - Number of packages installed so far
+   * @param totalCount - Total number of packages to install
+   * @param message - Optional custom message
+   */
+  async emitDepsProgress(
+    currentPackage: string,
+    installedCount: number,
+    totalCount: number,
+    message?: string
+  ): Promise<void> {
+    const progress = totalCount > 0 ? Math.round((installedCount / totalCount) * 100) : 0;
+    const defaultMessage = `Installing ${currentPackage}...`;
+    
+    const event: StreamEvent = {
+      type: 'deps:progress',
+      message: message || defaultMessage,
+      currentPackage,
+      installedCount,
+      totalCount,
+      progress,
+      timestamp: Date.now(),
+      versionId: this.versionId,
+    };
+
+    await streamingService.emit(this.projectId, event);
+    console.log(`[StreamingEventEmitter] Deps progress: ${event.message} (${progress}%)`);
+  }
+
+  /**
+   * Emit deps:complete event when all dependencies are installed
+   * 
+   * Requirements: 5.4, 3.6
+   * WHEN installation completes THEN the System SHALL display "Dependencies installed ✓"
+   * WHEN installation completes THEN the System SHALL emit install:complete event 
+   * with list of installed packages
+   * 
+   * @param packages - Array of installed packages with versions
+   * @param message - Optional custom message
+   */
+  async emitDepsComplete(
+    packages: Array<{ name: string; version: string }>,
+    message?: string
+  ): Promise<void> {
+    const defaultMessage = packages.length > 0
+      ? 'Dependencies installed ✓'
+      : 'No additional dependencies needed ✓';
+    
+    const event: StreamEvent = {
+      type: 'deps:complete',
+      message: message || defaultMessage,
+      packages,
+      timestamp: Date.now(),
+      versionId: this.versionId,
+    };
+
+    await streamingService.emit(this.projectId, event);
+    console.log(`[StreamingEventEmitter] Deps complete: ${event.message}`);
+  }
+
+  /**
+   * Emit deps:error event when dependency installation fails
+   * 
+   * Requirements: 3.8
+   * IF dependency installation fails THEN the System SHALL emit an error event 
+   * with the pnpm error message and NOT proceed with code generation
+   * 
+   * @param error - The error message
+   * @param failedPackages - Optional array of packages that failed to install
+   * @param message - Optional custom message
+   */
+  async emitDepsError(
+    error: string,
+    failedPackages?: string[],
+    message?: string
+  ): Promise<void> {
+    const defaultMessage = failedPackages && failedPackages.length > 0
+      ? `Failed to install: ${failedPackages.join(', ')}`
+      : 'Dependency installation failed';
+    
+    const event: StreamEvent = {
+      type: 'deps:error',
+      message: message || defaultMessage,
+      error,
+      failedPackages,
+      timestamp: Date.now(),
+      versionId: this.versionId,
+    };
+
+    await streamingService.emit(this.projectId, event);
+    console.log(`[StreamingEventEmitter] Deps error: ${event.message} - ${error}`);
+  }
+
+  /**
+   * Emit generate:start event when code generation begins (after deps installed)
+   * 
+   * Requirements: 5.5
+   * AFTER dependencies are installed THEN the System SHALL display "Generating code..."
+   * 
+   * @param message - Optional custom message
+   */
+  async emitGenerateStart(message?: string): Promise<void> {
+    const event: StreamEvent = {
+      type: 'generate:start',
+      message: message || 'Generating code...',
+      timestamp: Date.now(),
+      versionId: this.versionId,
+    };
+
+    await streamingService.emit(this.projectId, event);
+    console.log(`[StreamingEventEmitter] Generate start: ${event.message}`);
+  }
+
+  /**
+   * Emit preview:starting event when preview server is starting
+   * 
+   * Requirements: 5.7
+   * WHEN starting preview THEN the System SHALL display "Starting development server..."
+   * 
+   * @param message - Optional custom message
+   */
+  async emitPreviewStarting(message?: string): Promise<void> {
+    const event: StreamEvent = {
+      type: 'preview:starting',
+      message: message || 'Starting development server...',
+      timestamp: Date.now(),
+      versionId: this.versionId,
+    };
+
+    await streamingService.emit(this.projectId, event);
+    console.log(`[StreamingEventEmitter] Preview starting: ${event.message}`);
   }
 
   /**

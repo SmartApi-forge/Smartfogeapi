@@ -9,14 +9,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/src/trpc/client";
 import { toast } from "sonner";
-import { Github, X, GitBranch, Plus, Check, Loader2, Search } from "lucide-react";
+import { X, GitBranch, Plus, Check, Loader2, Search } from "lucide-react";
 import { useTheme } from "next-themes";
 import Image from "next/image";
 
 interface GitHubSetupDialogProps {
   children: React.ReactNode;
   projectId: string;
-  projectFiles?: Record<string, any>; // Files to push
+  projectFiles?: Record<string, unknown>; // Files to push
 }
 
 interface Branch {
@@ -29,7 +29,7 @@ export function GitHubSetupDialog({
   projectId,
   projectFiles = {},
 }: GitHubSetupDialogProps) {
-  const { theme, resolvedTheme } = useTheme();
+  const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
   const router = useRouter();
   const trpcUtils = trpc.useUtils();
@@ -95,9 +95,6 @@ export function GitHubSetupDialog({
     }
   };
 
-  // Update project mutation
-  const updateProjectMutation = trpc.projects.update.useMutation();
-
   // Store repository mutation
   const storeRepositoryMutation = trpc.github.storeRepository.useMutation();
 
@@ -154,18 +151,19 @@ export function GitHubSetupDialog({
       
       if (branchData && branchData.length > 0) {
         // Safely map branches with sha check
+        type BranchData = { name: string; commit?: { sha?: string } };
         setBranches(
-          branchData
-            .filter((b: any) => b.commit && b.commit.sha) // Filter out branches without sha
-            .map((b: any) => ({ 
+          (branchData as BranchData[])
+            .filter((b) => b.commit && b.commit.sha) // Filter out branches without sha
+            .map((b) => ({ 
               name: b.name, 
-              sha: b.commit.sha 
+              sha: b.commit!.sha! 
             }))
         );
         
         // Set default branch (main, master, or first available)
-        const hasMain = branchData.some((b: any) => b.name === 'main');
-        const hasMaster = branchData.some((b: any) => b.name === 'master');
+        const hasMain = branchData.some((b: BranchData) => b.name === 'main');
+        const hasMaster = branchData.some((b: BranchData) => b.name === 'master');
         
         if (hasMain) {
           setSelectedBranch('main');
@@ -180,14 +178,15 @@ export function GitHubSetupDialog({
         setSelectedBranch('');
         throw new Error('Repository has no branches yet');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to fetch branches:", error);
       setBranches([]);
       setSelectedBranch('');
       
       // Use structured error properties instead of string matching
-      const status = error?.response?.status || error?.status || error?.data?.httpStatus;
-      const errorCode = error?.code;
+      const err = error as { response?: { status?: number }; status?: number; data?: { httpStatus?: number }; code?: string };
+      const status = err?.response?.status || err?.status || err?.data?.httpStatus;
+      const errorCode = err?.code;
       
       if (status === 404 || errorCode === 'NOT_FOUND') {
         // Repository not found or not yet initialized - re-throw for retry
@@ -265,8 +264,8 @@ export function GitHubSetupDialog({
       } else {
         throw new Error('Failed to push code');
       }
-    } catch (error: any) {
-      toast.error(error.message || "Failed to push code");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to push code");
     } finally {
       setIsPushing(false);
     }
@@ -417,7 +416,7 @@ export function GitHubSetupDialog({
               >
                 private repository
               </a>{" "}
-              to sync changes to. SmartAPIForge will push changes to a branch on this repository each time you send a message.
+              to sync changes to. SmartAPIForge will push changes to a branch on this repository each time you send a message. Select &quot;Create Repository&quot; to continue.
             </p>
             
             <div className="space-y-1 sm:space-y-1.5">
@@ -597,7 +596,7 @@ export function GitHubSetupDialog({
                           branch.name.toLowerCase().includes(branchSearchTerm.toLowerCase())
                         ).length === 0 && branches.length > 0 && (
                           <div className={`p-2 text-center text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                            No branches match "{branchSearchTerm}"
+                            No branches match &quot;{branchSearchTerm}&quot;
                           </div>
                         )}
                         

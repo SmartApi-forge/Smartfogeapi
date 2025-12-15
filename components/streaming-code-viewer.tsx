@@ -23,6 +23,9 @@ interface StreamingCodeViewerProps {
   versions?: Version[];
   selectedVersionId?: string | null;
   onVersionChange?: (versionId: string) => void;
+  // New props for v0-style streaming from useCodeGeneration hook
+  streamingOutput?: string; // Raw streaming output from codeGeneration.output
+  streamingStatus?: string; // Status from codeGeneration.status
 }
 
 /**
@@ -37,6 +40,8 @@ export function StreamingCodeViewer({
   versions = [],
   selectedVersionId,
   onVersionChange,
+  streamingOutput,
+  streamingStatus,
 }: StreamingCodeViewerProps) {
   const { resolvedTheme } = useTheme();
   const [displayedContent, setDisplayedContent] = useState('');
@@ -45,6 +50,9 @@ export function StreamingCodeViewer({
   const [isVersionDropdownOpen, setIsVersionDropdownOpen] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  
+  // Define codeTheme early so it can be used in streaming output display
+  const codeTheme = resolvedTheme === 'dark' ? themes.vsDark : themes.github;
 
   // Determine which file to display
   const fileToDisplay = files.find(
@@ -139,6 +147,76 @@ export function StreamingCodeViewer({
     }
   }, [isVersionDropdownOpen]);
 
+  // Show streaming output from codeGeneration hook if available (v0-style)
+  // Requirements: 19.2 - Update viewer in real-time as tokens arrive
+  if (streamingOutput && streamingStatus === 'generating') {
+    return (
+      <div className="h-full flex flex-col">
+        <div className="bg-muted/30 dark:bg-[#1D1D1D] px-4 py-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="font-sans text-sm font-medium">Generating...</span>
+            <motion.div
+              animate={{ opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+              className="flex items-center gap-1 text-xs text-blue-500"
+            >
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span>Writing code...</span>
+            </motion.div>
+          </div>
+        </div>
+        <div ref={scrollContainerRef} className="flex-1 overflow-auto relative bg-muted/30 dark:bg-[#1D1D1D]">
+          <Highlight
+            theme={codeTheme}
+            code={streamingOutput || '// Generating...'}
+            language="typescript"
+          >
+            {({ className, style, tokens, getLineProps, getTokenProps }) => (
+              <pre
+                className={`${className} font-mono p-3 min-h-full`}
+                style={{
+                  ...style,
+                  margin: 0,
+                  background: 'transparent',
+                  fontSize: '13px',
+                  lineHeight: '20px',
+                  fontWeight: '400',
+                }}
+              >
+                {tokens.map((line, i) => (
+                  <div
+                    key={i}
+                    {...getLineProps({ line })}
+                    className="flex hover:bg-muted/20 dark:hover:bg-gray-800/30 transition-colors"
+                  >
+                    <span className="inline-block w-10 text-right mr-3 text-gray-500 select-none flex-shrink-0 font-mono" style={{ fontSize: '13px', lineHeight: '20px' }}>
+                      {i + 1}
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      {line.map((token, key) => (
+                        <span key={key} {...getTokenProps({ token })} />
+                      ))}
+                    </span>
+                  </div>
+                ))}
+              </pre>
+            )}
+          </Highlight>
+          {/* Blinking cursor */}
+          <motion.div
+            className="absolute bottom-4 left-[4.5rem] w-2 h-4 bg-blue-500"
+            animate={{ opacity: [1, 0] }}
+            transition={{ duration: 0.8, repeat: Infinity }}
+          />
+        </div>
+        <div className="bg-muted/30 dark:bg-[#1D1D1D] border-t border-border dark:border-[#333433] px-4 py-1 flex items-center justify-between text-xs text-muted-foreground">
+          <span>Streaming output...</span>
+          <span>{streamingOutput.split('\n').length} lines</span>
+        </div>
+      </div>
+    );
+  }
+
   if (files.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
@@ -159,7 +237,7 @@ export function StreamingCodeViewer({
   }
 
   const language = getLanguageFromFilename(fileToDisplay.filename);
-  const codeTheme = resolvedTheme === 'dark' ? themes.vsDark : themes.github;
+  // codeTheme is already defined at the top of the component
 
   return (
     <div className="h-full flex flex-col">

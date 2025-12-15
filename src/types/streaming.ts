@@ -1,36 +1,139 @@
 // Event types for streaming API generation progress
+// Simplified for V0/Lovable architecture - removed unused version events
+
+/**
+ * Suggested library information for smart library suggestions
+ * Requirements: 9.1-9.9
+ */
+export interface SuggestedLibrary {
+  name: string;
+  reason: string;
+  keywords: string[];
+}
 
 export type StreamEvent =
   | {
+      // Legacy event types - kept for backward compatibility
       type: 'project:created';
       projectId: string;
       prompt: string;
     }
   | {
-      type: 'version:created';
-      versionId: string;
-      versionNumber: number;
-      versionName: string;
-    }
-  | {
-      type: 'version:start';
-      versionId: string;
-      versionNumber: number;
-      versionName: string;
-      projectId: string;
-    }
-  | {
-      type: 'version:complete';
-      versionId: string;
-      versionNumber: number;
-      versionName: string;
-      totalFiles: number;
-      projectId: string;
-    }
-  | {
       type: 'step:start';
       step: string;
       message: string;
+      versionId?: string;
+    }
+  // ============================================
+  // Scaffolding SSE Events
+  // Requirements: 5.1-5.8 (Generation Progress Tracking)
+  // ============================================
+  | {
+      // Emitted when scaffolding process begins
+      // Requirements: 5.1
+      type: 'scaffold:start';
+      message: string;
+      timestamp: number;
+      versionId?: string;
+    }
+  | {
+      // Emitted when template cloning begins
+      // Requirements: 1.1
+      type: 'template:cloning';
+      message: string;
+      timestamp: number;
+      versionId?: string;
+    }
+  | {
+      // Emitted when template cloning completes
+      // Requirements: 1.2
+      type: 'template:complete';
+      message: string;
+      sandboxId?: string;
+      sandboxUrl?: string;
+      timestamp: number;
+      versionId?: string;
+    }
+  | {
+      // Emitted when analyzing prompt for dependencies
+      // Requirements: 5.1
+      type: 'deps:analyzing';
+      message: string;
+      timestamp: number;
+      versionId?: string;
+    }
+  | {
+      // Emitted when packages are detected from prompt
+      // Requirements: 5.2, 3.2
+      type: 'deps:detected';
+      message: string;
+      packages: string[];
+      timestamp: number;
+      versionId?: string;
+    }
+  | {
+      // Emitted when libraries are suggested based on context
+      // Requirements: 9.1-9.9
+      type: 'deps:suggested';
+      message: string;
+      suggestions: SuggestedLibrary[];
+      timestamp: number;
+      versionId?: string;
+    }
+  | {
+      // Emitted when package installation begins
+      // Requirements: 5.3
+      type: 'deps:installing';
+      message: string;
+      packages: string[];
+      timestamp: number;
+      versionId?: string;
+    }
+  | {
+      // Emitted during package installation progress
+      // Requirements: 5.3, 3.5
+      type: 'deps:progress';
+      message: string;
+      currentPackage: string;
+      installedCount: number;
+      totalCount: number;
+      progress: number; // 0-100
+      timestamp: number;
+      versionId?: string;
+    }
+  | {
+      // Emitted when all dependencies are installed
+      // Requirements: 5.4, 3.6
+      type: 'deps:complete';
+      message: string;
+      packages: Array<{ name: string; version: string }>;
+      timestamp: number;
+      versionId?: string;
+    }
+  | {
+      // Emitted when dependency installation fails
+      // Requirements: 3.8
+      type: 'deps:error';
+      message: string;
+      error: string;
+      failedPackages?: string[];
+      timestamp: number;
+      versionId?: string;
+    }
+  | {
+      // Emitted when code generation starts (after deps installed)
+      // Requirements: 5.5
+      type: 'generate:start';
+      message: string;
+      timestamp: number;
+      versionId?: string;
+    }
+  | {
+      // Emitted when preview server is starting
+      // Requirements: 5.7
+      type: 'preview:starting';
+      message: string;
+      timestamp: number;
       versionId?: string;
     }
   | {
@@ -152,6 +255,28 @@ export type StreamEvent =
       type: 'preview:ready';
       previewUrl: string;
       message: string;
+      versionId?: string;
+    }
+  // Tool SSE events for AI tool system (v0-style)
+  // Requirements: 15.5, 15.6
+  | {
+      type: 'tool:start';
+      tool: string;
+      taskNameActive: string;
+      parameters?: Record<string, unknown>;
+      versionId?: string;
+    }
+  | {
+      type: 'tool:complete';
+      tool: string;
+      taskNameComplete: string;
+      result?: unknown;
+      versionId?: string;
+    }
+  | {
+      type: 'tool:error';
+      tool: string;
+      error: string;
       versionId?: string;
     };
 

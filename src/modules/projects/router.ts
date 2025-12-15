@@ -106,6 +106,30 @@ export const projectsRouter = createTRPCRouter({
     }),
 
   /**
+   * Get latest file snapshot for a project (v0-style architecture)
+   * Requirements: 18.1 - Display file tree from latest file_snapshot
+   */
+  getLatestSnapshot: protectedProcedure
+    .input(z.object({
+      projectId: z.string(),
+    }))
+    .query(async ({ input, ctx }) => {
+      try {
+        return await ProjectService.getLatestSnapshot(input.projectId, ctx.user.id)
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error
+        }
+        
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch file snapshot',
+          cause: error
+        })
+      }
+    }),
+
+  /**
    * Update project visibility
    */
   updateVisibility: protectedProcedure

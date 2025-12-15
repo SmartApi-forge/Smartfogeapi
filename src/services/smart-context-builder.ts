@@ -1,9 +1,18 @@
-import { EmbeddingService, SearchResult } from './embedding-service';
 import { VersionManager } from './version-manager';
 import { messageOperations } from '../../lib/supabase-server';
 import { createClient } from '@supabase/supabase-js';
 import type { Version } from '../modules/versions/types';
 import type { Message } from '../modules/messages/types';
+import { conversationContextService, buildConversationHistory } from './conversation-context-service';
+import type { FileSnapshot, FileSnapshotData, ConversationMessage } from '../types/database';
+
+// SearchResult type (previously from embedding-service)
+interface SearchResult {
+  filePath: string;
+  similarity: number;
+  fileType?: string;
+  imports?: string[];
+}
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -120,18 +129,15 @@ export class SmartContextBuilder {
       }
     }
     
-    // Step 3: Semantic search for relevant files
+    // Step 3: Keyword-based search for relevant files (embeddings removed)
     console.log(`🔍 Searching for relevant files for: "${userPrompt}"`);
     
-    let searchResults = await EmbeddingService.searchRelevantFiles(
-      projectId,
+    // Use keyword-based search instead of embeddings
+    let searchResults: SearchResult[] = this.keywordBasedSearch(
       userPrompt,
-      {
-        versionId: previousVersion?.id,
-        limit: maxFiles,
-        threshold: 0.3, // Lower threshold to get more candidates
-        fileTypes: includeTests ? undefined : ['component', 'utility', 'api', 'config'],
-      }
+      allFiles,
+      maxFiles,
+      includeTests
     );
     
     const embeddingSearchTime = Date.now() - startTime;
@@ -627,6 +633,81 @@ export class SmartContextBuilder {
     sections.push(newPrompt);
     
     return sections.join('\n');
+  }
+  
+  /**
+   * Keyword-based search to replace embedding search
+   * Returns SearchResult[] for compatibility with existing code
+   */
+  private static keywordBasedSearch(
+    prompt: string,
+    allFiles: Record<string, string>,
+    limit: number,
+    includeTests: boolean
+  ): SearchResult[] {
+    const results: SearchResult[] = [];
+    const promptLower = prompt.toLowerCase();
+    const keywords = this.extractKeywords(prompt);
+    
+    // Extract words from prompt for matching
+    const promptWords = promptLower
+      .split(/[\s,.:;!?]+/)
+      .filter(w => w.length > 2);
+    
+    for (const [filePath, content] of Object.entries(allFiles)) {
+      // Skip test files if not included
+      if (!includeTests && (filePath.includes('.test.') || filePath.includes('.spec.'))) {
+        continue;
+      }
+      
+      const pathLower = filePath.toLowerCase();
+      const fileName = filePath.split('/').pop()?.toLowerCase() || '';
+      let similarity = 0;
+      
+      // Check file path matches
+      for (const keyword of keywords) {
+        if (pathLower.includes(keyword)) {
+          similarity += 0.3;
+        }
+      }
+      
+      // Check file name matches prompt words
+      for (const word of promptWords) {
+        if (fileName.includes(word)) {
+          similarity += 0.2;
+        }
+      }
+      
+      // Check content for keyword matches
+      if (typeof content === 'string') {
+        const contentLower = content.toLowerCase();
+        for (const keyword of keywords) {
+          if (contentLower.includes(keyword)) {
+            similarity += 0.1;
+          }
+        }
+      }
+      
+      // Determine file type
+      let fileType = 'utility';
+      if (pathLower.includes('component')) fileType = 'component';
+      else if (pathLower.includes('api') || pathLower.includes('route')) fileType = 'api';
+      else if (pathLower.includes('config')) fileType = 'config';
+      
+      if (similarity > 0) {
+        results.push({
+          filePath,
+          similarity: Math.min(similarity, 1.0),
+          fileType,
+          imports: [],
+        });
+      }
+    }
+    
+    // Sort by similarity and return top N
+    return results
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, limit);
   }
   
   /**

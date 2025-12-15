@@ -1,10 +1,12 @@
 /**
- * ValidationAgent Service
+ * ValidationAgent Service (Updated for V0/Lovable Architecture)
  * 
  * Validates generated code and applies automatic fixes for common issues.
  * Handles missing imports, syntax errors, type errors, and framework-specific validations.
  * 
- * Requirements: 2.4, 8.4, 12.1, 12.2, 12.3, 12.4
+ * Integrated with new streaming API route for post-generation validation.
+ * 
+ * Requirements: 2.4, 4.3, 4.4, 8.4, 12.1, 12.2, 12.3, 12.4
  */
 
 import type {
@@ -15,7 +17,6 @@ import type {
   AppliedFix,
   ReadinessReport,
   ReadinessCheck,
-  ValidationIssueType,
 } from '../types/context-management';
 
 /**
@@ -1304,7 +1305,174 @@ export class ValidationAgent implements IValidationAgent {
 
     return issues;
   }
+
+  /**
+   * Validate multiple files from a generation turn (V0/Lovable Architecture Integration)
+   * 
+   * Requirements: 4.3, 4.4
+   * - Validates all generated files in a single call
+   * - Returns aggregated results with execution status
+   * - Applies auto-fixes where possible
+   * 
+   * @param files - Record of file paths to content
+   * @param context - Validation context with project info
+   * @returns Aggregated validation results for all files
+   */
+  async validateGeneratedFiles(
+    files: Record<string, string>,
+    context: ValidationContext
+  ): Promise<{
+    isValid: boolean;
+    executionStatus: 'success' | 'failed';
+    results: Record<string, ValidationResult>;
+    totalIssues: number;
+    totalFixes: number;
+    errorMessage?: string;
+  }> {
+    const results: Record<string, ValidationResult> = {};
+    let totalIssues = 0;
+    let totalFixes = 0;
+    let hasErrors = false;
+
+    try {
+      for (const [filePath, content] of Object.entries(files)) {
+        const result = await this.validate(content, filePath, context);
+        results[filePath] = result;
+        totalIssues += result.issues.length;
+        totalFixes += result.fixes.length;
+        
+        // Check for non-auto-fixable errors
+        const nonFixableErrors = result.issues.filter(
+          i => i.severity === 'error' && !i.autoFixable
+        );
+        if (nonFixableErrors.length > 0) {
+          hasErrors = true;
+        }
+      }
+
+      return {
+        isValid: !hasErrors,
+        executionStatus: hasErrors ? 'failed' : 'success',
+        results,
+        totalIssues,
+        totalFixes,
+        errorMessage: hasErrors 
+          ? `Validation failed with ${totalIssues} issue(s) across ${Object.keys(files).length} file(s)`
+          : undefined,
+      };
+    } catch (error) {
+      return {
+        isValid: false,
+        executionStatus: 'failed',
+        results,
+        totalIssues,
+        totalFixes,
+        errorMessage: error instanceof Error ? error.message : 'Unknown validation error',
+      };
+    }
+  }
+
+  /**
+   * Quick validation check for a single file (no auto-fix)
+   * 
+   * Requirements: 4.3
+   * - Fast validation for streaming feedback
+   * - Returns boolean for quick pass/fail check
+   */
+  quickValidate(code: string, filePath: string, isNextJsAppRouter: boolean = true): boolean {
+    if (!this.isReactFile(filePath)) {
+      return true;
+    }
+
+    // Check for critical issues only
+    const needsUseClient = this.needsUseClientDirective(code);
+    const hasUseClient = this.hasUseClientDirective(code);
+    
+    if (isNextJsAppRouter && needsUseClient && !hasUseClient) {
+      return false;
+    }
+
+    // Check for syntax errors
+    const syntaxResult = this.checkSyntax(code);
+    const hasSyntaxErrors = syntaxResult.issues.some(i => i.severity === 'error');
+    
+    return !hasSyntaxErrors;
+  }
+
+  /**
+   * Get fixed code for a file (applies all auto-fixes)
+   * 
+   * Requirements: 4.4
+   * - Returns fixed code ready for saving
+   * - Applies all auto-fixable issues
+   */
+  async getFixedCode(
+    code: string,
+    filePath: string,
+    context: ValidationContext
+  ): Promise<string> {
+    const result = await this.validate(code, filePath, context);
+    return result.fixedCode;
+  }
+
+  /**
+   * Create a default validation context for Next.js App Router projects
+   */
+  static createDefaultContext(filePath: string = '', projectFiles?: string[]): ValidationContext {
+    return {
+      isNextJsAppRouter: true,
+      projectFiles: projectFiles || [],
+      availableComponents: {},
+      filePath,
+      existingImports: [],
+      projectPatterns: {
+        uiLibrary: 'shadcn',
+        styling: 'tailwind',
+        formLibrary: 'react-hook-form',
+        stateManagement: 'hooks',
+        commonComponents: [],
+        importPatterns: [],
+      },
+    };
+  }
 }
 
 // Export singleton instance
 export const validationAgent = new ValidationAgent();
+
+/**
+ * Helper function to validate files from streaming API route
+ * 
+ * Requirements: 4.3, 4.4
+ */
+export async function validateAndFixFiles(
+  files: Record<string, string>,
+  projectFiles?: string[]
+): Promise<{
+  fixedFiles: Record<string, string>;
+  validationResults: Record<string, ValidationResult>;
+  isValid: boolean;
+  executionStatus: 'success' | 'failed';
+}> {
+  const fixedFiles: Record<string, string> = {};
+  const validationResults: Record<string, ValidationResult> = {};
+  let hasErrors = false;
+
+  for (const [filePath, content] of Object.entries(files)) {
+    const context = ValidationAgent.createDefaultContext(filePath, projectFiles);
+    const result = await validationAgent.validate(content, filePath, context);
+    validationResults[filePath] = result;
+    fixedFiles[filePath] = result.fixedCode;
+    
+    if (!result.isValid) {
+      hasErrors = true;
+    }
+  }
+
+  return {
+    fixedFiles,
+    validationResults,
+    isValid: !hasErrors,
+    executionStatus: hasErrors ? 'failed' : 'success',
+  };
+}

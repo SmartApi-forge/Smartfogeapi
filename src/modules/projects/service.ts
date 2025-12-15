@@ -276,6 +276,88 @@ export class ProjectService {
   }
 
   /**
+   * Get latest file snapshot for a project (v0-style architecture)
+   * Requirements: 18.1 - Display file tree from latest file_snapshot
+   */
+  static async getLatestSnapshot(
+    projectId: string,
+    userId: string
+  ): Promise<{ files_jsonb: Record<string, { content: string; language: string; size: number }> | null; turn_index: number | null; file_count: number | null }> {
+    try {
+      // Verify project ownership or collaboration
+      const { data: project, error: projectError } = await supabase
+        .from('projects')
+        .select('id, user_id')
+        .eq('id', projectId)
+        .single()
+
+      if (projectError || !project) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Project not found'
+        })
+      }
+
+      // Check if user is owner OR collaborator
+      const isOwner = project.user_id === userId
+      
+      if (!isOwner) {
+        const { data: collaborator, error: collabError } = await supabase
+          .from('project_collaborators')
+          .select('id')
+          .eq('project_id', projectId)
+          .eq('user_id', userId)
+          .maybeSingle()
+
+        if (collabError || !collaborator) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'You do not have access to this project'
+          })
+        }
+      }
+
+      // Get the latest file snapshot
+      const { data: snapshot, error: snapshotError } = await supabase
+        .from('file_snapshots')
+        .select('files_jsonb, turn_index, file_count')
+        .eq('project_id', projectId)
+        .order('turn_index', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (snapshotError) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to fetch file snapshot: ${snapshotError.message}`
+        })
+      }
+
+      // Return null values if no snapshot exists (new project)
+      if (!snapshot) {
+        return { files_jsonb: null, turn_index: null, file_count: null }
+      }
+
+      return {
+        files_jsonb: snapshot.files_jsonb as Record<string, { content: string; language: string; size: number }>,
+        turn_index: snapshot.turn_index,
+        file_count: snapshot.file_count
+      }
+    } catch (error) {
+      console.error('Error fetching file snapshot:', error)
+      
+      if (error instanceof TRPCError) {
+        throw error
+      }
+      
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch file snapshot'
+      })
+    }
+  }
+
+  /**
    * Update project visibility
    */
   static async updateVisibility(
