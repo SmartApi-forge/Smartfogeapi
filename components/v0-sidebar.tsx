@@ -431,15 +431,7 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
                 </button>
 
                 {/* Debug info - remove after testing */}
-                {process.env.NODE_ENV === 'development' && (
-                  <div className="px-3 py-2 text-xs text-muted-foreground border-b border-border mb-2">
-                    <p>Mobile: {isMobile ? 'Yes' : 'No'}</p>
-                    <p>Expanded: {isExpanded ? 'Yes' : 'No'}</p>
-                    <p>Loading: {isLoadingProjects ? 'Yes' : 'No'}</p>
-                    <p>Projects: {userProjects.length}</p>
-                    <p>Filtered: {filteredProjects.length}</p>
-                  </div>
-                )}
+
 
                 {/* Projects list */}
                 <div className="space-y-1 w-full">
