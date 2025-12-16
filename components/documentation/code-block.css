@@ -1,0 +1,74 @@
+/**
+ * Code Block Styles
+ * 
+ * Styles for syntax-highlighted code blocks with Shiki
+ */
+
+/* Base code block styles */
+.code-block-content pre {
+  margin: 0;
+  padding: 1rem;
+  overflow-x: auto;
+  font-size: 0.875rem;
+  line-height: 1.7;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+}
+
+.code-block-content code {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* Line numbers support */
+.code-block-content.show-line-numbers pre {
+  padding-left: 3.5rem;
+  counter-reset: line;
+}
+
+.code-block-content.show-line-numbers code {
+  counter-increment: line;
+}
+
+.code-block-content.show-line-numbers code::before {
+  content: counter(line);
+  display: inline-block;
+  width: 2rem;
+  margin-right: 1.5rem;
+  margin-left: -3.5rem;
+  text-align: right;
+  color: hsl(var(--muted-foreground));
+  opacity: 0.5;
+  user-select: none;
+}
+
+/* Shiki theme overrides */
+.code-block-content pre code .line {
+  display: block;
+}
+
+/* Highlighted lines */
+.code-block-content pre code .line.highlighted {
+  background-color: hsl(var(--accent) / 0.5);
+  border-left: 2px solid hsl(var(--primary));
+  padding-left: 0.5rem;
+  margin-left: -0.5rem;
+}
+
+/* Scrollbar styling */
+.code-block-content pre::-webkit-scrollbar {
+  height: 8px;
+}
+
+.code-block-content pre::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.code-block-content pre::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+}
+
+.code-block-content pre::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}

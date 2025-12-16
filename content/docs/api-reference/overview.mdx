@@ -1,0 +1,464 @@
+---
+title: API Reference Overview
+description: Complete reference for SmartAPIForge tRPC API
+category: api-reference
+order: 1
+tags: [api, trpc, reference, endpoints]
+lastUpdated: 2024-12-11
+---
+
+# API Reference Overview
+
+SmartAPIForge uses [tRPC](https://trpc.io/) for end-to-end type-safe APIs. This reference documents all available procedures (endpoints) and their usage.
+
+## What is tRPC?
+
+tRPC provides type-safe APIs without code generation. When you call a tRPC procedure from the frontend, TypeScript automatically knows the input and output types.
+
+<Callout type="info" title="Type Safety">
+  With tRPC, you get autocomplete, type checking, and inline documentation in your IDE automatically.
+</Callout>
+
+## Base URL
+
+All tRPC procedures are accessed through:
+
+```
+http://localhost:3000/api/trpc
+```
+
+In production:
+
+```
+https://your-domain.com/api/trpc
+```
+
+## Authentication
+
+Most procedures require authentication using Supabase JWT tokens.
+
+### Getting a Token
+
+```typescript
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+// Sign in with email
+const { data, error } = await supabase.auth.signInWithOtp({
+  email: 'user@example.com'
+})
+
+// Get session token
+const { data: { session } } = await supabase.auth.getSession()
+const token = session?.access_token
+```
+
+### Using the Token
+
+Include the token in requests:
+
+```typescript
+// Automatic with tRPC client
+import { trpc } from '@/lib/trpc-client'
+
+// Token is automatically included from Supabase session
+const projects = await trpc.projects.list.query()
+```
+
+## API Routers
+
+SmartAPIForge API is organized into the following routers:
+
+<CardGrid cols={2}>
+  <Card
+    title="Authentication"
+    description="User authentication and profile management"
+    href="/docs/api-reference/auth"
+  />
+  <Card
+    title="Projects"
+    description="Create and manage API projects"
+    href="/docs/api-reference/projects"
+  />
+  <Card
+    title="API Generation"
+    description="Generate APIs from prompts"
+    href="/docs/api-reference/generation"
+  />
+  <Card
+    title="GitHub"
+    description="GitHub integration and repository management"
+    href="/docs/api-reference/github"
+  />
+  <Card
+    title="Vercel"
+    description="Deployment to Vercel platform"
+    href="/docs/api-reference/vercel"
+  />
+  <Card
+    title="Messages"
+    description="Project messages and chat history"
+    href="/docs/api-reference/messages"
+  />
+  <Card
+    title="Versions"
+    description="Project version control"
+    href="/docs/api-reference/versions"
+  />
+  <Card
+    title="Invitations"
+    description="Team collaboration and invites"
+    href="/docs/api-reference/invitations"
+  />
+</CardGrid>
+
+## Using the API
+
+### Frontend (React)
+
+```typescript
+'use client'
+
+import { trpc } from '@/lib/trpc-client'
+
+export function ProjectList() {
+  // Query - automatically refetches and caches
+  const { data, isLoading, error } = trpc.projects.list.useQuery()
+  
+  // Mutation - for creating/updating data
+  const createProject = trpc.projects.create.useMutation({
+    onSuccess: () => {
+      // Invalidate and refetch
+      trpc.useContext().projects.list.invalidate()
+    }
+  })
+  
+  const handleCreate = () => {
+    createProject.mutate({
+      name: 'My API',
+      description: 'A new API project',
+      framework: 'fastapi'
+    })
+  }
+  
+  if (isLoading) return <div>Loading...</div>
+  if (error) return <div>Error: {error.message}</div>
+  
+  return (
+    <div>
+      {data?.map(project => (
+        <div key={project.id}>{project.name}</div>
+      ))}
+      <button onClick={handleCreate}>Create Project</button>
+    </div>
+  )
+}
+```
+
+### Server-Side (Next.js)
+
+```typescript
+import { createCaller } from '@/server/root'
+import { createContext } from '@/server/context'
+
+export async function getServerSideProps(context) {
+  const ctx = await createContext(context)
+  const caller = createCaller(ctx)
+  
+  // Call procedures directly
+  const projects = await caller.projects.list()
+  
+  return {
+    props: {
+      projects
+    }
+  }
+}
+```
+
+### Direct HTTP (cURL)
+
+```bash
+# Query (GET)
+curl -X GET \
+  'http://localhost:3000/api/trpc/projects.list' \
+  -H 'Authorization: Bearer YOUR_TOKEN'
+
+# Mutation (POST)
+curl -X POST \
+  'http://localhost:3000/api/trpc/projects.create' \
+  -H 'Authorization: Bearer YOUR_TOKEN' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "My API",
+    "description": "A new API project",
+    "framework": "fastapi"
+  }'
+```
+
+## Request Format
+
+### Query Procedures
+
+Queries use GET requests with URL parameters:
+
+```
+GET /api/trpc/projects.getById?input={"id":"project-123"}
+```
+
+### Mutation Procedures
+
+Mutations use POST requests with JSON body:
+
+```
+POST /api/trpc/projects.create
+Content-Type: application/json
+
+{
+  "name": "My API",
+  "description": "Description",
+  "framework": "fastapi"
+}
+```
+
+## Response Format
+
+### Success Response
+
+```json
+{
+  "result": {
+    "data": {
+      "id": "project-123",
+      "name": "My API",
+      "status": "active"
+    }
+  }
+}
+```
+
+### Error Response
+
+```json
+{
+  "error": {
+    "message": "Project not found",
+    "code": "NOT_FOUND",
+    "data": {
+      "code": "NOT_FOUND",
+      "httpStatus": 404,
+      "path": "projects.getById"
+    }
+  }
+}
+```
+
+## Error Codes
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `BAD_REQUEST` | 400 | Invalid input or parameters |
+| `UNAUTHORIZED` | 401 | Missing or invalid authentication |
+| `FORBIDDEN` | 403 | Insufficient permissions |
+| `NOT_FOUND` | 404 | Resource not found |
+| `CONFLICT` | 409 | Resource already exists |
+| `INTERNAL_SERVER_ERROR` | 500 | Server error |
+
+## Rate Limiting
+
+API requests are rate limited:
+
+| Tier | Requests per Minute | Requests per Hour |
+|------|---------------------|-------------------|
+| **Free** | 60 | 1,000 |
+| **Pro** | 300 | 10,000 |
+| **Enterprise** | Unlimited | Unlimited |
+
+<Callout type="warning" title="Rate Limit Headers">
+  Check `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers to avoid hitting limits.
+</Callout>
+
+## Pagination
+
+List endpoints support pagination:
+
+```typescript
+const { data } = await trpc.projects.list.useQuery({
+  limit: 20,
+  offset: 0,
+  orderBy: 'created_at',
+  order: 'desc'
+})
+
+// Response includes pagination metadata
+{
+  items: [...],
+  total: 150,
+  limit: 20,
+  offset: 0,
+  hasMore: true
+}
+```
+
+## Filtering
+
+Filter results using query parameters:
+
+```typescript
+const { data } = await trpc.projects.list.useQuery({
+  status: 'active',
+  framework: 'fastapi',
+  search: 'user api'
+})
+```
+
+## Sorting
+
+Sort results by any field:
+
+```typescript
+const { data } = await trpc.projects.list.useQuery({
+  orderBy: 'created_at',
+  order: 'desc' // or 'asc'
+})
+```
+
+## Batch Requests
+
+Execute multiple procedures in one request:
+
+```typescript
+const [projects, profile] = await Promise.all([
+  trpc.projects.list.query(),
+  trpc.auth.getProfile.query()
+])
+```
+
+## Subscriptions
+
+Real-time updates using WebSockets:
+
+```typescript
+// Subscribe to project updates
+trpc.projects.onUpdate.useSubscription(
+  { projectId: 'project-123' },
+  {
+    onData: (project) => {
+      console.log('Project updated:', project)
+    }
+  }
+)
+```
+
+## Type Definitions
+
+All types are automatically inferred from the tRPC router:
+
+```typescript
+import type { AppRouter } from '@/server/root'
+import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server'
+
+// Input types
+type RouterInput = inferRouterInputs<AppRouter>
+type CreateProjectInput = RouterInput['projects']['create']
+
+// Output types
+type RouterOutput = inferRouterOutputs<AppRouter>
+type Project = RouterOutput['projects']['getById']
+```
+
+## Best Practices
+
+### Error Handling
+
+Always handle errors gracefully:
+
+```typescript
+const { data, error } = trpc.projects.create.useMutation()
+
+if (error) {
+  if (error.data?.code === 'UNAUTHORIZED') {
+    // Redirect to login
+  } else if (error.data?.code === 'BAD_REQUEST') {
+    // Show validation errors
+  } else {
+    // Show generic error
+  }
+}
+```
+
+### Optimistic Updates
+
+Update UI immediately for better UX:
+
+```typescript
+const utils = trpc.useContext()
+
+const updateProject = trpc.projects.update.useMutation({
+  onMutate: async (newData) => {
+    // Cancel outgoing refetches
+    await utils.projects.getById.cancel()
+    
+    // Snapshot previous value
+    const previous = utils.projects.getById.getData()
+    
+    // Optimistically update
+    utils.projects.getById.setData(newData.id, newData)
+    
+    return { previous }
+  },
+  onError: (err, newData, context) => {
+    // Rollback on error
+    utils.projects.getById.setData(
+      newData.id,
+      context?.previous
+    )
+  }
+})
+```
+
+### Caching
+
+Configure cache behavior:
+
+```typescript
+const { data } = trpc.projects.list.useQuery(undefined, {
+  staleTime: 60 * 1000, // Consider fresh for 1 minute
+  cacheTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
+  refetchOnWindowFocus: false,
+  refetchOnMount: false
+})
+```
+
+## Next Steps
+
+<CardGrid cols={2}>
+  <Card
+    title="Authentication API"
+    description="User authentication endpoints"
+    href="/docs/api-reference/auth"
+  />
+  <Card
+    title="Projects API"
+    description="Project management endpoints"
+    href="/docs/api-reference/projects"
+  />
+  <Card
+    title="Generation API"
+    description="API generation endpoints"
+    href="/docs/api-reference/generation"
+  />
+  <Card
+    title="GitHub API"
+    description="GitHub integration endpoints"
+    href="/docs/api-reference/github"
+  />
+</CardGrid>
+
+## Resources
+
+- [tRPC Documentation](https://trpc.io/docs)
+- [React Query Documentation](https://tanstack.com/query/latest)
+- [Zod Validation](https://zod.dev/)
+- [TypeScript Handbook](https://www.typescriptlang.org/docs/)

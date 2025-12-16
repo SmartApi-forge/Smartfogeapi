@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { LogOut, Settings, User, Menu, Plus, Search } from "lucide-react"
+import { LogOut, Settings, User, Menu, Plus, Search, BookOpen, History, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AnimatePresence, motion } from "framer-motion"
 import {
@@ -160,36 +160,22 @@ export function DashboardHeader({
           </div>
           {/* Center Navigation (Desktop) */}
           <nav className="hidden md:flex absolute left-1/2 -translate-x-1/2 items-center gap-6">
-            <Link href="/careers" className="text-white hover:text-white/80 text-base transition-colors">
-              Careers
+            <Link href="/docs/getting-started/introduction" className="text-white hover:text-white/80 text-base transition-colors flex items-center gap-2">
+              <BookOpen className="w-4 h-4" />
+              Documentation
             </Link>
-            <Link href="/enterprise" className="text-white hover:text-white/80 text-base transition-colors">
-              Enterprise
+            <Link href="/history" className="text-white hover:text-white/80 text-base transition-colors flex items-center gap-2">
+              <History className="w-4 h-4" />
+              History
             </Link>
-            <Link href="/pricing" className="text-white hover:text-white/80 text-base transition-colors">
-              Pricing
-            </Link>
-            <Link href="/credits" className="text-white hover:text-white/80 text-base transition-colors">
-              Free Credits
+            <Link href="/templates" className="text-white hover:text-white/80 text-base transition-colors flex items-center gap-2">
+              <Sparkles className="w-4 h-4" />
+              Templates
             </Link>
           </nav>
 
         {/* Right side - Navigation */}
         <div className="flex items-center gap-4 md:gap-6">
-
-          {/* Social Icons */}
-          <div className="hidden sm:flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="text-white hover:bg-white/10">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-              </svg>
-            </Button>
-            <Button variant="ghost" size="icon" className="text-white hover:bg-white/10">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-              </svg>
-            </Button>
-          </div>
 
           {/* User Avatar with Dropdown */}
           <DropdownMenu>
@@ -306,32 +292,28 @@ export function DashboardHeader({
           <div className="border-t border-[#2A2D31]/60 bg-[#1A1D21]/50">
             <nav className="p-2">
               <Link 
-                href="/careers" 
-                className="block px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800/60 rounded-md transition-colors"
+                href="/docs/getting-started/introduction" 
+                className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800/60 rounded-md transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Careers
+                <BookOpen className="w-4 h-4" />
+                Documentation
               </Link>
               <Link 
-                href="/enterprise" 
-                className="block px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800/60 rounded-md transition-colors"
+                href="/history" 
+                className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800/60 rounded-md transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Enterprise
+                <History className="w-4 h-4" />
+                History
               </Link>
               <Link 
-                href="/pricing" 
-                className="block px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800/60 rounded-md transition-colors"
+                href="/templates" 
+                className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800/60 rounded-md transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Pricing
-              </Link>
-              <Link 
-                href="/credits" 
-                className="block px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800/60 rounded-md transition-colors"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Free Credits
+                <Sparkles className="w-4 h-4" />
+                Templates
               </Link>
             </nav>
           </div>

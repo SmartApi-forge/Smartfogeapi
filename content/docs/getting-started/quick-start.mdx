@@ -1,0 +1,472 @@
+---
+title: Quick Start Guide
+description: Create your first API with SmartAPIForge in under 5 minutes
+category: getting-started
+order: 3
+tags: [quick-start, tutorial, getting-started, first-api]
+lastUpdated: 2024-12-11
+---
+
+# Quick Start Guide
+
+Create your first production-ready API with SmartAPIForge in under 5 minutes. This guide walks you through the complete workflow from prompt to deployed API.
+
+<Callout type="info" title="Prerequisites">
+  Make sure you've completed the [Installation](/docs/getting-started/installation) guide before starting.
+</Callout>
+
+## Your First API in 5 Minutes
+
+### Step 1: Sign In
+
+Navigate to [http://localhost:3000](http://localhost:3000) and sign in with your email:
+
+1. Click **Sign In** or **Get Started**
+2. Enter your email address
+3. Check your inbox for the magic link
+4. Click the link to authenticate
+
+<Callout type="success" title="Authenticated">
+  You're now signed in and ready to create your first API!
+</Callout>
+
+### Step 2: Create a New Project
+
+From the dashboard:
+
+1. Click **New Project** or the **+** button
+2. Enter a project name (e.g., "My First API")
+3. Add a description (optional)
+4. Click **Create Project**
+
+Your project is created instantly and you'll be redirected to the project workspace.
+
+### Step 3: Describe Your API
+
+In the AI prompt box, describe what you want to build. Be specific!
+
+**Example Prompts:**
+
+<Tabs defaultValue="todo">
+  <TabsList>
+    <TabsTrigger value="todo">Todo API</TabsTrigger>
+    <TabsTrigger value="blog">Blog API</TabsTrigger>
+    <TabsTrigger value="ecommerce">E-commerce API</TabsTrigger>
+  </TabsList>
+  
+  <TabsContent value="todo">
+    ```
+    Create a REST API for managing todos with the following features:
+    - Create, read, update, and delete todos
+    - Each todo has a title, description, status (pending/completed), and due date
+    - Filter todos by status
+    - Mark todos as complete
+    - Include input validation and error handling
+    ```
+  </TabsContent>
+  
+  <TabsContent value="blog">
+    ```
+    Create a blog API with:
+    - Posts with title, content, author, and publish date
+    - Categories and tags for posts
+    - Comments on posts
+    - User authentication
+    - CRUD operations for all resources
+    - Pagination for listing posts
+    ```
+  </TabsContent>
+  
+  <TabsContent value="ecommerce">
+    ```
+    Create an e-commerce API with:
+    - Products with name, description, price, and inventory
+    - Shopping cart functionality
+    - Order management
+    - User accounts
+    - Product search and filtering
+    - Payment processing integration
+    ```
+  </TabsContent>
+</Tabs>
+
+<Callout type="warning" title="Be Specific">
+  The more detailed your description, the better the generated API will match your needs.
+</Callout>
+
+### Step 4: Generate Your API
+
+1. Click **Generate** or press `Cmd/Ctrl + Enter`
+2. Watch the real-time progress as SmartAPIForge:
+   - 🤖 Analyzes your requirements
+   - 📝 Generates OpenAPI 3.1 specification
+   - 💻 Creates FastAPI/Express code
+   - 🧪 Writes automated tests
+   - 🏗️ Sets up the sandbox environment
+   - ✅ Runs tests and validation
+
+**Generation Time:** Typically 30-60 seconds
+
+<Callout type="info" title="What's Happening?">
+  SmartAPIForge uses GPT-4 to understand your requirements and generate production-ready code with proper structure, validation, and tests.
+</Callout>
+
+### Step 5: Preview Your API
+
+Once generation completes, you'll see:
+
+**Left Panel - Code Editor:**
+- Browse generated files
+- View API endpoints
+- Inspect data models
+- Review tests
+
+**Right Panel - Live Preview:**
+- Interactive Swagger UI
+- Test endpoints directly
+- View request/response examples
+- See API documentation
+
+**Bottom Panel - Terminal:**
+- View server logs
+- Run commands
+- Debug issues
+- Monitor requests
+
+### Step 6: Test Your API
+
+Use the built-in Swagger UI to test your endpoints:
+
+1. Click on an endpoint (e.g., `POST /todos`)
+2. Click **Try it out**
+3. Enter request data:
+   ```json
+   {
+     "title": "My first todo",
+     "description": "Test the API",
+     "status": "pending",
+     "dueDate": "2024-12-31"
+   }
+   ```
+4. Click **Execute**
+5. View the response
+
+<Callout type="success" title="API Working">
+  Your API is running in a secure sandbox and ready to handle requests!
+</Callout>
+
+### Step 7: Make Changes (Optional)
+
+Want to modify the generated code?
+
+1. Click on any file in the code editor
+2. Make your changes
+3. The sandbox automatically restarts
+4. Test your changes in the preview
+
+**Example Modification:**
+
+```python
+# Add a new endpoint to mark all todos as complete
+@app.post("/todos/complete-all")
+async def complete_all_todos():
+    todos = await Todo.find_all()
+    for todo in todos:
+        todo.status = "completed"
+        await todo.save()
+    return {"message": f"Marked {len(todos)} todos as complete"}
+```
+
+### Step 8: Deploy to Production
+
+Ready to go live? Deploy with one click:
+
+<Tabs defaultValue="vercel">
+  <TabsList>
+    <TabsTrigger value="vercel">Vercel</TabsTrigger>
+    <TabsTrigger value="github">GitHub</TabsTrigger>
+  </TabsList>
+  
+  <TabsContent value="vercel">
+    1. Click the **Publish** button (Vercel logo)
+    2. Click **Connect Vercel Account** (first time only)
+    3. Authorize SmartAPIForge
+    4. Click **Deploy to Vercel**
+    5. Wait ~1-2 minutes for deployment
+    6. Click **View Live Site**
+    
+    Your API is now live at `https://your-project.vercel.app`!
+  </TabsContent>
+  
+  <TabsContent value="github">
+    1. Click the **GitHub** icon
+    2. Click **Connect GitHub** (first time only)
+    3. Authorize SmartAPIForge
+    4. Click **Create Repository**
+    5. Enter repository name
+    6. Choose public or private
+    7. Click **Create**
+    
+    Your code is now on GitHub and ready for CI/CD!
+  </TabsContent>
+</Tabs>
+
+<Callout type="success" title="Deployed">
+  Your API is now live and accessible to the world!
+</Callout>
+
+## Understanding the Generated Code
+
+### Project Structure
+
+```
+my-first-api/
+├── main.py                 # FastAPI application entry point
+├── models/                 # Data models (Pydantic)
+│   ├── todo.py
+│   └── user.py
+├── routes/                 # API endpoints
+│   ├── todos.py
+│   └── users.py
+├── schemas/                # Request/response schemas
+│   ├── todo_schema.py
+│   └── user_schema.py
+├── tests/                  # Automated tests
+│   ├── test_todos.py
+│   └── test_users.py
+├── requirements.txt        # Python dependencies
+└── openapi.yaml           # OpenAPI 3.1 specification
+```
+
+### Key Files
+
+**main.py** - Application entry point:
+```python
+from fastapi import FastAPI
+from routes import todos, users
+
+app = FastAPI(
+    title="My First API",
+    description="Generated by SmartAPIForge",
+    version="1.0.0"
+)
+
+app.include_router(todos.router)
+app.include_router(users.router)
+```
+
+**models/todo.py** - Data model:
+```python
+from pydantic import BaseModel
+from datetime import datetime
+
+class Todo(BaseModel):
+    id: str
+    title: str
+    description: str | None
+    status: str  # "pending" | "completed"
+    due_date: datetime
+    created_at: datetime
+    updated_at: datetime
+```
+
+**routes/todos.py** - API endpoints:
+```python
+from fastapi import APIRouter, HTTPException
+from models.todo import Todo
+
+router = APIRouter(prefix="/todos", tags=["todos"])
+
+@router.post("/", response_model=Todo)
+async def create_todo(todo: TodoCreate):
+    # Implementation
+    pass
+
+@router.get("/", response_model=list[Todo])
+async def list_todos(status: str | None = None):
+    # Implementation
+    pass
+```
+
+## Common Workflows
+
+### Iterating on Your API
+
+1. **Refine with AI:**
+   ```
+   Add authentication to all endpoints using JWT tokens
+   ```
+
+2. **Add Features:**
+   ```
+   Add a search endpoint that finds todos by keyword in title or description
+   ```
+
+3. **Fix Issues:**
+   ```
+   Fix the validation error when due_date is in the past
+   ```
+
+### Working with GitHub
+
+**Create a Branch:**
+1. Click GitHub icon
+2. Click **+** next to branches
+3. Enter branch name: `feature/add-search`
+4. Click **Create**
+
+**Push Changes:**
+1. Make your code changes
+2. Click **Push Changes**
+3. Enter commit message
+4. Click **Push**
+
+**Pull Changes:**
+1. Click **Pull Changes**
+2. Sandbox restarts automatically
+3. Changes appear in editor
+
+### Testing Locally
+
+Want to run the API on your machine?
+
+1. Click **Download Code**
+2. Extract the ZIP file
+3. Navigate to the directory:
+   ```bash
+   cd my-first-api
+   ```
+4. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+5. Run the server:
+   ```bash
+   uvicorn main:app --reload
+   ```
+6. Open [http://localhost:8000/docs](http://localhost:8000/docs)
+
+## Next Steps
+
+<CardGrid cols={2}>
+  <Card
+    title="AI Generation Deep Dive"
+    description="Learn advanced AI generation techniques"
+    href="/docs/features/ai-generation"
+  />
+  <Card
+    title="Sandbox Execution"
+    description="Understand the sandbox environment"
+    href="/docs/features/sandbox"
+  />
+  <Card
+    title="GitHub Integration"
+    description="Master version control workflows"
+    href="/docs/features/github"
+  />
+  <Card
+    title="Deployment Guide"
+    description="Deploy to multiple platforms"
+    href="/docs/deployment"
+  />
+</CardGrid>
+
+## Tips for Success
+
+### Writing Better Prompts
+
+✅ **Good Prompts:**
+- Specific about data models and relationships
+- Include validation requirements
+- Mention authentication needs
+- Specify error handling
+
+❌ **Avoid:**
+- Vague descriptions
+- Missing data structure details
+- Unclear requirements
+
+### Best Practices
+
+1. **Start Simple:** Begin with core functionality, then iterate
+2. **Test Thoroughly:** Use the Swagger UI to test all endpoints
+3. **Review Code:** Always review generated code before deploying
+4. **Version Control:** Push to GitHub regularly
+5. **Monitor Logs:** Check the terminal for errors and warnings
+
+### Performance Tips
+
+- **Sandbox Warm-up:** First request may be slower (cold start)
+- **Batch Operations:** Use bulk endpoints for multiple items
+- **Caching:** Generated code includes caching where appropriate
+- **Database Indexes:** Check generated models for proper indexing
+
+## Troubleshooting
+
+### Generation Failed
+
+**Problem:** API generation times out or fails
+
+**Solutions:**
+- Simplify your prompt
+- Break complex APIs into smaller pieces
+- Check OpenAI API credits
+- Verify all environment variables are set
+
+### Sandbox Not Starting
+
+**Problem:** Preview shows "Sandbox starting..." indefinitely
+
+**Solutions:**
+- Check E2B API key and credits
+- Refresh the page
+- Check browser console for errors
+- Verify E2B service status
+
+### Endpoints Not Working
+
+**Problem:** API returns 404 or 500 errors
+
+**Solutions:**
+- Check terminal logs for errors
+- Verify request format matches schema
+- Test with Swagger UI first
+- Review generated code for issues
+
+### Deployment Failed
+
+**Problem:** Vercel deployment fails
+
+**Solutions:**
+- Check Vercel account is connected
+- Verify project has no build errors
+- Check Vercel service status
+- Review deployment logs
+
+## Getting Help
+
+Need assistance?
+
+- 📚 Browse the [Full Documentation](/docs)
+- 💬 Join [Discord Community](https://discord.gg/smartapiforge)
+- 🐛 Report [GitHub Issues](https://github.com/Shashank4507/smart-forge-api/issues)
+- 📧 Email: support@smartapiforge.dev
+
+<Callout type="success" title="Congratulations!">
+  You've created your first API with SmartAPIForge! You're now ready to build production-ready APIs in minutes instead of hours.
+</Callout>
+
+## What's Next?
+
+Explore advanced features:
+
+- **Authentication & Authorization** - Add JWT, OAuth, API keys
+- **Database Integration** - Connect to PostgreSQL, MongoDB, Redis
+- **Real-time Features** - WebSockets and Server-Sent Events
+- **File Uploads** - Handle file uploads and storage
+- **Rate Limiting** - Protect your API from abuse
+- **Monitoring** - Track usage and performance
+- **Custom Domains** - Use your own domain name
+- **Team Collaboration** - Invite team members
+
+Ready to dive deeper? Check out our [Guides](/docs/guides) section!

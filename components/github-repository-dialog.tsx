@@ -76,7 +76,7 @@ export function GitHubRepositoryDialog({
       await createRepositoryMutation.mutateAsync({
         name: repositoryName.trim(),
         isPrivate: true,
-        description: `Repository created from v0 project`,
+        description: `Repository created from SmartAPIForge project`,
       });
     } catch (error) {
       // Error handling is done in the mutation

@@ -1,4 +1,9 @@
 import bundleAnalyzer from '@next/bundle-analyzer';
+import createMDX from '@next/mdx'
+import remarkGfm from 'remark-gfm'
+import rehypeSlug from 'rehype-slug'
+import rehypeAutolinkHeadings from 'rehype-autolink-headings'
+import rehypePrettyCode from 'rehype-pretty-code'
 
 const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === 'true',
@@ -20,10 +25,13 @@ const nextConfig = {
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
   
+  pageExtensions: ['js', 'jsx', 'md', 'mdx', 'ts', 'tsx'],
+  
   // React Compiler and package optimizations (Requirements 6.1, 6.2)
   experimental: {
     reactCompiler: true,
     optimizePackageImports: [
+      '@/components/documentation',
       '@tabler/icons-react',
       'lucide-react',
       'framer-motion',
@@ -41,4 +49,34 @@ const nextConfig = {
   productionBrowserSourceMaps: false,
 }
 
-export default withBundleAnalyzer(nextConfig)
+const withMDX = createMDX({
+  options: {
+    remarkPlugins: [
+      remarkGfm, // GitHub Flavored Markdown support
+    ],
+    rehypePlugins: [
+      rehypeSlug, // Add IDs to headings
+      [
+        rehypeAutolinkHeadings, // Add links to headings
+        {
+          behavior: 'wrap',
+          properties: {
+            className: ['anchor'],
+          },
+        },
+      ],
+      [
+        rehypePrettyCode, // Syntax highlighting with Shiki
+        {
+          theme: {
+            dark: 'github-dark',
+            light: 'github-light',
+          },
+          keepBackground: false,
+        },
+      ],
+    ],
+  },
+})
+
+export default withMDX(withBundleAnalyzer(nextConfig))

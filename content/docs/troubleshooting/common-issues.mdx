@@ -1,0 +1,527 @@
+---
+title: Common Issues & Solutions
+description: Troubleshooting guide for common SmartAPIForge issues
+category: troubleshooting
+order: 1
+tags: [troubleshooting, issues, solutions, faq]
+lastUpdated: 2024-12-11
+---
+
+# Common Issues & Solutions
+
+Quick solutions to common problems you might encounter while using SmartAPIForge.
+
+## Installation Issues
+
+### Node.js Version Error
+
+**Problem:** Error message about Node.js version
+
+```
+Error: The engine "node" is incompatible with this module.
+Expected version ">=18.17.0". Got "16.14.0"
+```
+
+**Solution:**
+
+Update Node.js to version 18 or higher:
+
+```bash
+# Using NVM
+nvm install 18
+nvm use 18
+
+# Verify
+node --version  # Should show v18.x.x or higher
+```
+
+### Port Already in Use
+
+**Problem:** Cannot start development server
+
+```
+Error: listen EADDRINUSE: address already in use :::3000
+```
+
+**Solution:**
+
+Kill the process using port 3000:
+
+```bash
+# macOS/Linux
+lsof -ti:3000 | xargs kill -9
+
+# Or use a different port
+PORT=3001 pnpm dev
+```
+
+### Database Connection Failed
+
+**Problem:** Cannot connect to Supabase
+
+```
+Error: Failed to connect to database
+```
+
+**Solution:**
+
+1. Verify environment variables:
+   ```bash
+   echo $NEXT_PUBLIC_SUPABASE_URL
+   echo $NEXT_PUBLIC_SUPABASE_ANON_KEY
+   ```
+
+2. Check Supabase project is active
+3. Test connection:
+   ```bash
+   curl $NEXT_PUBLIC_SUPABASE_URL/rest/v1/
+   ```
+
+4. Ensure `.env.local` file exists and is properly formatted
+
+## Authentication Issues
+
+### Magic Link Not Received
+
+**Problem:** Email with magic link doesn't arrive
+
+**Solutions:**
+
+1. **Check spam folder** - Magic links often end up in spam
+2. **Wait a few minutes** - Email delivery can be delayed
+3. **Verify email address** - Ensure no typos
+4. **Check Supabase email settings**:
+   - Go to Supabase dashboard
+   - Settings → Auth → Email Templates
+   - Verify SMTP configuration
+
+### Session Expired
+
+**Problem:** "Session expired" error after some time
+
+**Solution:**
+
+This is normal behavior. Sessions expire after a period of inactivity.
+
+```typescript
+// Implement token refresh
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+// Refresh session
+const { data, error } = await supabase.auth.refreshSession()
+if (data.session) {
+  // Session refreshed successfully
+}
+```
+
+### Unauthorized Error
+
+**Problem:** API returns 401 Unauthorized
+
+**Solutions:**
+
+1. **Check token is included**:
+   ```typescript
+   const { data: { session } } = await supabase.auth.getSession()
+   console.log('Token:', session?.access_token)
+   ```
+
+2. **Verify token hasn't expired**:
+   ```typescript
+   if (session && session.expires_at < Date.now() / 1000) {
+     // Token expired, refresh it
+     await supabase.auth.refreshSession()
+   }
+   ```
+
+3. **Check Authorization header**:
+   ```bash
+   curl -H "Authorization: Bearer YOUR_TOKEN" \
+     http://localhost:3000/api/trpc/auth.getProfile
+   ```
+
+## API Generation Issues
+
+### Generation Timeout
+
+**Problem:** API generation takes too long or times out
+
+**Solutions:**
+
+1. **Simplify your prompt** - Break complex APIs into smaller pieces
+2. **Check OpenAI API credits** - Ensure you have available credits
+3. **Verify OpenAI API key**:
+   ```bash
+   curl https://api.openai.com/v1/models \
+     -H "Authorization: Bearer $OPENAI_API_KEY"
+   ```
+
+4. **Try again** - Sometimes it's just a temporary issue
+
+### Generated Code Has Errors
+
+**Problem:** Generated code doesn't work or has syntax errors
+
+**Solutions:**
+
+1. **Review the code** - Check for obvious issues
+2. **Check terminal logs** - Look for specific error messages
+3. **Refine your prompt** - Be more specific about requirements
+4. **Iterate** - Ask AI to fix specific issues:
+   ```
+   Fix the validation error in the create_user endpoint
+   ```
+
+### Wrong Framework Generated
+
+**Problem:** AI generated Express but you wanted FastAPI
+
+**Solution:**
+
+Be explicit in your prompt:
+
+```
+Create a REST API using FastAPI (Python) with the following features...
+```
+
+Or regenerate with correct framework specified.
+
+## Sandbox Issues
+
+### Sandbox Won't Start
+
+**Problem:** Sandbox stuck on "Starting..."
+
+**Solutions:**
+
+1. **Check E2B API key**:
+   ```bash
+   echo $E2B_API_KEY
+   ```
+
+2. **Verify E2B credits** - Check your E2B dashboard
+3. **Check E2B service status** - Visit [status.e2b.dev](https://status.e2b.dev)
+4. **Restart sandbox**:
+   - Click the Restart button
+   - Or create a new project
+
+### Sandbox Crashes
+
+**Problem:** Sandbox stops responding or crashes
+
+**Solutions:**
+
+1. **Check resource usage**:
+   ```bash
+   # In sandbox terminal
+   top
+   free -h
+   df -h
+   ```
+
+2. **Review error logs**:
+   ```bash
+   tail -f /var/log/server.log
+   ```
+
+3. **Reduce memory usage** - Optimize your code
+4. **Restart sandbox** - Click the Restart button
+
+### Dependencies Won't Install
+
+**Problem:** `pip install` or `npm install` fails
+
+**Solutions:**
+
+1. **Check requirements.txt/package.json** - Ensure valid format
+2. **Try manual installation**:
+   ```bash
+   # In sandbox terminal
+   pip install package-name
+   # or
+   npm install package-name
+   ```
+
+3. **Check package exists** - Verify package name is correct
+4. **Use specific versions**:
+   ```
+   fastapi==0.104.1
+   ```
+
+## GitHub Integration Issues
+
+### Cannot Connect GitHub
+
+**Problem:** GitHub OAuth fails
+
+**Solutions:**
+
+1. **Check GitHub OAuth app settings**:
+   - Callback URL must match exactly
+   - App must be active
+
+2. **Revoke and reconnect**:
+   - Go to GitHub Settings → Applications
+   - Revoke SmartAPIForge
+   - Reconnect from SmartAPIForge
+
+3. **Check environment variables**:
+   ```bash
+   echo $GITHUB_ID
+   echo $GITHUB_SECRET
+   ```
+
+### Push/Pull Fails
+
+**Problem:** Cannot push or pull code
+
+**Solutions:**
+
+1. **Check repository permissions** - Ensure you have write access
+2. **Pull before push** - Always pull latest changes first
+3. **Resolve conflicts** - If there are conflicts, resolve them manually
+4. **Check GitHub service status** - Visit [githubstatus.com](https://www.githubstatus.com)
+
+### Branch Not Found
+
+**Problem:** Cannot switch to branch
+
+**Solutions:**
+
+1. **Refresh branch list** - Click the refresh icon
+2. **Check branch exists on GitHub** - Verify in GitHub web interface
+3. **Create branch if needed** - Use the + button to create it
+
+## Deployment Issues
+
+### Vercel Deployment Failed
+
+**Problem:** Deployment fails with build error
+
+**Solutions:**
+
+1. **Check build logs** - Read the error message carefully
+2. **Verify environment variables** - Ensure all required vars are set
+3. **Test build locally**:
+   ```bash
+   pnpm build
+   ```
+
+4. **Check Vercel service status** - Visit [vercel-status.com](https://www.vercel-status.com)
+
+### Environment Variables Not Working
+
+**Problem:** API can't access environment variables in production
+
+**Solutions:**
+
+1. **Add variables in Vercel dashboard**:
+   - Go to Project Settings → Environment Variables
+   - Add each variable
+   - Redeploy
+
+2. **Check variable names** - Must match exactly (case-sensitive)
+3. **Restart deployment** - Sometimes requires a fresh deploy
+
+### Custom Domain Not Working
+
+**Problem:** Custom domain shows error
+
+**Solutions:**
+
+1. **Check DNS configuration**:
+   ```bash
+   dig yourdomain.com
+   ```
+
+2. **Wait for DNS propagation** - Can take up to 48 hours
+3. **Verify CNAME record**:
+   ```
+   Type: CNAME
+   Name: api (or @)
+   Value: cname.vercel-dns.com
+   ```
+
+4. **Check domain is verified** - In Vercel dashboard
+
+## Performance Issues
+
+### Slow API Responses
+
+**Problem:** API takes too long to respond
+
+**Solutions:**
+
+1. **Add caching**:
+   ```python
+   @cache(expire=60)
+   async def expensive_operation():
+       pass
+   ```
+
+2. **Optimize database queries**:
+   - Add indexes
+   - Use joins instead of multiple queries
+   - Limit result sets
+
+3. **Enable compression**:
+   ```python
+   from fastapi.middleware.gzip import GZipMiddleware
+   app.add_middleware(GZipMiddleware, minimum_size=1000)
+   ```
+
+4. **Use CDN** - For static assets
+
+### High Memory Usage
+
+**Problem:** Sandbox or production using too much memory
+
+**Solutions:**
+
+1. **Profile memory usage**:
+   ```python
+   import tracemalloc
+   tracemalloc.start()
+   # Your code
+   snapshot = tracemalloc.take_snapshot()
+   top_stats = snapshot.statistics('lineno')
+   ```
+
+2. **Optimize data structures** - Use generators instead of lists
+3. **Clear caches** - Implement cache eviction
+4. **Increase memory limit** - Upgrade plan if needed
+
+## Testing Issues
+
+### Tests Failing
+
+**Problem:** Automated tests fail
+
+**Solutions:**
+
+1. **Read test output** - Understand what's failing
+2. **Run tests individually**:
+   ```bash
+   pytest tests/test_file.py::test_name -v
+   ```
+
+3. **Check test data** - Ensure test fixtures are correct
+4. **Update tests** - If code changed, update tests accordingly
+
+### Cannot Run Tests
+
+**Problem:** `pytest` command not found
+
+**Solutions:**
+
+1. **Install pytest**:
+   ```bash
+   pip install pytest
+   ```
+
+2. **Check virtual environment** - Ensure it's activated
+3. **Use full path**:
+   ```bash
+   python -m pytest tests/
+   ```
+
+## Browser Issues
+
+### UI Not Loading
+
+**Problem:** SmartAPIForge UI doesn't load
+
+**Solutions:**
+
+1. **Clear browser cache**:
+   - Chrome: Cmd/Ctrl + Shift + Delete
+   - Select "Cached images and files"
+   - Clear data
+
+2. **Try incognito/private mode** - Rules out extension issues
+3. **Check browser console** - Press F12, look for errors
+4. **Try different browser** - Test in Chrome, Firefox, Safari
+
+### WebSocket Connection Failed
+
+**Problem:** Real-time updates not working
+
+**Solutions:**
+
+1. **Check firewall** - Ensure WebSocket connections allowed
+2. **Verify proxy settings** - Some proxies block WebSockets
+3. **Check browser support** - Use modern browser
+4. **Restart browser** - Sometimes helps
+
+## Getting More Help
+
+If you're still experiencing issues:
+
+<CardGrid cols={2}>
+  <Card
+    title="Discord Community"
+    description="Ask questions and get help from the community"
+    href="https://discord.gg/smartapiforge"
+  />
+  <Card
+    title="GitHub Issues"
+    description="Report bugs and request features"
+    href="https://github.com/Shashank4507/smart-forge-api/issues"
+  />
+  <Card
+    title="Email Support"
+    description="Contact our support team"
+    href="mailto:support@smartapiforge.dev"
+  />
+  <Card
+    title="Documentation"
+    description="Browse the full documentation"
+    href="/docs"
+  />
+</CardGrid>
+
+## Reporting Bugs
+
+When reporting bugs, please include:
+
+1. **Description** - What happened vs what you expected
+2. **Steps to reproduce** - Exact steps to trigger the issue
+3. **Environment**:
+   - OS and version
+   - Node.js version
+   - Browser and version
+4. **Error messages** - Full error text and stack traces
+5. **Screenshots** - If applicable
+6. **Code samples** - Minimal reproduction code
+
+**Example Bug Report:**
+
+```markdown
+**Description:**
+API generation fails with timeout error
+
+**Steps to Reproduce:**
+1. Create new project
+2. Enter prompt: "Create a complex e-commerce API..."
+3. Click Generate
+4. Wait 2 minutes
+5. Error appears: "Generation timeout"
+
+**Environment:**
+- OS: macOS 14.0
+- Node.js: v18.17.0
+- Browser: Chrome 120.0
+
+**Error Message:**
+```
+Error: Generation timeout after 120 seconds
+at generateAPI (api-generation.ts:45)
+```
+
+**Additional Context:**
+- OpenAI API key is valid
+- Other projects generate successfully
+- Issue started after updating to latest version
+```

@@ -1,0 +1,439 @@
+---
+title: Installation
+description: Install and set up SmartAPIForge in your development environment
+category: getting-started
+order: 2
+tags: [installation, setup, configuration]
+lastUpdated: 2024-12-11
+---
+
+# Installation
+
+Get SmartAPIForge up and running in your development environment in under 10 minutes.
+
+<Callout type="info" title="Prerequisites Required">
+  Before starting, make sure you've completed all items in the [Prerequisites](/docs/getting-started/prerequisites) guide.
+</Callout>
+
+## Installation Steps
+
+### 1. Clone the Repository
+
+Clone the SmartAPIForge repository to your local machine:
+
+```bash
+git clone https://github.com/Shashank4507/smart-forge-api.git
+cd smart-forge-api
+```
+
+<Callout type="success" title="Repository Cloned">
+  You now have the complete SmartAPIForge codebase on your machine.
+</Callout>
+
+### 2. Install Dependencies
+
+Install all required packages using your preferred package manager:
+
+<Tabs defaultValue="pnpm">
+  <TabsList>
+    <TabsTrigger value="pnpm">pnpm (Recommended)</TabsTrigger>
+    <TabsTrigger value="npm">npm</TabsTrigger>
+    <TabsTrigger value="yarn">yarn</TabsTrigger>
+  </TabsList>
+  
+  <TabsContent value="pnpm">
+    ```bash
+    pnpm install
+    ```
+    
+    **Installation time:** ~2-3 minutes
+  </TabsContent>
+  
+  <TabsContent value="npm">
+    ```bash
+    npm install
+    ```
+    
+    **Installation time:** ~3-5 minutes
+  </TabsContent>
+  
+  <TabsContent value="yarn">
+    ```bash
+    yarn install
+    ```
+    
+    **Installation time:** ~3-4 minutes
+  </TabsContent>
+</Tabs>
+
+### 3. Set Up Environment Variables
+
+Create your local environment configuration:
+
+```bash
+cp env.example .env.local
+```
+
+Now edit `.env.local` with your actual credentials:
+
+```env
+# ============================================
+# Supabase Configuration
+# ============================================
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key_here
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+
+# ============================================
+# Authentication
+# ============================================
+JWT_SECRET=your_strong_jwt_secret_min_32_chars
+
+# ============================================
+# OpenAI Configuration
+# ============================================
+OPENAI_API_KEY=sk-your_openai_api_key_here
+
+# ============================================
+# Inngest Configuration
+# ============================================
+INNGEST_EVENT_KEY=your_inngest_event_key
+INNGEST_SIGNING_KEY=your_inngest_signing_key
+
+# ============================================
+# E2B Sandbox Configuration
+# ============================================
+E2B_API_KEY=your_e2b_api_key
+E2B_FULLSTACK_TEMPLATE_ID=ckskh5feot2y94v5z07d
+
+# ============================================
+# GitHub OAuth (Optional)
+# ============================================
+GITHUB_ID=your_github_oauth_client_id
+GITHUB_SECRET=your_github_oauth_client_secret
+GITHUB_CALLBACK_URL=http://localhost:3000/api/auth/github/callback
+
+# ============================================
+# Vercel Integration (Optional)
+# ============================================
+VERCEL_CLIENT_ID=your_vercel_client_id
+VERCEL_CLIENT_SECRET=your_vercel_client_secret
+VERCEL_REDIRECT_URI=http://localhost:3000/api/vercel/callback
+
+# ============================================
+# Application Configuration
+# ============================================
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
+
+<Callout type="warning" title="Keep Your Keys Secret">
+  Never commit your `.env.local` file to version control. It's already included in `.gitignore`.
+</Callout>
+
+#### Getting Your API Keys
+
+<Tabs defaultValue="supabase">
+  <TabsList>
+    <TabsTrigger value="supabase">Supabase</TabsTrigger>
+    <TabsTrigger value="openai">OpenAI</TabsTrigger>
+    <TabsTrigger value="e2b">E2B</TabsTrigger>
+    <TabsTrigger value="inngest">Inngest</TabsTrigger>
+  </TabsList>
+  
+  <TabsContent value="supabase">
+    1. Go to [supabase.com/dashboard](https://supabase.com/dashboard)
+    2. Select your project
+    3. Click **Settings** → **API**
+    4. Copy:
+       - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
+       - **anon public** key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+       - **service_role** key → `SUPABASE_SERVICE_ROLE_KEY`
+  </TabsContent>
+  
+  <TabsContent value="openai">
+    1. Go to [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+    2. Click **Create new secret key**
+    3. Name it "SmartAPIForge"
+    4. Copy the key → `OPENAI_API_KEY`
+    5. Add billing credits (minimum $5 recommended)
+  </TabsContent>
+  
+  <TabsContent value="e2b">
+    1. Go to [e2b.dev/dashboard](https://e2b.dev/dashboard)
+    2. Click **API Keys**
+    3. Create a new key
+    4. Copy the key → `E2B_API_KEY`
+    5. Use template ID: `ckskh5feot2y94v5z07d`
+  </TabsContent>
+  
+  <TabsContent value="inngest">
+    1. Go to [app.inngest.com](https://app.inngest.com)
+    2. Create a new app or select existing
+    3. Go to **Settings** → **Keys**
+    4. Copy:
+       - **Event Key** → `INNGEST_EVENT_KEY`
+       - **Signing Key** → `INNGEST_SIGNING_KEY`
+  </TabsContent>
+</Tabs>
+
+### 4. Initialize the Database
+
+Run Supabase migrations to set up your database schema:
+
+<Tabs defaultValue="local">
+  <TabsList>
+    <TabsTrigger value="local">Local Supabase</TabsTrigger>
+    <TabsTrigger value="cloud">Cloud Supabase</TabsTrigger>
+  </TabsList>
+  
+  <TabsContent value="local">
+    If you're using Supabase locally:
+    
+    ```bash
+    # Start Supabase locally
+    supabase start
+    
+    # Run migrations
+    supabase db push
+    ```
+  </TabsContent>
+  
+  <TabsContent value="cloud">
+    If you're using Supabase cloud:
+    
+    ```bash
+    # Link to your project
+    supabase link --project-ref your-project-ref
+    
+    # Push migrations
+    supabase db push
+    ```
+    
+    Or manually run migrations in the Supabase SQL Editor:
+    1. Go to your Supabase dashboard
+    2. Click **SQL Editor**
+    3. Run each migration file from `supabase/migrations/` in order
+  </TabsContent>
+</Tabs>
+
+<Callout type="info" title="Database Schema">
+  The migrations create tables for projects, users, jobs, messages, fragments, and more.
+</Callout>
+
+### 5. Start the Development Servers
+
+SmartAPIForge requires two servers running simultaneously:
+
+**Terminal 1 - Next.js Development Server:**
+
+```bash
+pnpm dev
+```
+
+**Terminal 2 - Inngest Development Server:**
+
+```bash
+pnpm dev:inngest
+```
+
+<Callout type="success" title="Servers Running">
+  - **Frontend:** [http://localhost:3000](http://localhost:3000)
+  - **Inngest Dashboard:** [http://localhost:8288](http://localhost:8288)
+</Callout>
+
+### 6. Verify Installation
+
+Open your browser and navigate to [http://localhost:3000](http://localhost:3000).
+
+You should see:
+- ✅ SmartAPIForge landing page
+- ✅ No console errors
+- ✅ Ability to sign up/login
+
+Test the Inngest dashboard at [http://localhost:8288](http://localhost:8288):
+- ✅ Dashboard loads
+- ✅ Shows your app name
+- ✅ Ready to receive events
+
+## Post-Installation Setup
+
+### Create Your First User
+
+1. Navigate to [http://localhost:3000/signup](http://localhost:3000/signup)
+2. Enter your email address
+3. Check your email for the magic link
+4. Click the link to verify your account
+
+<Callout type="info" title="Email Configuration">
+  In development, Supabase sends emails through their SMTP server. For production, configure your own SMTP settings.
+</Callout>
+
+### Configure GitHub Integration (Optional)
+
+To enable GitHub features:
+
+1. Go to [github.com/settings/developers](https://github.com/settings/developers)
+2. Click **New OAuth App**
+3. Fill in:
+   - **Application name:** SmartAPIForge Local
+   - **Homepage URL:** `http://localhost:3000`
+   - **Authorization callback URL:** `http://localhost:3000/api/auth/github/callback`
+4. Copy Client ID and Secret to `.env.local`
+5. Restart the dev server
+
+### Configure Vercel Integration (Optional)
+
+To enable one-click deployments:
+
+1. Go to [vercel.com/dashboard/integrations/console](https://vercel.com/dashboard/integrations/console)
+2. Click **Create Integration**
+3. Set redirect URL: `http://localhost:3000/api/vercel/callback`
+4. Enable scopes: `project`, `deployment`, `user`, `team`
+5. Copy Client ID and Secret to `.env.local`
+6. Restart the dev server
+
+## Development Workflow
+
+### Available Scripts
+
+```bash
+# Development
+pnpm dev              # Start Next.js dev server
+pnpm dev:inngest      # Start Inngest dev server
+pnpm dev:all          # Start both servers (if configured)
+
+# Building
+pnpm build            # Build for production
+pnpm start            # Start production server
+
+# Database
+pnpm db:migrate       # Run migrations
+pnpm db:seed          # Seed database (if configured)
+
+# Code Quality
+pnpm lint             # Run ESLint
+pnpm lint:fix         # Fix linting issues
+pnpm type-check       # TypeScript checking
+pnpm format           # Format with Prettier
+
+# Testing
+pnpm test             # Run all tests
+pnpm test:watch       # Watch mode
+pnpm test:coverage    # Coverage report
+```
+
+## Troubleshooting
+
+### Port Already in Use
+
+If port 3000 is already in use:
+
+```bash
+# Kill the process using port 3000
+lsof -ti:3000 | xargs kill -9
+
+# Or use a different port
+PORT=3001 pnpm dev
+```
+
+### Database Connection Issues
+
+**Problem:** Cannot connect to Supabase
+
+```bash
+# Verify environment variables
+echo $NEXT_PUBLIC_SUPABASE_URL
+echo $NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+# Test connection
+curl $NEXT_PUBLIC_SUPABASE_URL/rest/v1/
+```
+
+**Solution:** Ensure your Supabase project is active and URLs are correct.
+
+### Missing Dependencies
+
+**Problem:** Module not found errors
+
+```bash
+# Clean install
+rm -rf node_modules .next
+pnpm install
+pnpm build
+```
+
+### Inngest Not Receiving Events
+
+**Problem:** Jobs not executing
+
+```bash
+# Check Inngest dev server is running
+curl http://localhost:8288
+
+# Verify webhook endpoint
+curl http://localhost:3000/api/inngest
+```
+
+**Solution:** Ensure both dev servers are running and `INNGEST_EVENT_KEY` is set.
+
+### E2B Sandbox Timeout
+
+**Problem:** Sandbox creation fails
+
+**Solution:** Check your E2B API key and ensure you have available sandbox hours:
+
+```bash
+# Test E2B connection
+curl -H "Authorization: Bearer $E2B_API_KEY" https://api.e2b.dev/sandboxes
+```
+
+### Build Errors
+
+**Problem:** TypeScript or build errors
+
+```bash
+# Check for type errors
+pnpm type-check
+
+# Clear Next.js cache
+rm -rf .next
+pnpm build
+```
+
+## Next Steps
+
+<CardGrid cols={2}>
+  <Card
+    title="Quick Start Guide"
+    description="Create your first API in minutes"
+    href="/docs/getting-started/quick-start"
+  />
+  <Card
+    title="AI Generation"
+    description="Learn how to use AI-powered generation"
+    href="/docs/features/ai-generation"
+  />
+  <Card
+    title="Sandbox Execution"
+    description="Test APIs in secure sandboxes"
+    href="/docs/features/sandbox"
+  />
+  <Card
+    title="Deployment"
+    description="Deploy your APIs to production"
+    href="/docs/deployment"
+  />
+</CardGrid>
+
+## Getting Help
+
+If you encounter issues during installation:
+
+- 📚 Check the [Troubleshooting Guide](/docs/troubleshooting)
+- 💬 Ask in [Discord Community](https://discord.gg/smartapiforge)
+- 🐛 Report bugs on [GitHub Issues](https://github.com/Shashank4507/smart-forge-api/issues)
+- 📧 Email: support@smartapiforge.dev
+
+<Callout type="success" title="Installation Complete">
+  Congratulations! SmartAPIForge is now installed and ready to use. Proceed to the [Quick Start Guide](/docs/getting-started/quick-start) to create your first API.
+</Callout>

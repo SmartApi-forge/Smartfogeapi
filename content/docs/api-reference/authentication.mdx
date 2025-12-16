@@ -1,0 +1,687 @@
+---
+title: Authentication API
+description: User authentication and profile management endpoints
+category: api-reference
+order: 2
+tags: [api, authentication, auth, jwt, supabase]
+lastUpdated: 2024-12-11
+---
+
+# Authentication API
+
+Manage user authentication, sessions, and profiles using Supabase Auth.
+
+## Overview
+
+SmartAPIForge uses Supabase Auth for secure, passwordless authentication via magic links.
+
+**Base Router:** `auth`
+
+**Authentication:** Most endpoints are public (for login), profile endpoints require authentication.
+
+## Endpoints
+
+### Sign In with Email
+
+Send a magic link to the user's email for authentication.
+
+**Procedure:** `auth.signInWithEmail`
+
+**Type:** Mutation
+
+**Authentication:** None required
+
+#### Input
+
+```typescript
+{
+  email: string // Valid email address
+}
+```
+
+#### Example
+
+<Tabs defaultValue="react">
+  <TabsList>
+    <TabsTrigger value="react">React</TabsTrigger>
+    <TabsTrigger value="curl">cURL</TabsTrigger>
+  </TabsList>
+  
+  <TabsContent value="react">
+    ```typescript
+    import { trpc } from '@/lib/trpc-client'
+    
+    function LoginForm() {
+      const signIn = trpc.auth.signInWithEmail.useMutation()
+      
+      const handleSubmit = async (email: string) => {
+        try {
+          const result = await signIn.mutateAsync({ email })
+          
+          if (result.success) {
+            alert('Check your email for the magic link!')
+          }
+        } catch (error) {
+          console.error('Sign in failed:', error)
+        }
+      }
+      
+      return (
+        <form onSubmit={(e) => {
+          e.preventDefault()
+          const email = e.currentTarget.email.value
+          handleSubmit(email)
+        }}>
+          <input
+            type="email"
+            name="email"
+            placeholder="Enter your email"
+            required
+          />
+          <button type="submit">
+            {signIn.isLoading ? 'Sending...' : 'Send Magic Link'}
+          </button>
+        </form>
+      )
+    }
+    ```
+  </TabsContent>
+  
+  <TabsContent value="curl">
+    ```bash
+    curl -X POST \
+      'http://localhost:3000/api/trpc/auth.signInWithEmail' \
+      -H 'Content-Type: application/json' \
+      -d '{
+        "email": "user@example.com"
+      }'
+    ```
+  </TabsContent>
+</Tabs>
+
+#### Response
+
+```typescript
+{
+  success: boolean
+  message: string
+}
+```
+
+**Example Response:**
+
+```json
+{
+  "success": true,
+  "message": "Magic link sent to user@example.com"
+}
+```
+
+#### Errors
+
+| Code | Message | Description |
+|------|---------|-------------|
+| `BAD_REQUEST` | Invalid email address | Email format is invalid |
+| `INTERNAL_SERVER_ERROR` | Failed to send magic link | Email service error |
+
+---
+
+### Verify OTP
+
+Verify the OTP token from the magic link email.
+
+**Procedure:** `auth.verifyOtp`
+
+**Type:** Mutation
+
+**Authentication:** None required
+
+#### Input
+
+```typescript
+{
+  email: string    // Email address
+  token: string    // 6-character OTP from email
+}
+```
+
+#### Example
+
+<Tabs defaultValue="react">
+  <TabsList>
+    <TabsTrigger value="react">React</TabsTrigger>
+    <TabsTrigger value="curl">cURL</TabsTrigger>
+  </TabsList>
+  
+  <TabsContent value="react">
+    ```typescript
+    import { trpc } from '@/lib/trpc-client'
+    import { useRouter } from 'next/navigation'
+    
+    function VerifyOTPForm() {
+      const router = useRouter()
+      const verifyOtp = trpc.auth.verifyOtp.useMutation()
+      
+      const handleVerify = async (email: string, token: string) => {
+        try {
+          const result = await verifyOtp.mutateAsync({ email, token })
+          
+          if (result.success) {
+            // Store session
+            localStorage.setItem('session', JSON.stringify(result.session))
+            
+            // Redirect to dashboard
+            router.push('/dashboard')
+          }
+        } catch (error) {
+          console.error('Verification failed:', error)
+        }
+      }
+      
+      return (
+        <form onSubmit={(e) => {
+          e.preventDefault()
+          const formData = new FormData(e.currentTarget)
+          handleVerify(
+            formData.get('email') as string,
+            formData.get('token') as string
+          )
+        }}>
+          <input type="email" name="email" required />
+          <input
+            type="text"
+            name="token"
+            placeholder="Enter 6-digit code"
+            maxLength={6}
+            required
+          />
+          <button type="submit">
+            {verifyOtp.isLoading ? 'Verifying...' : 'Verify'}
+          </button>
+        </form>
+      )
+    }
+    ```
+  </TabsContent>
+  
+  <TabsContent value="curl">
+    ```bash
+    curl -X POST \
+      'http://localhost:3000/api/trpc/auth.verifyOtp' \
+      -H 'Content-Type: application/json' \
+      -d '{
+        "email": "user@example.com",
+        "token": "123456"
+      }'
+    ```
+  </TabsContent>
+</Tabs>
+
+#### Response
+
+```typescript
+{
+  success: boolean
+  user: {
+    id: string
+    email: string
+    name: string | null
+    avatar_url: string | null
+    created_at: Date
+  }
+  session: {
+    access_token: string
+    refresh_token: string
+    expires_at: number
+  }
+}
+```
+
+**Example Response:**
+
+```json
+{
+  "success": true,
+  "user": {
+    "id": "user-123",
+    "email": "user@example.com",
+    "name": "John Doe",
+    "avatar_url": "https://avatar.url",
+    "created_at": "2024-01-01T00:00:00Z"
+  },
+  "session": {
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refresh_token": "refresh-token-here",
+    "expires_at": 1704153600
+  }
+}
+```
+
+#### Errors
+
+| Code | Message | Description |
+|------|---------|-------------|
+| `UNAUTHORIZED` | Invalid OTP | Token is incorrect or expired |
+| `BAD_REQUEST` | OTP must be 6 characters | Token format is invalid |
+
+---
+
+### Get Profile
+
+Get the current user's profile information.
+
+**Procedure:** `auth.getProfile`
+
+**Type:** Query
+
+**Authentication:** Required
+
+#### Input
+
+None
+
+#### Example
+
+<Tabs defaultValue="react">
+  <TabsList>
+    <TabsTrigger value="react">React</TabsTrigger>
+    <TabsTrigger value="curl">cURL</TabsTrigger>
+  </TabsList>
+  
+  <TabsContent value="react">
+    ```typescript
+    import { trpc } from '@/lib/trpc-client'
+    
+    function UserProfile() {
+      const { data: profile, isLoading } = trpc.auth.getProfile.useQuery()
+      
+      if (isLoading) return <div>Loading...</div>
+      
+      return (
+        <div>
+          <img src={profile?.avatar_url || '/default-avatar.png'} />
+          <h2>{profile?.name || 'Anonymous'}</h2>
+          <p>{profile?.email}</p>
+          <p>Member since: {profile?.created_at.toLocaleDateString()}</p>
+          <p>Plan: {profile?.subscription_tier}</p>
+        </div>
+      )
+    }
+    ```
+  </TabsContent>
+  
+  <TabsContent value="curl">
+    ```bash
+    curl -X GET \
+      'http://localhost:3000/api/trpc/auth.getProfile' \
+      -H 'Authorization: Bearer YOUR_ACCESS_TOKEN'
+    ```
+  </TabsContent>
+</Tabs>
+
+#### Response
+
+```typescript
+{
+  id: string
+  email: string
+  name: string | null
+  avatar_url: string | null
+  created_at: Date
+  subscription_tier: 'free' | 'pro' | 'enterprise'
+}
+```
+
+**Example Response:**
+
+```json
+{
+  "id": "user-123",
+  "email": "user@example.com",
+  "name": "John Doe",
+  "avatar_url": "https://avatar.url",
+  "created_at": "2024-01-01T00:00:00Z",
+  "subscription_tier": "free"
+}
+```
+
+#### Errors
+
+| Code | Message | Description |
+|------|---------|-------------|
+| `UNAUTHORIZED` | Not authenticated | Missing or invalid token |
+
+---
+
+### Update Profile
+
+Update the current user's profile information.
+
+**Procedure:** `auth.updateProfile`
+
+**Type:** Mutation
+
+**Authentication:** Required
+
+#### Input
+
+```typescript
+{
+  name?: string        // Full name (min 2 characters)
+  avatar_url?: string  // Avatar image URL
+}
+```
+
+#### Example
+
+<Tabs defaultValue="react">
+  <TabsList>
+    <TabsTrigger value="react">React</TabsTrigger>
+    <TabsTrigger value="curl">cURL</TabsTrigger>
+  </TabsList>
+  
+  <TabsContent value="react">
+    ```typescript
+    import { trpc } from '@/lib/trpc-client'
+    
+    function EditProfile() {
+      const utils = trpc.useContext()
+      const updateProfile = trpc.auth.updateProfile.useMutation({
+        onSuccess: () => {
+          // Refetch profile
+          utils.auth.getProfile.invalidate()
+        }
+      })
+      
+      const handleSubmit = async (name: string, avatarUrl: string) => {
+        try {
+          await updateProfile.mutateAsync({
+            name,
+            avatar_url: avatarUrl
+          })
+          
+          alert('Profile updated successfully!')
+        } catch (error) {
+          console.error('Update failed:', error)
+        }
+      }
+      
+      return (
+        <form onSubmit={(e) => {
+          e.preventDefault()
+          const formData = new FormData(e.currentTarget)
+          handleSubmit(
+            formData.get('name') as string,
+            formData.get('avatar_url') as string
+          )
+        }}>
+          <input type="text" name="name" placeholder="Full Name" />
+          <input type="url" name="avatar_url" placeholder="Avatar URL" />
+          <button type="submit">
+            {updateProfile.isLoading ? 'Saving...' : 'Save Changes'}
+          </button>
+        </form>
+      )
+    }
+    ```
+  </TabsContent>
+  
+  <TabsContent value="curl">
+    ```bash
+    curl -X POST \
+      'http://localhost:3000/api/trpc/auth.updateProfile' \
+      -H 'Authorization: Bearer YOUR_ACCESS_TOKEN' \
+      -H 'Content-Type: application/json' \
+      -d '{
+        "name": "John Doe",
+        "avatar_url": "https://avatar.url/new.jpg"
+      }'
+    ```
+  </TabsContent>
+</Tabs>
+
+#### Response
+
+```typescript
+{
+  success: boolean
+  profile: {
+    id: string
+    email: string
+    name: string | null
+    avatar_url: string | null
+  }
+}
+```
+
+**Example Response:**
+
+```json
+{
+  "success": true,
+  "profile": {
+    "id": "user-123",
+    "email": "user@example.com",
+    "name": "John Doe",
+    "avatar_url": "https://avatar.url/new.jpg"
+  }
+}
+```
+
+#### Errors
+
+| Code | Message | Description |
+|------|---------|-------------|
+| `UNAUTHORIZED` | Not authenticated | Missing or invalid token |
+| `BAD_REQUEST` | Name must be at least 2 characters | Invalid name format |
+
+---
+
+### Sign Out
+
+Sign out the current user and invalidate their session.
+
+**Procedure:** `auth.signOut`
+
+**Type:** Mutation
+
+**Authentication:** Required
+
+#### Input
+
+None
+
+#### Example
+
+<Tabs defaultValue="react">
+  <TabsList>
+    <TabsTrigger value="react">React</TabsTrigger>
+    <TabsTrigger value="curl">cURL</TabsTrigger>
+  </TabsList>
+  
+  <TabsContent value="react">
+    ```typescript
+    import { trpc } from '@/lib/trpc-client'
+    import { useRouter } from 'next/navigation'
+    
+    function SignOutButton() {
+      const router = useRouter()
+      const signOut = trpc.auth.signOut.useMutation()
+      
+      const handleSignOut = async () => {
+        try {
+          await signOut.mutateAsync()
+          
+          // Clear local storage
+          localStorage.removeItem('session')
+          
+          // Redirect to home
+          router.push('/')
+        } catch (error) {
+          console.error('Sign out failed:', error)
+        }
+      }
+      
+      return (
+        <button onClick={handleSignOut}>
+          {signOut.isLoading ? 'Signing out...' : 'Sign Out'}
+        </button>
+      )
+    }
+    ```
+  </TabsContent>
+  
+  <TabsContent value="curl">
+    ```bash
+    curl -X POST \
+      'http://localhost:3000/api/trpc/auth.signOut' \
+      -H 'Authorization: Bearer YOUR_ACCESS_TOKEN'
+    ```
+  </TabsContent>
+</Tabs>
+
+#### Response
+
+```typescript
+{
+  success: boolean
+}
+```
+
+**Example Response:**
+
+```json
+{
+  "success": true
+}
+```
+
+## Authentication Flow
+
+### Complete Authentication Example
+
+```typescript
+import { trpc } from '@/lib/trpc-client'
+import { useState } from 'react'
+
+function AuthFlow() {
+  const [step, setStep] = useState<'email' | 'verify'>('email')
+  const [email, setEmail] = useState('')
+  
+  const signIn = trpc.auth.signInWithEmail.useMutation()
+  const verifyOtp = trpc.auth.verifyOtp.useMutation()
+  
+  // Step 1: Send magic link
+  const handleSendLink = async () => {
+    const result = await signIn.mutateAsync({ email })
+    if (result.success) {
+      setStep('verify')
+    }
+  }
+  
+  // Step 2: Verify OTP
+  const handleVerify = async (token: string) => {
+    const result = await verifyOtp.mutateAsync({ email, token })
+    if (result.success) {
+      // User is now authenticated
+      // Session is automatically stored by Supabase
+    }
+  }
+  
+  if (step === 'email') {
+    return (
+      <div>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <button onClick={handleSendLink}>Send Magic Link</button>
+      </div>
+    )
+  }
+  
+  return (
+    <div>
+      <p>Check your email for the verification code</p>
+      <input
+        type="text"
+        maxLength={6}
+        onChange={(e) => {
+          if (e.target.value.length === 6) {
+            handleVerify(e.target.value)
+          }
+        }}
+      />
+    </div>
+  )
+}
+```
+
+## Session Management
+
+### Checking Authentication Status
+
+```typescript
+import { trpc } from '@/lib/trpc-client'
+
+function useAuth() {
+  const { data: profile, isLoading } = trpc.auth.getProfile.useQuery(
+    undefined,
+    {
+      retry: false,
+      onError: (error) => {
+        if (error.data?.code === 'UNAUTHORIZED') {
+          // User is not authenticated
+          // Redirect to login
+        }
+      }
+    }
+  )
+  
+  return {
+    user: profile,
+    isAuthenticated: !!profile,
+    isLoading
+  }
+}
+```
+
+### Protected Routes
+
+```typescript
+import { useAuth } from '@/hooks/use-auth'
+import { useRouter } from 'next/navigation'
+import { useEffect } from 'react'
+
+function ProtectedPage() {
+  const { isAuthenticated, isLoading } = useAuth()
+  const router = useRouter()
+  
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push('/login')
+    }
+  }, [isAuthenticated, isLoading, router])
+  
+  if (isLoading) return <div>Loading...</div>
+  if (!isAuthenticated) return null
+  
+  return <div>Protected content</div>
+}
+```
+
+## Next Steps
+
+<CardGrid cols={2}>
+  <Card
+    title="Projects API"
+    description="Manage API projects"
+    href="/docs/api-reference/projects"
+  />
+  <Card
+    title="Generation API"
+    description="Generate APIs from prompts"
+    href="/docs/api-reference/generation"
+  />
+</CardGrid>

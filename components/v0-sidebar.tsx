@@ -88,13 +88,21 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
   // Fetch user's projects
   useEffect(() => {
     const fetchProjects = async () => {
-      if (!showProjectList) return;
+      if (!showProjectList) {
+        console.log('[V0Sidebar] Not fetching projects - showProjectList is false');
+        return;
+      }
       
+      console.log('[V0Sidebar] Fetching projects...');
       setIsLoadingProjects(true);
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!user) {
+          console.log('[V0Sidebar] No user found');
+          return;
+        }
 
+        console.log('[V0Sidebar] User ID:', user.id);
         const { data, error } = await supabase
           .from('projects')
           .select('*')
@@ -102,10 +110,15 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
           .order('updated_at', { ascending: false })
           .limit(50);
 
-        if (error) throw error;
+        if (error) {
+          console.error('[V0Sidebar] Error fetching projects:', error);
+          throw error;
+        }
+        
+        console.log('[V0Sidebar] Fetched projects:', data?.length || 0, 'projects');
         setUserProjects(data || []);
       } catch (error) {
-        console.error('Error fetching projects:', error);
+        console.error('[V0Sidebar] Error fetching projects:', error);
       } finally {
         setIsLoadingProjects(false);
       }
@@ -159,11 +172,15 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
       const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
       console.log('[V0Sidebar] Mobile detected:', mobile, 'Width:', window.innerWidth);
+      // On mobile, if sidebar is open, ensure it stays visible
+      if (mobile && isExpanded) {
+        console.log('[V0Sidebar] Mobile sidebar is expanded');
+      }
     };
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  }, [isExpanded]);
 
   // Sync with parent isOpen prop
   useEffect(() => {
@@ -253,6 +270,8 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
       label: "Projects",
       icon: <FolderKanban className="size-5" />,
       onClick: () => {
+        console.log('[V0Sidebar] Projects button clicked');
+        console.log('[V0Sidebar] isMobile:', isMobile, 'isExpanded:', isExpanded);
         // Always show project list when clicking Projects
         handleNavClick("projects");
         setShowProjectList(true);
@@ -260,6 +279,7 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
         // Ensure sidebar is expanded to show the list
         setIsExpanded(true);
         setManuallyToggled(true);
+        console.log('[V0Sidebar] Set showProjectList to true, isExpanded to true');
       },
     },
     {
@@ -325,8 +345,9 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
       <motion.aside
         initial={false}
         animate={{
-          width: isExpanded ? 240 : 0,
+          width: isExpanded ? (isMobile ? '80vw' : 240) : 0,
           opacity: isExpanded ? 1 : 0,
+          display: isExpanded ? 'flex' : 'none',
         }}
         transition={{
           duration: 0.25,
@@ -344,9 +365,7 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
             onHoverChange?.(false);
           }
         }}
-        className={`fixed h-[calc(100vh-50px)] bg-white dark:bg-[#0E100F] z-40 flex flex-col ${
-          isMobile && !isExpanded ? 'hidden' : ''
-        }`}
+        className="fixed h-[calc(100vh-50px)] bg-white dark:bg-[#0E100F] z-40 flex-col"
         style={{
           left: isMobile ? '0' : '4px',
           top: '50px',
@@ -356,6 +375,7 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
             : 'none',
           border: isMobile ? 'none' : '1px solid rgba(0, 0, 0, 0.08)',
           overflow: 'hidden',
+          maxWidth: isMobile ? '80vw' : '240px',
         }}
       >
 
@@ -396,10 +416,11 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
           <TooltipProvider delayDuration={300}>
             {/* Show project list when expanded and projects is active */}
             {isExpanded && showProjectList ? (
-              <div className="space-y-1">
+              <div className="space-y-1 w-full">
                 {/* Back button */}
                 <button
                   onClick={() => {
+                    console.log('[V0Sidebar] Back button clicked');
                     setShowProjectList(false);
                     setProjectSearchQuery('');
                   }}
@@ -409,10 +430,21 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
                   <span>Back</span>
                 </button>
 
+                {/* Debug info - remove after testing */}
+                {process.env.NODE_ENV === 'development' && (
+                  <div className="px-3 py-2 text-xs text-muted-foreground border-b border-border mb-2">
+                    <p>Mobile: {isMobile ? 'Yes' : 'No'}</p>
+                    <p>Expanded: {isExpanded ? 'Yes' : 'No'}</p>
+                    <p>Loading: {isLoadingProjects ? 'Yes' : 'No'}</p>
+                    <p>Projects: {userProjects.length}</p>
+                    <p>Filtered: {filteredProjects.length}</p>
+                  </div>
+                )}
+
                 {/* Projects list */}
-                <div className="space-y-1">
+                <div className="space-y-1 w-full">
                   {isLoadingProjects ? (
-                    <div className="px-3 py-8 text-center">
+                    <div className="px-3 py-8 text-center w-full">
                       <div className="size-8 mx-auto mb-2 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                       <p className="text-sm text-muted-foreground">Loading projects...</p>
                     </div>
@@ -423,24 +455,38 @@ export function V0Sidebar({ projectId, projectName, messages = [], onNavigate, s
                         href={`/projects/${proj.id}`}
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
-                        className="block px-3 py-2 rounded-lg hover:bg-muted/50 dark:hover:bg-[#1D1D1D] cursor-pointer transition-all group"
+                        className="block px-3 py-2.5 rounded-lg hover:bg-muted/50 dark:hover:bg-[#1D1D1D] cursor-pointer transition-all group w-full"
                       >
-                        <p className="text-sm text-foreground font-medium line-clamp-1">
-                          {proj.name}
-                        </p>
-                        {proj.description && (
-                          <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
-                            {proj.description}
-                          </p>
-                        )}
+                        <div className="flex items-start gap-2 w-full">
+                          <FolderKanban className="size-4 flex-shrink-0 mt-0.5 text-blue-500" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-foreground font-medium line-clamp-1 break-words">
+                              {proj.name}
+                            </p>
+                            {proj.description && (
+                              <p className="text-xs text-muted-foreground line-clamp-2 mt-1 break-words">
+                                {proj.description}
+                              </p>
+                            )}
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {proj.framework && <span className="capitalize">{proj.framework}</span>}
+                              {proj.status && <span className="ml-2">• {proj.status}</span>}
+                            </p>
+                          </div>
+                        </div>
                       </motion.a>
                     ))
                   ) : (
-                    <div className="px-3 py-8 text-center">
+                    <div className="px-3 py-8 text-center w-full">
                       <FolderKanban className="size-8 mx-auto mb-2 text-muted-foreground opacity-50" />
                       <p className="text-sm text-muted-foreground">
                         {projectSearchQuery ? 'No projects found' : 'No projects yet'}
                       </p>
+                      {!projectSearchQuery && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Create your first project to get started
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
