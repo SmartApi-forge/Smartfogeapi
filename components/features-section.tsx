@@ -34,7 +34,7 @@ const features = [
 
 export default function FeaturesSection() {
   return (
-    <div className="relative z-20 py-10 lg:py-20 max-w-7xl mx-auto">
+    <div id="features" className="relative z-20 py-10 lg:py-20 max-w-7xl mx-auto">
       <div className="px-8">
         <h4 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl lg:leading-tight max-w-5xl mx-auto text-center tracking-tight font-semibold text-foreground">
           Everything you need to build APIs
