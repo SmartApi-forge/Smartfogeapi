@@ -46,11 +46,12 @@ export function DocumentationLayout({
               className={cn(
                 "hidden lg:block",
                 "sticky top-0 h-screen overflow-y-auto",
-                "bg-sidebar"
+                "bg-sidebar",
+                "scrollbar-hide"
               )}
               aria-label="Primary navigation"
             >
-              <div className="py-6 px-4">
+              <div className="py-6 px-8">
                 {leftSidebar}
               </div>
             </aside>
@@ -69,11 +70,12 @@ export function DocumentationLayout({
               className={cn(
                 "hidden xl:block",
                 "sticky top-0 h-screen overflow-y-auto",
-                "bg-sidebar"
+                "bg-sidebar",
+                "scrollbar-hide"
               )}
               aria-label="Table of contents"
             >
-              <div className="py-6 px-4">
+              <div className="py-6 px-8">
                 {rightSidebar}
               </div>
             </aside>

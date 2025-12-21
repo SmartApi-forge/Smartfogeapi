@@ -72,8 +72,8 @@ export function RightSidebar({ headings, className }: RightSidebarProps) {
         "sticky top-20 h-[calc(100vh-5rem)]",
         "w-64 shrink-0",
         "overflow-y-auto overflow-x-hidden",
-        "py-8 pr-4",
-        "scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700",
+        "py-8 pl-8",
+        "scrollbar-hide",
         className
       )}
       aria-label="Table of contents"
@@ -103,13 +103,12 @@ export function RightSidebar({ headings, className }: RightSidebarProps) {
                     className={cn(
                       "block py-1.5 px-2 rounded-md",
                       "transition-all duration-200",
-                      "hover:text-foreground",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                       "text-sm leading-relaxed",
                       "break-words",
                       isActive
-                        ? "text-foreground font-medium bg-accent border-l-2 border-primary pl-3"
-                        : "text-muted-foreground hover:bg-accent/50"
+                        ? "text-blue-500 font-medium"
+                        : "text-muted-foreground hover:text-foreground"
                     )}
                     aria-current={isActive ? "location" : undefined}
                     title={heading.text}

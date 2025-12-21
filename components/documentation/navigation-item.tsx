@@ -144,7 +144,7 @@ export function NavigationItem({
           href={item.href}
           className={cn(
             "flex-1 flex items-center justify-between gap-2",
-            "px-2 py-1.5 rounded-md",
+            "px-3 py-1.5 rounded-md",
             "text-sm leading-tight",
             "transition-all duration-200",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",

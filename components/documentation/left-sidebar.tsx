@@ -65,7 +65,7 @@ export function LeftSidebar({
             onClick={() => toggleSection(section.id)}
             className={cn(
               "flex w-full items-center justify-between",
-              "px-2 py-1.5 rounded-md",
+              "px-3 py-1.5 rounded-md",
               "text-xs font-semibold uppercase tracking-wider",
               "text-muted-foreground",
               "hover:bg-accent hover:text-accent-foreground",

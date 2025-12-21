@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { LogOut, Settings, User, Menu, Plus, Search, BookOpen, History, Sparkles } from "lucide-react"
+import { LogOut, Settings, User, Menu, Plus, Search, BookOpen, HelpCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AnimatePresence, motion } from "framer-motion"
 import {
@@ -164,13 +164,9 @@ export function DashboardHeader({
               <BookOpen className="w-4 h-4" />
               Documentation
             </Link>
-            <Link href="/history" className="text-white hover:text-white/80 text-base transition-colors flex items-center gap-2">
-              <History className="w-4 h-4" />
-              History
-            </Link>
-            <Link href="/templates" className="text-white hover:text-white/80 text-base transition-colors flex items-center gap-2">
-              <Sparkles className="w-4 h-4" />
-              Templates
+            <Link href="/support" className="text-white hover:text-white/80 text-base transition-colors flex items-center gap-2">
+              <HelpCircle className="w-4 h-4" />
+              Support
             </Link>
           </nav>
 
@@ -300,20 +296,12 @@ export function DashboardHeader({
                 Documentation
               </Link>
               <Link 
-                href="/history" 
+                href="/support" 
                 className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800/60 rounded-md transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                <History className="w-4 h-4" />
-                History
-              </Link>
-              <Link 
-                href="/templates" 
-                className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800/60 rounded-md transition-colors"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <Sparkles className="w-4 h-4" />
-                Templates
+                <HelpCircle className="w-4 h-4" />
+                Support
               </Link>
             </nav>
           </div>

@@ -60,6 +60,28 @@ export const navigationConfig: NavigationConfig = {
           title: 'Deployment',
           href: '/docs/features/deployment',
         },
+        {
+          id: 'platform-features',
+          title: 'Platform Features',
+          href: '/docs/features/platform-features',
+        },
+      ],
+    },
+    guides: {
+      id: 'guides',
+      title: 'Guides',
+      expanded: false,
+      items: [
+        {
+          id: 'your-first-api',
+          title: 'Your First API',
+          href: '/docs/guides/your-first-api',
+        },
+        {
+          id: 'advanced-usage',
+          title: 'Advanced Usage',
+          href: '/docs/guides/advanced-usage',
+        },
       ],
     },
     apiReference: {
@@ -73,48 +95,9 @@ export const navigationConfig: NavigationConfig = {
           href: '/docs/api-reference/overview',
         },
         {
-          id: 'endpoints',
-          title: 'Endpoints',
-          href: '/docs/api-reference/endpoints',
-        },
-        {
           id: 'authentication',
           title: 'Authentication',
           href: '/docs/api-reference/authentication',
-        },
-      ],
-    },
-    guides: {
-      id: 'guides',
-      title: 'Guides',
-      expanded: false,
-      items: [
-        {
-          id: 'first-api',
-          title: 'Your First API',
-          href: '/docs/guides/first-api',
-        },
-        {
-          id: 'advanced-usage',
-          title: 'Advanced Usage',
-          href: '/docs/guides/advanced-usage',
-        },
-      ],
-    },
-    deployment: {
-      id: 'deployment',
-      title: 'Deployment',
-      expanded: false,
-      items: [
-        {
-          id: 'vercel',
-          title: 'Deploy to Vercel',
-          href: '/docs/deployment/vercel',
-        },
-        {
-          id: 'docker',
-          title: 'Docker Deployment',
-          href: '/docs/deployment/docker',
         },
       ],
     },
@@ -127,11 +110,6 @@ export const navigationConfig: NavigationConfig = {
           id: 'common-issues',
           title: 'Common Issues',
           href: '/docs/troubleshooting/common-issues',
-        },
-        {
-          id: 'faq',
-          title: 'FAQ',
-          href: '/docs/troubleshooting/faq',
         },
       ],
     },
