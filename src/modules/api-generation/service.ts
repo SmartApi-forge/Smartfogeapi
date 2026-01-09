@@ -196,7 +196,8 @@ export class ApiGenerationService {
         .insert({
           user_id: userId,
           name: generateProjectName(input.prompt),
-          description: input.prompt.substring(0, 200), // Use full prompt as description
+          description: input.prompt.substring(0, 200), // Truncated for display
+          prompt: input.prompt, // Full prompt for generation (required field)
           framework: input.framework,
           advanced: input.advanced,
           status: 'generating'
