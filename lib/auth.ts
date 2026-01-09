@@ -54,5 +54,13 @@ export const authService = {
   async getCurrentSession() {
     const { data: { session }, error } = await supabase.auth.getSession()
     return { session, error }
+  },
+
+  // Update password for logged-in user
+  async updatePassword(newPassword: string) {
+    const { data, error } = await supabase.auth.updateUser({
+      password: newPassword
+    })
+    return { data, error }
   }
 }

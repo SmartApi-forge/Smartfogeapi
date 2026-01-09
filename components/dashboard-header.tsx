@@ -190,11 +190,17 @@ export function DashboardHeader({
                 <p className="text-xs text-gray-400 font-neue-500">{user?.email || ''}</p>
               </div>
               <DropdownMenuSeparator className="bg-gray-700" />
-              <DropdownMenuItem className="text-white hover:bg-gray-700 cursor-pointer font-neue-500">
+              <DropdownMenuItem 
+                className="text-white hover:bg-gray-700 cursor-pointer font-neue-500"
+                onClick={() => router.push('/profile')}
+              >
                 <User className="mr-2 h-4 w-4" />
                 Profile
               </DropdownMenuItem>
-              <DropdownMenuItem className="text-white hover:bg-gray-700 cursor-pointer font-neue-500">
+              <DropdownMenuItem 
+                className="text-white hover:bg-gray-700 cursor-pointer font-neue-500"
+                onClick={() => router.push('/settings')}
+              >
                 <Settings className="mr-2 h-4 w-4" />
                 Settings
               </DropdownMenuItem>

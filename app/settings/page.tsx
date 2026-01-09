@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { SimpleHeader } from "@/components/simple-header"
+import { ChangePasswordDialog } from "@/components/change-password-dialog"
 import { useTheme } from "next-themes"
 import { 
   Settings as SettingsIcon, 
@@ -21,6 +22,7 @@ export default function SettingsPage() {
   const { theme, setTheme } = useTheme()
   const [isLoading, setIsLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -180,7 +182,10 @@ export default function SettingsPage() {
               </div>
               
               <div className="space-y-4">
-                <button className="w-full sm:w-auto px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium">
+                <button 
+                  onClick={() => setChangePasswordOpen(true)}
+                  className="w-full sm:w-auto px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
+                >
                   Change Password
                 </button>
               </div>
@@ -188,6 +193,12 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Change Password Dialog */}
+      <ChangePasswordDialog 
+        open={changePasswordOpen} 
+        onOpenChange={setChangePasswordOpen}
+      />
     </div>
   )
 }
