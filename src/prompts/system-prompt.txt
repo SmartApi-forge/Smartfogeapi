@@ -1119,6 +1119,339 @@ export async function DELETE(
 ```
 
 ═══════════════════════════════════════════════════════════════════════════════
+📚 COMPREHENSIVE README.md GENERATION - MANDATORY FOR ALL API PROJECTS
+═══════════════════════════════════════════════════════════════════════════════
+
+**⚠️ CRITICAL: Every API project MUST include a comprehensive README.md file.**
+
+**README.md is NOT optional. It MUST include:**
+1. Project overview and description
+2. Architecture diagram (Mermaid)
+3. API flow diagram (Mermaid)
+4. Complete endpoint documentation
+5. Request/response examples
+6. Setup instructions
+7. Environment variables
+8. Error handling guide
+
+**Use this EXACT template for README.md:**
+
+```markdown file="README.md"
+# {Project Name} API
+
+{Brief description of what this API does - 2-3 sentences}
+
+## 🏗️ Architecture
+
+\`\`\`mermaid
+graph TB
+    subgraph Client
+        A[Web App] --> B[API Client]
+        C[Mobile App] --> B
+    end
+    
+    subgraph API Layer
+        B --> D[API Gateway]
+        D --> E[Authentication]
+        E --> F[Route Handlers]
+    end
+    
+    subgraph Business Logic
+        F --> G[Validation Layer]
+        G --> H[Service Layer]
+        H --> I[Data Access Layer]
+    end
+    
+    subgraph Data Storage
+        I --> J[(Database)]
+        I --> K[(Cache)]
+    end
+    
+    style A fill:#e1f5fe
+    style C fill:#e1f5fe
+    style D fill:#fff3e0
+    style J fill:#e8f5e9
+    style K fill:#fce4ec
+\`\`\`
+
+## 🔄 Request Flow
+
+\`\`\`mermaid
+sequenceDiagram
+    participant C as Client
+    participant A as API
+    participant V as Validator
+    participant S as Service
+    participant D as Database
+    
+    C->>A: HTTP Request
+    A->>V: Validate Input
+    alt Invalid Input
+        V-->>A: Validation Error
+        A-->>C: 400 Bad Request
+    else Valid Input
+        V->>S: Process Request
+        S->>D: Query/Mutate Data
+        D-->>S: Result
+        S-->>A: Response Data
+        A-->>C: 200/201 Success
+    end
+\`\`\`
+
+## 📋 Features
+
+- ✅ Full CRUD operations for {resource}
+- ✅ Input validation with Zod schemas
+- ✅ Type-safe TypeScript implementation
+- ✅ OpenAPI 3.1 specification
+- ✅ Interactive Swagger UI documentation
+- ✅ Proper error handling with detailed messages
+- ✅ Pagination support
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Node.js 18+
+- npm or pnpm
+
+### Installation
+
+\`\`\`bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+\`\`\`
+
+### Environment Variables
+
+Create a \`.env.local\` file:
+
+\`\`\`env
+# Database
+DATABASE_URL=your_database_url
+
+# Authentication (if applicable)
+JWT_SECRET=your_jwt_secret
+\`\`\`
+
+## 📖 API Documentation
+
+### Interactive Docs
+
+Visit **[/api-docs](/api-docs)** for interactive Swagger UI documentation where you can test all endpoints.
+
+### Base URL
+
+\`\`\`
+http://localhost:3000/api
+\`\`\`
+
+---
+
+## 📡 Endpoints
+
+### {Resource} Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | \`/api/{resource}\` | List all {resources} with pagination |
+| POST | \`/api/{resource}\` | Create a new {resource} |
+| GET | \`/api/{resource}/:id\` | Get a specific {resource} by ID |
+| PUT | \`/api/{resource}/:id\` | Update a {resource} |
+| DELETE | \`/api/{resource}/:id\` | Delete a {resource} |
+
+---
+
+### List {Resources}
+
+\`\`\`http
+GET /api/{resource}?limit=10&offset=0
+\`\`\`
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| \`limit\` | integer | 10 | Number of items to return (1-100) |
+| \`offset\` | integer | 0 | Number of items to skip |
+
+**Example Response:**
+
+\`\`\`json
+{
+  "data": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "name": "Example Item",
+      "createdAt": "2024-01-15T10:30:00Z",
+      "updatedAt": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "total": 1,
+  "limit": 10,
+  "offset": 0
+}
+\`\`\`
+
+---
+
+### Create {Resource}
+
+\`\`\`http
+POST /api/{resource}
+Content-Type: application/json
+\`\`\`
+
+**Request Body:**
+
+\`\`\`json
+{
+  "name": "New Item",
+  "description": "Optional description"
+}
+\`\`\`
+
+**Example Response (201 Created):**
+
+\`\`\`json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "name": "New Item",
+  "description": "Optional description",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-15T10:30:00Z"
+}
+\`\`\`
+
+---
+
+### Get {Resource} by ID
+
+\`\`\`http
+GET /api/{resource}/:id
+\`\`\`
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| \`id\` | UUID | The unique identifier of the {resource} |
+
+---
+
+### Update {Resource}
+
+\`\`\`http
+PUT /api/{resource}/:id
+Content-Type: application/json
+\`\`\`
+
+**Request Body (partial update supported):**
+
+\`\`\`json
+{
+  "name": "Updated Name"
+}
+\`\`\`
+
+---
+
+### Delete {Resource}
+
+\`\`\`http
+DELETE /api/{resource}/:id
+\`\`\`
+
+**Response:** \`204 No Content\`
+
+---
+
+## ⚠️ Error Handling
+
+All errors follow a consistent format:
+
+\`\`\`json
+{
+  "error": "ErrorType",
+  "message": "Human-readable error message",
+  "details": [
+    {
+      "field": "fieldName",
+      "message": "Specific field error"
+    }
+  ]
+}
+\`\`\`
+
+### Error Status Codes
+
+| Status | Error Type | Description |
+|--------|------------|-------------|
+| 400 | \`ValidationError\` | Invalid request body or parameters |
+| 401 | \`Unauthorized\` | Missing or invalid authentication |
+| 403 | \`Forbidden\` | Insufficient permissions |
+| 404 | \`NotFound\` | Resource not found |
+| 409 | \`ConflictError\` | Resource already exists |
+| 500 | \`InternalError\` | Server error |
+
+---
+
+## 🔐 Authentication
+
+{If authentication is required, document it here. Otherwise, remove this section.}
+
+All protected endpoints require a Bearer token:
+
+\`\`\`http
+Authorization: Bearer <your-jwt-token>
+\`\`\`
+
+---
+
+## 📁 Project Structure
+
+\`\`\`
+{project-name}/
+├── src/
+│   ├── routes/
+│   │   ├── {resource}.ts       # Main CRUD handlers
+│   │   └── {resource}/[id].ts  # Single resource handlers
+│   └── index.ts                # Entry point
+├── types/
+│   └── {resource}.ts           # TypeScript types & Zod schemas
+├── docs/
+│   └── openapi.yaml            # OpenAPI 3.1 specification
+├── README.md                   # This file
+└── package.json
+\`\`\`
+
+---
+
+## 🛠️ Development
+
+### Running Tests
+
+\`\`\`bash
+npm test
+\`\`\`
+
+### Building for Production
+
+\`\`\`bash
+npm run build
+\`\`\`
+
+---
+
+## 📄 License
+
+MIT License - feel free to use this API in your projects.
+\`\`\`
+
+═══════════════════════════════════════════════════════════════════════════════
 API DOCUMENTATION MARKDOWN TEMPLATE
 ═══════════════════════════════════════════════════════════════════════════════
 

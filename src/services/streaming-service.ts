@@ -30,6 +30,7 @@ interface ProjectSandbox {
 class StreamingService {
   private connections: Map<string, Connection[]> = new Map();
   private projectSandboxes: Map<string, ProjectSandbox> = new Map();
+  private eventQueue: Map<string, StreamEventWithTimestamp[]> = new Map(); // Queue events until connection established
   private static instance: StreamingService;
 
   private constructor() {
@@ -37,6 +38,8 @@ class StreamingService {
     setInterval(() => this.cleanupStaleConnections(), 5 * 60 * 1000);
     // Cleanup stale sandbox mappings every 10 minutes
     setInterval(() => this.cleanupStaleSandboxes(), 10 * 60 * 1000);
+    // Cleanup old event queues every minute
+    setInterval(() => this.cleanupEventQueues(), 60 * 1000);
   }
 
   static getInstance(): StreamingService {
@@ -44,6 +47,22 @@ class StreamingService {
       StreamingService.instance = new StreamingService();
     }
     return StreamingService.instance;
+  }
+
+  /**
+   * Cleanup event queues older than 30 seconds
+   */
+  private cleanupEventQueues(): void {
+    const thirtySecondsAgo = Date.now() - 30000;
+    this.eventQueue.forEach((events, projectId) => {
+      // Remove events older than 30 seconds
+      const recentEvents = events.filter(e => e.timestamp > thirtySecondsAgo);
+      if (recentEvents.length === 0) {
+        this.eventQueue.delete(projectId);
+      } else {
+        this.eventQueue.set(projectId, recentEvents);
+      }
+    });
   }
 
   /**
@@ -61,6 +80,22 @@ class StreamingService {
     this.connections.set(projectId, connections);
 
     console.log(`[StreamingService] Added connection for project ${projectId}. Total connections: ${connections.length}`);
+
+    // Flush any queued events to the new connection
+    const queuedEvents = this.eventQueue.get(projectId);
+    if (queuedEvents && queuedEvents.length > 0) {
+      console.log(`[StreamingService] Flushing ${queuedEvents.length} queued events to new connection`);
+      queuedEvents.forEach(event => {
+        const formattedData = this.formatSSE(event);
+        try {
+          callback(formattedData);
+        } catch (error) {
+          console.error(`[StreamingService] Error flushing queued event:`, error);
+        }
+      });
+      // Clear the queue after flushing
+      this.eventQueue.delete(projectId);
+    }
 
     // Return cleanup function
     return () => {
@@ -86,19 +121,24 @@ class StreamingService {
 
   /**
    * Emit an event to all connections for a specific project
+   * If no connections exist, queue the event for later delivery
    */
   async emit(projectId: string, event: StreamEvent): Promise<void> {
     const connections = this.connections.get(projectId);
-
-    if (!connections || connections.length === 0) {
-      console.log(`[StreamingService] No connections for project ${projectId}. Event: ${event.type}`);
-      return;
-    }
 
     const eventWithTimestamp: StreamEventWithTimestamp = {
       ...event,
       timestamp: Date.now(),
     };
+
+    if (!connections || connections.length === 0) {
+      // Queue the event for later delivery when a connection is established
+      const queue = this.eventQueue.get(projectId) || [];
+      queue.push(eventWithTimestamp);
+      this.eventQueue.set(projectId, queue);
+      console.log(`[StreamingService] Queued event for project ${projectId}. Event: ${event.type}, Queue size: ${queue.length}`);
+      return;
+    }
 
     const formattedData = this.formatSSE(eventWithTimestamp);
 

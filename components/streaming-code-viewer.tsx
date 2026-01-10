@@ -91,7 +91,7 @@ export function StreamingCodeViewer({
       return;
     }
 
-    const targetContent = fileToDisplay.content;
+    const targetContent = fileToDisplay.content || '';
 
     // If file is complete and not currently streaming, show full content immediately
     if (fileToDisplay.isComplete && !isStreaming) {

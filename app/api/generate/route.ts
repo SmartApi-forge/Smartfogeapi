@@ -50,6 +50,7 @@ import { cloneTemplate, isPackageInTemplate } from '../../../src/services/templa
 import { detectFromPrompt, suggestLibraries } from '../../../src/services/dependency-detector';
 import { detectGenerationMode, type GenerationModeResult } from '../../../src/services/generation-mode-detector';
 import { generateFolderStructure, generatePackageJson, generateReadme, generateLightweightAPI } from '../../../src/services/lightweight-api-generator';
+import { streamingService } from '../../../src/services/streaming-service';
 
 // Lazy-load OpenAI client
 let openaiClient: OpenAI | null = null;
@@ -220,9 +221,9 @@ async function writeToDaytonaAsync(
     // Emit file:complete events for successfully written files
     for (const fileResult of result.results) {
       if (fileResult.success) {
-        emit(createEvent('file:complete', {
-          filename: fileResult.path,
-          message: `Written to sandbox: ${fileResult.path}`,
+        // Emit status event (not file:complete) since content was already emitted earlier
+        emit(createEvent('status', {
+          message: `Synced to sandbox: ${fileResult.path}`,
         }));
       }
     }
@@ -434,8 +435,38 @@ export async function POST(request: NextRequest) {
         /**
          * Helper to emit SSE event
          * Only emits if controller is still open
+         * Also emits through streamingService for frontend SSE connections
          */
         const emit = (event: GenerateSSEEvent) => {
+          // Always emit through streamingService for frontend SSE connections
+          // Convert GenerateSSEEvent to StreamEvent format
+          const streamEvent = {
+            type: event.type === 'thinking' ? 'step:start' :
+                  event.type === 'status' ? 'step:progress' :
+                  event.type === 'file:complete' ? 'file:complete' :
+                  event.type === 'complete' ? 'complete' :
+                  event.type === 'error' ? 'error' :
+                  event.type === 'folder:created' ? 'step:progress' :
+                  event.type === 'api:started' ? 'step:start' :
+                  event.type === 'api:analyzing' ? 'step:progress' :
+                  event.type === 'api:complete' ? 'step:complete' :
+                  event.type === 'generate:start' ? 'step:start' :
+                  event.type === 'chunk' ? 'code:chunk' :
+                  'step:progress',
+            message: event.message || '',
+            step: event.type,
+            filename: event.filename,
+            path: event.filePath,
+            content: event.content,
+            summary: event.message,
+            filesModified: event.filesModified,
+          };
+          
+          // Emit to streamingService (async, don't await)
+          streamingService.emit(projectId, streamEvent as any).catch(err => {
+            console.warn('[Generate] Failed to emit to streamingService:', err);
+          });
+          
           if (!isControllerOpen) {
             // Controller is closed, log but don't throw
             console.log('[Generate] Skipping emit, controller already closed:', event.type);
@@ -548,6 +579,7 @@ export async function POST(request: NextRequest) {
                   error: cloneResult.error,
                 }));
                 emitError(`Template clone failed: ${cloneResult.error}`, 'template_clone');
+                isControllerOpen = false;
                 controller.close();
                 return;
               }
@@ -659,6 +691,7 @@ export async function POST(request: NextRequest) {
                 error: errorMessage,
               }));
               emitError(`Template clone failed: ${errorMessage}`, 'template_clone');
+              isControllerOpen = false;
               controller.close();
               return;
             }
@@ -749,6 +782,7 @@ export async function POST(request: NextRequest) {
                     failedPackages: installResult.failed.map(f => f.name),
                   }));
                   emitError(`Package installation failed: ${installResult.error}`, 'deps_install');
+                  isControllerOpen = false;
                   controller.close();
                   return;
                 }
@@ -770,6 +804,7 @@ export async function POST(request: NextRequest) {
                   failedPackages: packagesToInstall,
                 }));
                 emitError(`Package installation failed: ${errorMessage}`, 'deps_install');
+                isControllerOpen = false;
                 controller.close();
                 return;
               }
@@ -847,6 +882,18 @@ export async function POST(request: NextRequest) {
 
           if (parseErrors.length > 0) {
             console.warn('[Generate] Code block parsing warnings:', parseErrors);
+          }
+
+          // REQUIREMENT 8.3, 8.4: Emit file:complete events with content for real-time file tree updates
+          // This enables V0/Lovable-style streaming where files appear in the explorer as they're generated
+          for (const file of parsedFiles) {
+            emit(createEvent('file:complete', {
+              filename: file.path,
+              filePath: file.path,
+              content: file.content,
+              message: `Generated ${file.path}`,
+            }));
+            console.log(`[Generate] Emitted file:complete for ${file.path} (${file.content.length} bytes)`);
           }
 
           // REQUIREMENT 3.3: Merge with existing snapshot
@@ -1015,9 +1062,11 @@ export async function POST(request: NextRequest) {
               console.warn('[Generate] Pending Daytona write failed:', writeError);
             }
           }
-          // Mark controller as closed before actually closing
-          isControllerOpen = false;
-          controller.close();
+          // Only close if not already closed (early returns may have closed it)
+          if (isControllerOpen) {
+            isControllerOpen = false;
+            controller.close();
+          }
         }
       },
     });
@@ -1158,6 +1207,7 @@ async function streamLLMResponse(
         messages,
         stream: true,
         temperature: 0.7,
+        max_tokens: 16384, // Ensure we get complete responses
       };
 
       // Add tools if context is provided
@@ -1395,7 +1445,13 @@ async function streamGeminiResponse(
 
   try {
     const genAI = getGeminiClient();
-    const model = genAI.getGenerativeModel({ model: geminiModelName });
+    const model = genAI.getGenerativeModel({ 
+      model: geminiModelName,
+      generationConfig: {
+        maxOutputTokens: 16384, // Ensure we get complete responses
+        temperature: 0.7,
+      }
+    });
 
     // Build the prompt for Gemini
     const systemPart = prompt.split('\n\n## Current Request')[0];
@@ -1611,6 +1667,29 @@ async function handleLightweightAPIGeneration(
       userMessage.substring(0, 100)
     );
 
+    // REQUIREMENT 8.3, 8.4: Emit file:complete events with content for real-time file tree updates
+    // This enables V0/Lovable-style streaming where files appear in the explorer as they're generated
+    for (const file of parsedFiles) {
+      emit(createEvent('file:complete', {
+        filename: file.path,
+        filePath: file.path,
+        content: file.content,
+        message: `Generated ${file.path}`,
+      }));
+      console.log(`[Generate] Emitted file:complete for ${file.path} (${file.content.length} bytes)`);
+    }
+
+    // Also emit file:complete for initial project files (package.json, README, etc.)
+    for (const file of apiProject.files) {
+      emit(createEvent('file:complete', {
+        filename: file.path,
+        filePath: file.path,
+        content: file.content,
+        message: `Generated ${file.path}`,
+      }));
+      console.log(`[Generate] Emitted file:complete for initial file ${file.path}`);
+    }
+
     // Get next turn index
     const turnIndex = await conversationContextService.getNextTurnIndex(projectId);
 
@@ -1629,17 +1708,13 @@ async function handleLightweightAPIGeneration(
       const writeResult = await writeSnapshotToDaytona(sandbox, mergeResult.snapshot);
       console.log(`[Generate] Wrote ${writeResult.successCount}/${writeResult.totalFiles} files to sandbox`);
 
-      // REQUIREMENT 5.3: Emit file:created events with paths for each written file
+      // REQUIREMENT 5.3: Emit status events for each written file (content already emitted earlier)
       for (const fileResult of writeResult.results) {
         if (fileResult.success) {
-          // Extract filename from path for display
-          const filename = fileResult.path.split('/').pop() || fileResult.path;
-          emit(createEvent('file:complete', {
-            filename: filename,
-            filePath: fileResult.path,
-            message: `Created ${fileResult.path}`,
+          emit(createEvent('status', {
+            message: `Synced to sandbox: ${fileResult.path}`,
           }));
-          console.log(`[Generate] File created: ${fileResult.path}`);
+          console.log(`[Generate] File synced: ${fileResult.path}`);
         } else {
           console.warn(`[Generate] Failed to write file: ${fileResult.path} - ${fileResult.error}`);
         }
@@ -1778,9 +1853,9 @@ async function handleLightweightAPIGeneration(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     emitError(errorMessage, 'lightweight_api_generation');
-  } finally {
-    controller.close();
   }
+  // NOTE: Do NOT close controller here - let the main start() finally block handle it
+  // This prevents "Controller is already closed" errors
 }
 
 /**
@@ -1814,7 +1889,7 @@ You MUST generate:
 - ✅ API route handlers in src/routes/
 - ✅ TypeScript types and Zod schemas in types/
 - ✅ OpenAPI 3.1 specification in docs/openapi.yaml
-- ✅ README.md with usage examples
+- ✅ Comprehensive README.md with Mermaid diagrams
 
 ═══════════════════════════════════════════════════════════════════════════════
 PROJECT STRUCTURE
@@ -1827,7 +1902,7 @@ Place your files in the appropriate folders:
 - Route handlers: ${projectName}/src/routes/
 - TypeScript types: ${projectName}/types/
 - OpenAPI spec: ${projectName}/docs/openapi.yaml
-- Documentation: ${projectName}/docs/README.md or ${projectName}/README.md
+- Documentation: ${projectName}/README.md
 
 ═══════════════════════════════════════════════════════════════════════════════
 CODE BLOCK FORMAT
@@ -1846,6 +1921,55 @@ When generating code, use this EXACT format:
 \`\`\`yaml file="${projectName}/docs/openapi.yaml"
 # Your OpenAPI spec here
 \`\`\`
+
+\`\`\`markdown file="${projectName}/README.md"
+# Your documentation here
+\`\`\`
+
+═══════════════════════════════════════════════════════════════════════════════
+README.md REQUIREMENTS (CRITICAL)
+═══════════════════════════════════════════════════════════════════════════════
+
+Generate a COMPREHENSIVE README.md that includes:
+
+1. **Project Title & Description** - Clear explanation of what the API does
+
+2. **Architecture Diagram** - Use Mermaid to show the API structure:
+\`\`\`mermaid
+graph TD
+    Client[Client] --> API[API Server]
+    API --> Routes[Route Handlers]
+    Routes --> Validation[Zod Validation]
+    Routes --> DB[(Database)]
+\`\`\`
+
+3. **API Endpoints Table** - Document ALL endpoints:
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET    | /items   | List all items |
+| POST   | /items   | Create item |
+
+4. **Request/Response Examples** - Show curl examples:
+\`\`\`bash
+curl -X GET http://localhost:3000/items
+\`\`\`
+
+5. **Data Models** - Document the data structures with Mermaid ER diagram:
+\`\`\`mermaid
+erDiagram
+    ITEM {
+        string id PK
+        string name
+        string description
+        datetime createdAt
+    }
+\`\`\`
+
+6. **Error Handling** - Document error responses
+
+7. **Getting Started** - Installation and running instructions
+
+8. **Project Structure** - File tree explanation
 
 ═══════════════════════════════════════════════════════════════════════════════
 API ROUTE TEMPLATE
@@ -1920,7 +2044,8 @@ REQUIREMENTS
 4. Export TypeScript types for all data structures
 5. Document all endpoints in OpenAPI spec
 6. Include example values in OpenAPI spec
-7. Create a README with usage examples`;
+7. Create a COMPREHENSIVE README with Mermaid diagrams (architecture + ER diagram)
+8. Include curl examples for all endpoints in README`;
 }
 
 /**

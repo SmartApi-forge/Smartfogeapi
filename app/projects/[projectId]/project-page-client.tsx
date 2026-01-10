@@ -60,6 +60,7 @@ import { useCodeGeneration } from "../../../hooks/use-code-generation";
 import { useGitHubClone } from "../../../hooks/use-github-clone";
 import { StreamingCodeViewer } from "../../../components/streaming-code-viewer";
 import { GenerationProgressTracker } from "../../../components/generation-progress-tracker";
+import { ProgressStepsRenderer, createProgressSteps } from "../../../components/progress-steps-renderer";
 import { TextShimmer } from "@/components/ui/text-shimmer";
 import { VersionCard } from "@/components/version-card";
 import { SandboxPreview } from "@/components/sandbox-preview";
@@ -67,6 +68,7 @@ import { V0Sidebar } from "@/components/v0-sidebar";
 import JSZip from "jszip";
 import { sanitizeMessages } from "@/src/utils/message-sanitizer";
 import { MESSAGE_STYLES } from "@/components/chat-message";
+import { MarkdownPreview } from "@/components/markdown-preview";
 
 interface Message {
   id: string;
@@ -358,7 +360,8 @@ function TreeItem({
   onNewItemCancel,
   newItemName,
   onContextMenu,
-  modifiedFiles = []
+  modifiedFiles = [],
+  isNewlyAdded = false
 }: {
   node: TreeNode;
   depth?: number;
@@ -375,6 +378,7 @@ function TreeItem({
   newItemName?: string;
   onContextMenu?: (e: React.MouseEvent, fileId: string) => void;
   modifiedFiles?: string[]; // Requirements: 18.3, 18.4 - Visual indicator for modified files
+  isNewlyAdded?: boolean; // Requirements: 8.3, 8.4 - Animation for new files
 }) {
   const isExpanded = expanded.has(node.id);
   const isSelected = selectedId === node.id;
@@ -384,8 +388,20 @@ function TreeItem({
     node.id === f || node.id.endsWith(f) || f.endsWith(node.id)
   );
 
+  // Animation variants for file items - Requirements: 8.3, 8.4, 8.5, 8.6
+  const itemVariants = {
+    initial: { opacity: 0, x: -10 },
+    animate: { opacity: 1, x: 0 },
+    exit: { opacity: 0, x: -10 },
+  };
+
   return (
-    <div>
+    <motion.div
+      variants={itemVariants}
+      initial={isModified ? "initial" : false}
+      animate="animate"
+      transition={{ duration: 0.2, ease: "easeOut" }}
+    >
       <div
         className={`flex items-center gap-1.5 sm:gap-2 px-1.5 sm:px-2 py-2 sm:py-1 cursor-pointer hover:bg-muted/50 transition-colors rounded-md ${
           isSelected ? 'bg-[#E6E6E6] dark:bg-[#333433] text-foreground' : 'text-foreground'
@@ -419,7 +435,12 @@ function TreeItem({
         <span className={`truncate min-w-0 font-sans text-[14px] font-normal ${isModified ? 'text-green-500 dark:text-green-400' : ''}`}>{node.name}</span>
         {/* Requirements: 18.3, 18.4 - Visual indicator for newly created/modified files */}
         {isModified && (
-          <span className="ml-1 w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" title="Recently modified" />
+          <motion.span 
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="ml-1 w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" 
+            title="Recently modified" 
+          />
         )}
       </div>
       
@@ -482,7 +503,7 @@ function TreeItem({
           ))}
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -504,6 +525,8 @@ function CodeViewer({
   const [copySuccess, setCopySuccess] = useState(false);
   const [editorContent, setEditorContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  // Requirements: 5.1, 5.5, 5.6 - Raw/Preview toggle for markdown files
+  const [markdownViewMode, setMarkdownViewMode] = useState<'raw' | 'preview'>('preview');
 
   const selectedFile = useMemo(() => {
     const findFile = (nodes: TreeNode[], id: string): TreeNode | null => {
@@ -518,6 +541,13 @@ function CodeViewer({
     };
     return filename ? findFile(fileTree, filename) : null;
   }, [filename, fileTree]);
+
+  // Check if current file is a markdown file
+  const isMarkdownFile = useMemo(() => {
+    if (!selectedFile?.name) return false;
+    const ext = selectedFile.name.split('.').pop()?.toLowerCase();
+    return ext === 'md' || ext === 'mdx' || ext === 'markdown';
+  }, [selectedFile?.name]);
 
   // Track if content has changed
   const hasUnsavedChanges = useMemo(() => {
@@ -625,6 +655,37 @@ function CodeViewer({
         
         {/* Action buttons */}
         <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
+          {/* Requirements: 5.1, 5.5, 5.6 - Raw/Preview toggle for markdown files */}
+          {isMarkdownFile && (
+            <div className="flex items-center bg-muted/50 dark:bg-[#262726]/50 rounded-md p-0.5 mr-1">
+              <button
+                onClick={() => setMarkdownViewMode('raw')}
+                className={`flex items-center justify-center gap-1 px-1.5 sm:px-2 py-1 rounded text-xs transition-colors ${
+                  markdownViewMode === 'raw'
+                    ? 'bg-background dark:bg-[#1D1D1D] text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                title="View raw markdown"
+                aria-label="Raw view"
+              >
+                <Code2 className="size-3.5 flex-shrink-0" />
+                <span className="hidden sm:inline text-[10px] sm:text-[11px]">Raw</span>
+              </button>
+              <button
+                onClick={() => setMarkdownViewMode('preview')}
+                className={`flex items-center justify-center gap-1 px-1.5 sm:px-2 py-1 rounded text-xs transition-colors ${
+                  markdownViewMode === 'preview'
+                    ? 'bg-background dark:bg-[#1D1D1D] text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                title="Preview markdown"
+                aria-label="Preview"
+              >
+                <Eye className="size-3.5 flex-shrink-0" />
+                <span className="hidden sm:inline text-[10px] sm:text-[11px]">Preview</span>
+              </button>
+            </div>
+          )}
           <button
             onClick={handleSave}
             disabled={isSaving || !hasUnsavedChanges}
@@ -676,7 +737,7 @@ function CodeViewer({
         </div>
       </div>
 
-            {/* Monaco Editor - editable with syntax highlighting */}
+            {/* Monaco Editor or Markdown Preview - based on file type and view mode */}
             <div 
               className="flex-1 bg-white dark:bg-[#1D1D1D]" 
               style={{ 
@@ -684,24 +745,31 @@ function CodeViewer({
                 width: '100%',
               }}
             >
-          <Editor
-            height="100%"
-            language={selectedFile.language || 'text'}
-            value={editorContent}
-            onChange={(value) => setEditorContent(value || '')}
-            theme={codeTheme === themes.vsDark ? 'vs-dark' : 'light'}
-            options={{
-              fontSize: 13,
-              lineHeight: 20,
-              fontFamily: 'var(--font-geist-mono), "Geist Mono", monospace',
-              minimap: { enabled: false },
-              scrollBeyondLastLine: false,
-              wordWrap: 'on',
-              automaticLayout: true,
-              tabSize: 2,
-              insertSpaces: true,
-            }}
-          />
+          {/* Requirements: 5.1, 5.5, 5.6 - Show markdown preview or raw editor */}
+          {isMarkdownFile && markdownViewMode === 'preview' ? (
+            <div className="h-full overflow-auto p-4 sm:p-6">
+              <MarkdownPreview content={editorContent} />
+            </div>
+          ) : (
+            <Editor
+              height="100%"
+              language={selectedFile.language || 'text'}
+              value={editorContent}
+              onChange={(value) => setEditorContent(value || '')}
+              theme={codeTheme === themes.vsDark ? 'vs-dark' : 'light'}
+              options={{
+                fontSize: 13,
+                lineHeight: 20,
+                fontFamily: 'var(--font-geist-mono), "Geist Mono", monospace',
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                wordWrap: 'on',
+                automaticLayout: true,
+                tabSize: 2,
+                insertSpaces: true,
+              }}
+            />
+          )}
       </div>
     </div>
   );
@@ -812,8 +880,10 @@ export function ProjectPageClient({
                     
                     // Refresh data when generation completes
                     if (event.type === 'complete') {
-                      // Refetch messages and versions
-                      window.location.reload();
+                      // Requirements: 9.1, 9.2, 9.3, 9.4 - No page reload on complete
+                      // Update state in-place via React instead of reloading
+                      console.log('[Generate] Generation complete, refetching data...');
+                      // Refetch will happen via the useEffect hooks that watch for completion
                     }
                   } catch (e) {
                     // Ignore parse errors for incomplete chunks
@@ -1178,7 +1248,8 @@ export function ProjectPageClient({
     }
     
     // NEW: Show status from useCodeGeneration hook (v0-style direct streaming)
-    // Code streams to file editor, chat shows only status messages
+    // Code streams to file editor, chat shows progress steps with text shimmer
+    // Requirements: 7.6, 11.1-11.6 - Step-by-step progress messages
     if (codeGeneration.isGenerating) {
       // Show pending user message FIRST (before assistant response)
       if (pendingUserMessage) {
@@ -1193,56 +1264,27 @@ export function ProjectPageClient({
         });
       }
       
-      // Show thinking/status indicator
-      if (codeGeneration.status === 'thinking') {
-        msgs.push({
-          id: 'codegen-thinking',
-          content: codeGeneration.statusMessage || 'Thinking...',
-          role: 'assistant' as const,
-          type: 'text' as const,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          isStreaming: true,
-          icon: 'generating',
-        });
-      }
+      // Create progress steps based on current status
+      const fileReadingCount = codeGeneration.fileReadingEvents.filter(e => e.type === 'file:reading').length;
+      const progressSteps = createProgressSteps(
+        codeGeneration.status,
+        codeGeneration.filesModified,
+        fileReadingCount
+      );
       
-      // Show file reading events
-      if (codeGeneration.status === 'reading_files') {
-        const readingEvents = codeGeneration.fileReadingEvents.filter(e => e.type === 'file:reading');
-        if (readingEvents.length > 0) {
-          msgs.push({
-            id: 'codegen-reading-files',
-            content: `Reading ${readingEvents.length} file(s) for context...`,
-            role: 'assistant' as const,
-            type: 'text' as const,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            isStreaming: true,
-            icon: 'processing',
-          });
-        }
-      }
-      
-      // Show generating status (NOT the raw code output - that goes to file editor)
-      if (codeGeneration.status === 'generating') {
-        // Show status message instead of raw code
-        const fileCount = codeGeneration.filesModified.length;
-        const statusText = fileCount > 0 
-          ? `Generating code... (${fileCount} file${fileCount > 1 ? 's' : ''} modified)`
-          : 'Generating code...';
-        
-        msgs.push({
-          id: 'codegen-generating',
-          content: statusText,
-          role: 'assistant' as const,
-          type: 'text' as const,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          isStreaming: true,
-          icon: 'generating',
-        });
-      }
+      // Show progress steps as a single assistant message with custom rendering
+      msgs.push({
+        id: 'codegen-progress',
+        content: '', // Content rendered via progressSteps
+        role: 'assistant' as const,
+        type: 'progress' as const,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        isStreaming: true,
+        progressSteps, // Custom field for progress steps
+        status: codeGeneration.status,
+        statusMessage: codeGeneration.statusMessage,
+      });
       
       return msgs;
     }
@@ -1647,16 +1689,23 @@ export function ProjectPageClient({
     let baseFiles: Record<string, any> = {};
     
     // Priority 1: Use streaming files from codeGeneration hook (v0-style)
-    if (codeGeneration.isGenerating && codeGeneration.filesModified.length > 0) {
+    // Also merge with streamState.generatedFiles which has actual file content
+    if (codeGeneration.isGenerating && (codeGeneration.filesModified.length > 0 || streamState.generatedFiles.length > 0)) {
       // Start with existing snapshot files
       if (fileSnapshot?.files_jsonb) {
         Object.entries(fileSnapshot.files_jsonb).forEach(([path, fileData]) => {
           baseFiles[path] = fileData.content;
         });
       }
-      // Note: Modified files will be updated when snapshot is refetched
+      // Merge with streaming files that have content (from useGenerationStream hook)
+      // This enables real-time file tree updates during generation
+      streamState.generatedFiles.forEach(file => {
+        if (file.content) {
+          baseFiles[file.filename] = file.content;
+        }
+      });
     }
-    // Priority 2: Use streaming files from legacy streamState
+    // Priority 2: Use streaming files from legacy streamState (when not using codeGeneration)
     else if (streamState.isStreaming && streamState.generatedFiles.length > 0) {
       streamState.generatedFiles.forEach(file => {
         baseFiles[file.filename] = file.content;
@@ -2361,9 +2410,10 @@ export function ProjectPageClient({
           initial={false}
           animate={isMobileScreen ? {} : { 
             // Only apply motion animations on desktop - use fixed width for consistency
-            width: isChatPanelCollapsed ? 0 : '320px',
-            minWidth: isChatPanelCollapsed ? 0 : '320px',
-            maxWidth: isChatPanelCollapsed ? 0 : '320px',
+            // Requirements: 10.1, 10.2, 10.3, 10.4, 10.5 - Wider chat panel (380px min, up to 45% viewport)
+            width: isChatPanelCollapsed ? 0 : '380px',
+            minWidth: isChatPanelCollapsed ? 0 : '380px',
+            maxWidth: isChatPanelCollapsed ? 0 : '45vw',
             opacity: isChatPanelCollapsed ? 0 : 1
           }}
           transition={{ 
@@ -2383,7 +2433,7 @@ export function ProjectPageClient({
           className={`flex-col h-full bg-[#FAFAFA] dark:bg-[#0E100F] ${
             isChatPanelCollapsed 
               ? 'overflow-hidden' 
-              : 'w-full sm:w-[320px] sm:min-w-[320px] sm:max-w-[320px] overflow-hidden'
+              : 'w-full sm:w-[380px] sm:min-w-[380px] sm:max-w-[45vw] overflow-hidden'
           } ${mobileView === 'chat' ? 'flex flex-1 sm:flex-none' : 'hidden sm:flex'}`}
         >
           
@@ -2424,6 +2474,15 @@ export function ProjectPageClient({
                             </div>
                           </div>
                         )}
+                      </div>
+                    ) : message.type === "progress" && 'progressSteps' in message ? (
+                      // Progress steps with text shimmer - Requirements: 7.6, 11.1-11.6
+                      <div className={MESSAGE_STYLES.assistantMessage.container}>
+                        <ProgressStepsRenderer 
+                          steps={message.progressSteps}
+                          showCompleted={true}
+                          animate={true}
+                        />
                       </div>
                     ) : message.role === "user" ? (
                       // User message - consistent styling (Requirements 2.1, 2.2, 2.3)
@@ -2867,6 +2926,22 @@ export function ProjectPageClient({
                 >
                   ×
                 </button>
+                
+                {/* Loading state - Requirements: 8.1, 8.2, 8.7 */}
+                {(codeGeneration.isGenerating || gitHubClone.isCloning) && fileTree.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
+                    <Loader2 className="size-6 animate-spin text-muted-foreground mb-3" />
+                    <TextShimmer 
+                      className="text-sm font-medium"
+                      duration={1.5}
+                    >
+                      {gitHubClone.isCloning ? 'Cloning repository...' : 'Scaffolding project...'}
+                    </TextShimmer>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Files will appear here
+                    </p>
+                  </div>
+                )}
                 
                 {/* Show inline creator at root level if no folder selected */}
                 {creatingNewItem && !creatingNewItem.parentId && (
