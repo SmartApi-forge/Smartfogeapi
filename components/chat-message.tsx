@@ -8,17 +8,52 @@
  * - FileReadingIndicator for context building
  * - ContextSourceIndicator for RAG retrieval display
  * 
- * Requirements: 3.2, 6.2, 9.1
+ * Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 3.2, 6.2, 9.1
+ * 
+ * Styling Requirements (Requirement 2):
+ * - User messages: Right-aligned with consistent bubble styling
+ * - Assistant messages: Left-aligned with consistent styling
+ * - First and follow-up messages use identical styling
+ * - Visual consistency maintained throughout conversation
  */
 
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Loader2, User, Bot } from 'lucide-react';
-import { ClickableFilePath, InlineFilePath } from './clickable-file-path';
+import { Loader2 } from 'lucide-react';
+import { InlineFilePath } from './clickable-file-path';
 import { FileReadingIndicator, FileReadingItem } from './file-reading-indicator';
 import { ContextSourceIndicator } from './context-source-indicator';
 import { TextShimmer } from './ui/text-shimmer';
-import type { ChatMessage as ChatMessageType, ContextSource, FileReadingEvent, ChatMode } from '@/src/types/chat-ux';
+import type { ContextSource, FileReadingEvent, ChatMode } from '@/src/types/chat-ux';
+
+/**
+ * Message Styling Constants
+ * 
+ * These constants ensure consistent styling across all message types.
+ * Requirements 2.1-2.5: Consistent message styling for first and follow-up messages.
+ * 
+ * IMPORTANT: If you need to change message styling, update these constants
+ * to maintain consistency across the application.
+ */
+export const MESSAGE_STYLES = {
+  /** User message bubble styling - right-aligned */
+  userBubble: {
+    container: 'flex justify-end mb-1.5',
+    bubble: 'rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 bg-[#EBEBEB] dark:bg-[#262626] border border-[#d1d5db] dark:border-[#262626] max-w-[90%]',
+    text: 'whitespace-pre-wrap break-words leading-[1.5] text-[14px] sm:text-[15px] text-gray-900 dark:text-white font-medium',
+  },
+  /** Assistant message styling - left-aligned */
+  assistantMessage: {
+    container: 'flex gap-2 sm:gap-3 items-start mb-1.5 pr-2 sm:pr-4',
+    text: 'whitespace-pre-wrap break-words leading-[1.5] text-[14px] sm:text-[15px] flex-1',
+    textColor: 'text-foreground dark:text-gray-200',
+  },
+  /** Streaming animation styling */
+  streaming: {
+    spinner: 'size-4 animate-spin text-primary mt-1 flex-shrink-0',
+    shimmer: 'text-[14px] sm:text-[15px] font-normal text-foreground',
+  },
+} as const;
 
 /**
  * Regex pattern to match file paths in text
@@ -207,32 +242,32 @@ export function ChatMessage({
       
       {/* Message Content */}
       {isUser ? (
-        // User message - right aligned
-        <div className="flex justify-end mb-1.5">
-          <div className="rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 bg-[#EBEBEB] dark:bg-[#262626] border border-[#d1d5db] dark:border-[#262626] max-w-[90%]">
-            <div className="whitespace-pre-wrap break-words leading-[1.5] text-[14px] sm:text-[15px] text-gray-900 dark:text-white font-medium">
+        // User message - right aligned (Requirements 2.1, 2.2, 2.3)
+        <div className={MESSAGE_STYLES.userBubble.container}>
+          <div className={MESSAGE_STYLES.userBubble.bubble}>
+            <div className={MESSAGE_STYLES.userBubble.text}>
               {message.content}
             </div>
           </div>
         </div>
       ) : (
-        // Assistant message - left aligned with optional streaming animation
-        <div className="flex gap-2 sm:gap-3 items-start mb-1.5 pr-2 sm:pr-4">
+        // Assistant message - left aligned (Requirement 2.4)
+        <div className={MESSAGE_STYLES.assistantMessage.container}>
           {/* Spinner for streaming messages */}
           {isStreaming && (streamIcon === 'generating' || streamIcon === 'processing') && (
-            <Loader2 className="size-4 animate-spin text-primary mt-1 flex-shrink-0" />
+            <Loader2 className={MESSAGE_STYLES.streaming.spinner} />
           )}
           
-          <div className="whitespace-pre-wrap break-words leading-[1.5] text-[14px] sm:text-[15px] flex-1">
+          <div className={MESSAGE_STYLES.assistantMessage.text}>
             {isStreaming && (streamIcon === 'generating' || streamIcon === 'processing') ? (
               <TextShimmer 
                 duration={1.5} 
-                className="text-[14px] sm:text-[15px] font-normal text-foreground"
+                className={MESSAGE_STYLES.streaming.shimmer}
               >
                 {typeof parsedContent === 'string' ? parsedContent : message.content}
               </TextShimmer>
             ) : (
-              <span className="text-foreground dark:text-gray-200">
+              <span className={MESSAGE_STYLES.assistantMessage.textColor}>
                 {parsedContent}
               </span>
             )}

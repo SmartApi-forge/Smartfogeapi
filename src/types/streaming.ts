@@ -278,6 +278,46 @@ export type StreamEvent =
       tool: string;
       error: string;
       versionId?: string;
+    }
+  // ============================================
+  // Lightweight API Generation SSE Events
+  // Requirements: 5.1-5.5 (Lightweight API Generation)
+  // ============================================
+  | {
+      // Emitted when lightweight API generation starts
+      // Requirements: 5.1
+      type: 'api:started';
+      message: string;
+      projectName: string;
+      timestamp: number;
+      versionId?: string;
+    }
+  | {
+      // Emitted when analyzing API requirements
+      // Requirements: 5.1
+      type: 'api:analyzing';
+      message: string;
+      timestamp: number;
+      versionId?: string;
+    }
+  | {
+      // Emitted when a folder is created in lightweight mode
+      // Requirements: 5.2
+      type: 'folder:created';
+      path: string;
+      message: string;
+      timestamp: number;
+      versionId?: string;
+    }
+  | {
+      // Emitted when lightweight API generation completes
+      // Requirements: 5.4
+      type: 'api:complete';
+      message: string;
+      filesCreated: number;
+      projectName: string;
+      timestamp: number;
+      versionId?: string;
     };
 
 export type StreamEventWithTimestamp = StreamEvent & {

@@ -65,6 +65,8 @@ import { VersionCard } from "@/components/version-card";
 import { SandboxPreview } from "@/components/sandbox-preview";
 import { V0Sidebar } from "@/components/v0-sidebar";
 import JSZip from "jszip";
+import { sanitizeMessages } from "@/src/utils/message-sanitizer";
+import { MESSAGE_STYLES } from "@/components/chat-message";
 
 interface Message {
   id: string;
@@ -1492,6 +1494,10 @@ export function ProjectPageClient({
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
 
+    // Sanitize messages to remove duplicated prompts from assistant responses
+    // Requirements: 1.5 - Strip duplicated prompts from legacy data display
+    const sanitizedCombined = sanitizeMessages(combined);
+
     // Inject version cards after the ASSISTANT messages that created them
     // Only show COMPLETED versions (not generating ones) to avoid premature display
     const completedVersions = versions.filter(v => v.status === 'complete');
@@ -1500,7 +1506,7 @@ export function ProjectPageClient({
       const messagesWithVersions: any[] = [];
       const addedVersionIds = new Set<string>();
       
-      combined.forEach((msg, index) => {
+      sanitizedCombined.forEach((msg, index) => {
         messagesWithVersions.push(msg);
         
         // After each message, check if there's a version that should appear
@@ -1569,7 +1575,7 @@ export function ProjectPageClient({
       return messagesWithVersions;
     }
     
-    return combined;
+    return sanitizedCombined;
   }, [sortedMessages, streamingMessages, persistedEventMessages, versions, streamState.isStreaming, streamState.events.length, gitHubClone.isCloning, gitHubClone.status, project.name, pendingUserMessage]);
 
   // Auto-refresh preview when server:ready event is received
@@ -2420,31 +2426,31 @@ export function ProjectPageClient({
                         )}
                       </div>
                     ) : message.role === "user" ? (
-                      // User message - compact spacing
-                      <div className="flex justify-end mb-1.5">
-                        <div className="rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 bg-[#EBEBEB] dark:bg-[#262626] border border-[#d1d5db] dark:border-[#262626] max-w-[90%]">
-                          <div className="whitespace-pre-wrap break-words leading-[1.5] text-[14px] sm:text-[15px] text-gray-900 dark:text-white font-medium">
+                      // User message - consistent styling (Requirements 2.1, 2.2, 2.3)
+                      <div className={MESSAGE_STYLES.userBubble.container}>
+                        <div className={MESSAGE_STYLES.userBubble.bubble}>
+                          <div className={MESSAGE_STYLES.userBubble.text}>
                             {message.content}
                           </div>
                         </div>
                       </div>
                     ) : (
-                      // AI message - clean modern UI like ChatGPT/Claude with compact spacing
-                      <div className="flex gap-2 sm:gap-3 items-start mb-1.5 pr-2 sm:pr-4">
+                      // AI message - consistent styling (Requirement 2.4)
+                      <div className={MESSAGE_STYLES.assistantMessage.container}>
                         {/* Only show spinner when actively generating, no checkmarks */}
                         {isStreamingMsg && (streamIcon === 'generating' || streamIcon === 'processing') && (
-                          <Loader2 className="size-4 animate-spin text-primary mt-1 flex-shrink-0" />
+                          <Loader2 className={MESSAGE_STYLES.streaming.spinner} />
                         )}
-                        <div className="whitespace-pre-wrap break-words leading-[1.5] text-[14px] sm:text-[15px] flex-1">
+                        <div className={MESSAGE_STYLES.assistantMessage.text}>
                           {isStreamingMsg && (streamIcon === 'generating' || streamIcon === 'processing') ? (
                             <TextShimmer 
                               duration={1.5} 
-                              className="text-[14px] sm:text-[15px] font-normal text-foreground"
+                              className={MESSAGE_STYLES.streaming.shimmer}
                             >
                               {message.content}
                             </TextShimmer>
                           ) : (
-                            <span className="text-foreground dark:text-gray-200">
+                            <span className={MESSAGE_STYLES.assistantMessage.textColor}>
                               {message.content}
                             </span>
                           )}

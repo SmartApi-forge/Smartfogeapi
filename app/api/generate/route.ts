@@ -30,6 +30,7 @@ import {
   runPnpmInstall,
   startPreviewServer,
   getPreviewServerLogs,
+  createFolders,
   type Sandbox
 } from '../../../src/lib/daytona-client';
 import { supabaseServer } from '../../../lib/supabase-server';
@@ -47,6 +48,8 @@ import {
 import { PromptLoader } from '../../../src/services/prompt-loader';
 import { cloneTemplate, isPackageInTemplate } from '../../../src/services/template-service';
 import { detectFromPrompt, suggestLibraries } from '../../../src/services/dependency-detector';
+import { detectGenerationMode, type GenerationModeResult } from '../../../src/services/generation-mode-detector';
+import { generateFolderStructure, generatePackageJson, generateReadme, generateLightweightAPI } from '../../../src/services/lightweight-api-generator';
 
 // Lazy-load OpenAI client
 let openaiClient: OpenAI | null = null;
@@ -105,7 +108,12 @@ export interface GenerateSSEEvent {
   | 'deps:error'         // Installation failed
   | 'generate:start'     // Code generation starting
   | 'preview:starting'   // Preview server starting
-  | 'preview:ready';     // Preview ready
+  | 'preview:ready'      // Preview ready
+  // Lightweight API events (Requirements: 3.1, 3.2, 5.1-5.5)
+  | 'api:started'        // Lightweight API generation started
+  | 'api:analyzing'      // Analyzing API requirements
+  | 'folder:created'     // Folder created in lightweight mode
+  | 'api:complete';      // Lightweight API generation complete
   message?: string;
   content?: string;
   filename?: string;
@@ -129,6 +137,10 @@ export interface GenerateSSEEvent {
   installedPackages?: Array<{ name: string; version: string }>;
   error?: string;
   failedPackages?: string[];
+  // Lightweight API-specific fields
+  projectName?: string;
+  path?: string;
+  filesCreated?: number;
 }
 
 /**
@@ -451,6 +463,40 @@ export async function POST(request: NextRequest) {
           const thinkingTime = performance.now() - requestStartTime;
           emit(createEvent('thinking', { message: 'Processing your request...' }));
           console.log(`[Generate] Thinking indicator emitted at ${thinkingTime.toFixed(2)}ms`);
+
+          // ============================================
+          // REQUIREMENT 3.1: Generation Mode Detection
+          // Detect if this is an API-only request or full scaffold
+          // ============================================
+          const modeResult = detectGenerationMode(userMessage);
+          console.log(`[Generate] Mode detected: ${modeResult.mode} (confidence: ${modeResult.confidence})`);
+          console.log(`[Generate] API keywords: ${modeResult.apiKeywords.join(', ') || 'none'}`);
+          console.log(`[Generate] UI keywords: ${modeResult.uiKeywords.join(', ') || 'none'}`);
+          console.log(`[Generate] Suggested project name: ${modeResult.suggestedProjectName}`);
+
+          // ============================================
+          // REQUIREMENT 3.1, 3.2, 3.3: Route based on mode
+          // If LIGHTWEIGHT_API mode, skip template cloning
+          // ============================================
+          if (modeResult.mode === 'LIGHTWEIGHT_API') {
+            console.log('[Generate] Using lightweight API generation mode');
+            
+            // Handle lightweight API generation
+            await handleLightweightAPIGeneration(
+              projectId,
+              userMessage,
+              modeResult,
+              emit,
+              emitError,
+              controller,
+              requestStartTime,
+              model
+            );
+            return;
+          }
+
+          // Continue with full scaffold mode
+          console.log('[Generate] Using full scaffold generation mode');
 
           // REQUIREMENT 2.2, 3.2: Load conversation context
           emit(createEvent('status', { message: 'Loading conversation context...' }));
@@ -1402,6 +1448,479 @@ async function streamGeminiResponse(
   }
 
   return accumulatedResponse;
+}
+
+/**
+ * Handle lightweight API-only generation
+ * 
+ * Requirements: 3.1, 3.2, 3.3, 5.1, 5.2, 5.3, 5.4, 5.5
+ * - Skip template cloning for API-only requests
+ * - Create standalone folder structure
+ * - Emit lightweight API events (not template events)
+ * - Generate API files directly
+ * 
+ * @param projectId - The project ID
+ * @param userMessage - The user's prompt
+ * @param modeResult - The generation mode detection result
+ * @param emit - SSE event emitter function
+ * @param emitError - Error emitter function
+ * @param controller - ReadableStream controller
+ * @param requestStartTime - Request start time for timing
+ * @param model - AI model to use
+ */
+async function handleLightweightAPIGeneration(
+  projectId: string,
+  userMessage: string,
+  modeResult: GenerationModeResult,
+  emit: (event: GenerateSSEEvent) => void,
+  emitError: (message: string, stage?: string) => void,
+  controller: ReadableStreamDefaultController,
+  requestStartTime: number,
+  model: AIModel
+): Promise<void> {
+  const projectName = modeResult.suggestedProjectName;
+  
+  try {
+    // REQUIREMENT 5.1: Emit api:started event (NOT scaffold:start or template:cloning)
+    emit(createEvent('api:started', {
+      message: `Creating ${projectName} project...`,
+      projectName,
+    }));
+    console.log(`[Generate] Lightweight API started: ${projectName}`);
+
+    // REQUIREMENT 5.1: Emit api:analyzing event
+    emit(createEvent('api:analyzing', {
+      message: 'Analyzing API requirements...',
+    }));
+
+    // REQUIREMENT 2.2, 2.3: Generate folder structure
+    // Create folders BEFORE files (parents before children)
+    const folders = generateFolderStructure(projectName);
+    
+    // REQUIREMENT 7.1: Get or create sandbox for folder creation
+    // We need the sandbox early to create folders before file writing
+    const sandbox = await getOrCreateSandbox(projectId);
+    
+    if (sandbox) {
+      // REQUIREMENT 7.1: Create folders in sandbox BEFORE file writing
+      // This ensures the folder structure exists before we try to write files
+      console.log(`[Generate] Creating ${folders.length} folders in sandbox...`);
+      const folderResult = await createFolders(sandbox, folders);
+      
+      // REQUIREMENT 5.2: Emit folder:created events for each successfully created folder
+      for (const result of folderResult.results) {
+        if (result.success) {
+          emit(createEvent('folder:created', {
+            path: result.path,
+            message: `Created ${result.path}/`,
+          }));
+          console.log(`[Generate] Folder created in sandbox: ${result.path}`);
+        } else {
+          console.warn(`[Generate] Failed to create folder: ${result.path} - ${result.error}`);
+        }
+      }
+      
+      if (folderResult.failureCount > 0) {
+        console.warn(`[Generate] ${folderResult.failureCount}/${folderResult.totalFolders} folders failed to create`);
+      }
+    } else {
+      // No sandbox available - just emit events without actual folder creation
+      console.warn('[Generate] No sandbox available, emitting folder events only');
+      for (const folder of folders) {
+        emit(createEvent('folder:created', {
+          path: folder,
+          message: `Created ${folder}/`,
+        }));
+        console.log(`[Generate] Folder event emitted (no sandbox): ${folder}`);
+      }
+    }
+
+    // Generate initial project files (package.json, README, etc.)
+    const apiProject = generateLightweightAPI({
+      projectName,
+      endpoints: [], // Endpoints will be determined by LLM
+      includeOpenAPI: true,
+      includeReadme: true,
+    });
+
+    // REQUIREMENT 5.5: Emit generate:start event AFTER folder structure is created
+    emit(createEvent('generate:start', {
+      message: 'Generating API code...',
+    }));
+
+    // Build the lightweight API system prompt
+    const systemPrompt = buildLightweightAPIPrompt(projectName, folders);
+    const fullPrompt = `${systemPrompt}\n\n## Current Request\n${userMessage}`;
+
+    // Create read tracker for tool support
+    const readTracker = createReadTracker();
+
+    // Create tool context for lightweight mode
+    const toolStreamContext: ToolStreamContext = {
+      projectId,
+      snapshotData: {}, // Start with empty snapshot for lightweight mode
+      readTracker,
+      model,
+    };
+
+    // Stream LLM response to generate API code
+    const llmResponse = await streamLLMResponse(
+      fullPrompt,
+      emit,
+      requestStartTime,
+      toolStreamContext
+    );
+
+    // Parse code blocks from response
+    const { files: parsedFiles, errors: parseErrors } = parseCodeBlocks(llmResponse);
+
+    if (parseErrors.length > 0) {
+      console.warn('[Generate] Code block parsing warnings:', parseErrors);
+    }
+
+    // Merge generated files with initial project files
+    const initialFiles: FileSnapshotData = {};
+    
+    // Add initial project files to snapshot
+    for (const file of apiProject.files) {
+      // Determine language from file extension
+      const ext = file.path.split('.').pop() || '';
+      const languageMap: Record<string, string> = {
+        'ts': 'typescript',
+        'tsx': 'typescript',
+        'js': 'javascript',
+        'jsx': 'javascript',
+        'json': 'json',
+        'yaml': 'yaml',
+        'yml': 'yaml',
+        'md': 'markdown',
+      };
+      const language = languageMap[ext] || 'plaintext';
+      
+      initialFiles[file.path] = {
+        content: file.content,
+        size: file.content.length,
+        language,
+      };
+    }
+
+    // Merge with LLM-generated files
+    const mergeResult = mergeSnapshots(
+      initialFiles,
+      parsedFiles,
+      userMessage.substring(0, 100)
+    );
+
+    // Get next turn index
+    const turnIndex = await conversationContextService.getNextTurnIndex(projectId);
+
+    // REQUIREMENT 7.2: Write files to Daytona sandbox with correct paths
+    // Reuse the sandbox we obtained earlier for folder creation
+    const changedFiles = mergeResult.changes.map((c: FileChange) => c.file);
+    
+    if (changedFiles.length > 0 && sandbox) {
+      // Write files to sandbox - folders were already created above
+      const { writeSnapshotToDaytona } = await import('../../../src/lib/daytona-client');
+      
+      emit(createEvent('status', {
+        message: `Writing ${changedFiles.length} files to sandbox...`,
+      }));
+
+      const writeResult = await writeSnapshotToDaytona(sandbox, mergeResult.snapshot);
+      console.log(`[Generate] Wrote ${writeResult.successCount}/${writeResult.totalFiles} files to sandbox`);
+
+      // REQUIREMENT 5.3: Emit file:created events with paths for each written file
+      for (const fileResult of writeResult.results) {
+        if (fileResult.success) {
+          // Extract filename from path for display
+          const filename = fileResult.path.split('/').pop() || fileResult.path;
+          emit(createEvent('file:complete', {
+            filename: filename,
+            filePath: fileResult.path,
+            message: `Created ${fileResult.path}`,
+          }));
+          console.log(`[Generate] File created: ${fileResult.path}`);
+        } else {
+          console.warn(`[Generate] Failed to write file: ${fileResult.path} - ${fileResult.error}`);
+        }
+      }
+      
+      if (writeResult.failureCount > 0) {
+        console.warn(`[Generate] ${writeResult.failureCount}/${writeResult.totalFiles} files failed to write`);
+      }
+    } else if (changedFiles.length > 0) {
+      console.warn('[Generate] No sandbox available for file writing');
+    }
+
+    // Save conversation message
+    try {
+      await conversationContextService.saveMessage({
+        project_id: projectId,
+        user_message: userMessage,
+        assistant_response: llmResponse,
+        model: model,
+      });
+    } catch (saveError) {
+      console.error('[Generate] Error saving conversation message:', saveError);
+    }
+
+    // Create version with generated files
+    const filesModifiedList = mergeResult.changes.map((c: FileChange) => c.file);
+    let versionId: string | null = null;
+
+    try {
+      const { data: latestVersion } = await supabaseServer
+        .from('versions')
+        .select('version_number')
+        .eq('project_id', projectId)
+        .order('version_number', { ascending: false })
+        .limit(1)
+        .single();
+
+      const nextVersionNumber = (latestVersion?.version_number || 0) + 1;
+
+      const versionFiles: Record<string, string> = {};
+      Object.entries(mergeResult.snapshot).forEach(([path, data]) => {
+        versionFiles[path] = data.content;
+      });
+
+      const { data: versionData, error: versionError } = await supabaseServer
+        .from('versions')
+        .insert({
+          project_id: projectId,
+          version_number: nextVersionNumber,
+          name: `API ${nextVersionNumber}`,
+          description: userMessage.substring(0, 100),
+          files: versionFiles,
+          command_type: 'CREATE',
+          prompt: userMessage,
+          status: 'complete',
+          metadata: {
+            filesModified: filesModifiedList,
+            source: 'lightweight_api_generation',
+            generationMode: 'LIGHTWEIGHT_API',
+            projectName,
+          },
+        })
+        .select('id')
+        .single();
+
+      if (versionError) {
+        console.error('[Generate] Error creating version:', versionError);
+      } else {
+        versionId = versionData?.id;
+        console.log('[Generate] Version created:', versionId);
+      }
+    } catch (versionError) {
+      console.error('[Generate] Error creating version:', versionError);
+    }
+
+    // Save assistant message
+    const summaryMessage = filesModifiedList.length > 0
+      ? `I've created your ${projectName} API project with ${filesModifiedList.length} file${filesModifiedList.length > 1 ? 's' : ''}:\n${filesModifiedList.map(f => `- ${f}`).join('\n')}\n\nThe API is ready for development.`
+      : 'I\'ve processed your API request. Let me know if you need anything else!';
+
+    try {
+      await supabaseServer
+        .from('messages')
+        .insert({
+          project_id: projectId,
+          content: summaryMessage,
+          role: 'assistant',
+          type: 'text',
+          version_id: versionId,
+        });
+    } catch (msgError) {
+      console.error('[Generate] Error saving to messages table:', msgError);
+    }
+
+    // Save file snapshot
+    try {
+      await conversationContextService.saveSnapshot({
+        project_id: projectId,
+        turn_index: turnIndex,
+        files_jsonb: mergeResult.snapshot,
+        file_count: mergeResult.fileCount,
+        total_size_bytes: mergeResult.totalSizeBytes,
+      });
+    } catch (saveError) {
+      console.error('[Generate] Error saving snapshot:', saveError);
+    }
+
+    // Save file changes
+    try {
+      await conversationContextService.saveChanges({
+        project_id: projectId,
+        turn_index: turnIndex,
+        changes: mergeResult.changes as unknown as import('../../../src/types/database').Json,
+        execution_status: 'success',
+      });
+    } catch (saveError) {
+      console.error('[Generate] Error saving changes:', saveError);
+    }
+
+    // REQUIREMENT 5.4: Emit api:complete event with file count
+    emit(createEvent('api:complete', {
+      message: 'API project created!',
+      filesCreated: filesModifiedList.length,
+      projectName,
+    }));
+
+    // Also emit standard complete event for compatibility
+    emit(createEvent('complete', {
+      filesModified: filesModifiedList,
+      turnIndex,
+      message: `Created ${filesModifiedList.length} file(s) for ${projectName}`,
+    }));
+
+    console.log(`[Generate] Lightweight API completed in ${(performance.now() - requestStartTime).toFixed(2)}ms`);
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    emitError(errorMessage, 'lightweight_api_generation');
+  } finally {
+    controller.close();
+  }
+}
+
+/**
+ * Build system prompt for lightweight API generation
+ * 
+ * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
+ * - Generate route files, types, OpenAPI spec, and README
+ * - Do NOT generate Next.js config, React components, CSS files
+ * - Include validation, error handling, and TypeScript types
+ * - Place OpenAPI spec in docs/openapi.yaml
+ * 
+ * @param projectName - The project name
+ * @param folders - The folder structure
+ * @returns System prompt for lightweight API generation
+ */
+function buildLightweightAPIPrompt(projectName: string, folders: string[]): string {
+  return `You are an expert API code generation assistant. You are generating a LIGHTWEIGHT API-ONLY project.
+
+═══════════════════════════════════════════════════════════════════════════════
+⚠️ CRITICAL: LIGHTWEIGHT API MODE - NO FRONTEND CODE ⚠️
+═══════════════════════════════════════════════════════════════════════════════
+
+You are generating a STANDALONE API project. DO NOT generate:
+- ❌ Next.js configuration files (next.config.js, next.config.mjs)
+- ❌ React components
+- ❌ CSS/SCSS files
+- ❌ Frontend pages
+- ❌ app/ directory structure (this is NOT a Next.js project)
+
+You MUST generate:
+- ✅ API route handlers in src/routes/
+- ✅ TypeScript types and Zod schemas in types/
+- ✅ OpenAPI 3.1 specification in docs/openapi.yaml
+- ✅ README.md with usage examples
+
+═══════════════════════════════════════════════════════════════════════════════
+PROJECT STRUCTURE
+═══════════════════════════════════════════════════════════════════════════════
+
+The following folder structure has been created:
+${folders.map(f => `- ${f}/`).join('\n')}
+
+Place your files in the appropriate folders:
+- Route handlers: ${projectName}/src/routes/
+- TypeScript types: ${projectName}/types/
+- OpenAPI spec: ${projectName}/docs/openapi.yaml
+- Documentation: ${projectName}/docs/README.md or ${projectName}/README.md
+
+═══════════════════════════════════════════════════════════════════════════════
+CODE BLOCK FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+When generating code, use this EXACT format:
+
+\`\`\`typescript file="${projectName}/src/routes/example.ts"
+// Your route code here
+\`\`\`
+
+\`\`\`typescript file="${projectName}/types/example.ts"
+// Your types here
+\`\`\`
+
+\`\`\`yaml file="${projectName}/docs/openapi.yaml"
+# Your OpenAPI spec here
+\`\`\`
+
+═══════════════════════════════════════════════════════════════════════════════
+API ROUTE TEMPLATE
+═══════════════════════════════════════════════════════════════════════════════
+
+Use this pattern for route handlers:
+
+\`\`\`typescript file="${projectName}/src/routes/[resource].ts"
+import { z } from 'zod';
+
+// Validation schemas
+const createSchema = z.object({
+  // Define your schema
+});
+
+// Types
+export type CreateInput = z.infer<typeof createSchema>;
+
+// Route handlers
+export async function GET(request: Request) {
+  // List resources
+}
+
+export async function POST(request: Request) {
+  // Create resource
+  const body = await request.json();
+  const result = createSchema.safeParse(body);
+  
+  if (!result.success) {
+    return new Response(JSON.stringify({
+      error: 'ValidationError',
+      details: result.error.errors,
+    }), { status: 400 });
+  }
+  
+  // Process request...
+}
+\`\`\`
+
+═══════════════════════════════════════════════════════════════════════════════
+OPENAPI 3.1 SPECIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Always generate a complete OpenAPI 3.1 spec in docs/openapi.yaml:
+
+\`\`\`yaml file="${projectName}/docs/openapi.yaml"
+openapi: 3.1.0
+info:
+  title: ${projectName}
+  version: 1.0.0
+  description: API generated by SmartAPIForge
+
+servers:
+  - url: http://localhost:3000
+    description: Development server
+
+paths:
+  # Define all endpoints here
+
+components:
+  schemas:
+    # Define all schemas here
+\`\`\`
+
+═══════════════════════════════════════════════════════════════════════════════
+REQUIREMENTS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Generate COMPLETE, working code - no placeholders
+2. Include Zod validation for all inputs
+3. Include proper error handling with status codes
+4. Export TypeScript types for all data structures
+5. Document all endpoints in OpenAPI spec
+6. Include example values in OpenAPI spec
+7. Create a README with usage examples`;
 }
 
 /**

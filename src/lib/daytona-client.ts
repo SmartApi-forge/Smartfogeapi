@@ -298,6 +298,116 @@ export async function listWorkspaces(): Promise<any[]> {
 // ============================================================================
 
 /**
+ * Result of a folder creation operation
+ */
+export interface FolderCreateResult {
+  path: string;
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * Result of a batch folder creation operation
+ */
+export interface BatchFolderCreateResult {
+  totalFolders: number;
+  successCount: number;
+  failureCount: number;
+  results: FolderCreateResult[];
+  errors: string[];
+}
+
+/**
+ * Create a single folder in Daytona sandbox
+ * Errors are logged but don't throw - returns result object
+ * 
+ * @param sandbox Sandbox instance
+ * @param folderPath Path to create the folder
+ * @returns FolderCreateResult with success status
+ * 
+ * Requirements: 2.2 (Create folders before files)
+ */
+export async function createFolder(
+  sandbox: Sandbox,
+  folderPath: string
+): Promise<FolderCreateResult> {
+  try {
+    // Normalize path - ensure it's relative to /workspace
+    let normalizedPath = folderPath;
+    if (normalizedPath.startsWith('/workspace/')) {
+      normalizedPath = normalizedPath.substring('/workspace/'.length);
+    } else if (normalizedPath.startsWith('workspace/')) {
+      normalizedPath = normalizedPath.substring('workspace/'.length);
+    }
+
+    // Make path absolute for Daytona SDK
+    const absolutePath = normalizedPath.startsWith('/')
+      ? normalizedPath
+      : `/workspace/${normalizedPath}`;
+
+    // Create the folder
+    await (sandbox.fs as any).createFolder(absolutePath, '0755');
+    console.log(`✅ [Daytona] Created folder: ${absolutePath}`);
+    return { path: folderPath, success: true };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    // Folder might already exist - check if that's the error
+    if (errorMessage.includes('exists') || errorMessage.includes('EEXIST')) {
+      console.log(`📁 [Daytona] Folder already exists: ${folderPath}`);
+      return { path: folderPath, success: true };
+    }
+    console.error(`❌ [Daytona] Failed to create folder ${folderPath}:`, errorMessage);
+    return { path: folderPath, success: false, error: errorMessage };
+  }
+}
+
+/**
+ * Create multiple folders in Daytona sandbox
+ * Creates folders in order (parents before children)
+ * 
+ * @param sandbox Sandbox instance
+ * @param folders Array of folder paths to create (in order)
+ * @returns BatchFolderCreateResult with summary of operations
+ * 
+ * Requirements: 2.2 (Create folders before files inside them)
+ */
+export async function createFolders(
+  sandbox: Sandbox,
+  folders: string[]
+): Promise<BatchFolderCreateResult> {
+  const results: FolderCreateResult[] = [];
+  const errors: string[] = [];
+
+  console.log(`📁 [Daytona] Creating ${folders.length} folders...`);
+
+  // Create folders sequentially to ensure parents are created before children
+  for (const folderPath of folders) {
+    const result = await createFolder(sandbox, folderPath);
+    results.push(result);
+    if (!result.success && result.error) {
+      errors.push(`${folderPath}: ${result.error}`);
+    }
+  }
+
+  const successCount = results.filter(r => r.success).length;
+  const failureCount = results.filter(r => !r.success).length;
+
+  console.log(`📁 [Daytona] Folder creation complete: ${successCount}/${folders.length} succeeded`);
+
+  if (failureCount > 0) {
+    console.warn(`⚠️ [Daytona] ${failureCount} folder(s) failed to create:`, errors);
+  }
+
+  return {
+    totalFolders: folders.length,
+    successCount,
+    failureCount,
+    results,
+    errors,
+  };
+}
+
+/**
  * Result of an async file write operation
  */
 export interface FileWriteResult {

@@ -17,6 +17,8 @@ import { createReconnectionManager, type ReconnectionManager } from './use-sse-r
 
 /**
  * SSE Event types from /api/generate
+ * Extended to support lightweight API generation events
+ * Requirements: 5.1, 5.2, 5.3, 5.4
  */
 export interface GenerateSSEEvent {
   type: 
@@ -29,7 +31,12 @@ export interface GenerateSSEEvent {
     | 'file:complete' 
     | 'complete' 
     | 'error'
-    | 'heartbeat';
+    | 'heartbeat'
+    // Lightweight API generation events
+    | 'api:started'
+    | 'api:analyzing'
+    | 'folder:created'
+    | 'api:complete';
   message?: string;
   content?: string;
   filename?: string;
@@ -38,10 +45,15 @@ export interface GenerateSSEEvent {
   filesModified?: string[];
   turnIndex?: number;
   timestamp?: string;
+  // Lightweight API specific fields
+  projectName?: string;
+  path?: string;
+  filesCreated?: number;
 }
 
 /**
  * Generation status states
+ * Extended to support lightweight API generation mode
  */
 export type GenerationStatus = 
   | 'idle'
@@ -49,7 +61,10 @@ export type GenerationStatus =
   | 'reading_files'
   | 'generating'
   | 'complete'
-  | 'error';
+  | 'error'
+  // Lightweight API generation states
+  | 'creating_api'
+  | 'creating_folders';
 
 /**
  * File reading event for tracking context building
@@ -62,8 +77,30 @@ export interface FileReadingEvent {
 }
 
 /**
+ * Folder creation event for tracking lightweight API folder structure
+ * Requirements: 5.2
+ */
+export interface FolderCreatedEvent {
+  type: 'folder:created';
+  path: string;
+  timestamp: number;
+}
+
+/**
+ * Lightweight API generation state
+ * Requirements: 5.1, 5.2, 5.3, 5.4
+ */
+export interface LightweightAPIState {
+  isLightweightMode: boolean;
+  projectName: string | null;
+  foldersCreated: string[];
+  filesCreated: number;
+}
+
+/**
  * Hook return type
  * Requirements: 10.1, 13.1, 13.2, 13.3, 13.4
+ * Extended for lightweight API generation: 5.1, 5.2, 5.3, 5.4
  */
 export interface UseCodeGenerationReturn {
   generate: (prompt: string, projectId: string, mode?: 'ask' | 'code') => Promise<void>;
@@ -77,6 +114,8 @@ export interface UseCodeGenerationReturn {
   turnIndex: number | null;
   reconnectAttempts: number;
   isReconnecting: boolean;
+  /** Lightweight API generation state */
+  lightweightAPI: LightweightAPIState;
   reset: () => void;
   abort: () => void;
   retry: () => void;
@@ -98,10 +137,12 @@ function parseSSEEvent(data: string): GenerateSSEEvent | null {
  * useCodeGeneration Hook
  * 
  * Handles SSE streaming for code generation from /api/generate.
+ * Extended to support lightweight API generation events.
  * 
  * @returns UseCodeGenerationReturn
  * 
  * Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 12.1, 12.3
+ * Lightweight API Requirements: 5.1, 5.2, 5.3, 5.4
  */
 export function useCodeGeneration(): UseCodeGenerationReturn {
   const [output, setOutput] = useState('');
@@ -114,6 +155,15 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
   const [turnIndex, setTurnIndex] = useState<number | null>(null);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const [isReconnecting, setIsReconnecting] = useState(false);
+  
+  // Lightweight API generation state
+  // Requirements: 5.1, 5.2, 5.3, 5.4
+  const [lightweightAPI, setLightweightAPI] = useState<LightweightAPIState>({
+    isLightweightMode: false,
+    projectName: null,
+    foldersCreated: [],
+    filesCreated: 0,
+  });
   
   const abortControllerRef = useRef<AbortController | null>(null);
   const lastEventTimeRef = useRef<number>(Date.now());
@@ -143,6 +193,14 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
     setTurnIndex(null);
     setReconnectAttempts(0);
     setIsReconnecting(false);
+    
+    // Reset lightweight API state
+    setLightweightAPI({
+      isLightweightMode: false,
+      projectName: null,
+      foldersCreated: [],
+      filesCreated: 0,
+    });
     
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -182,6 +240,7 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
   /**
    * Process SSE event and update state
    * Requirements: 10.2, 10.3, 10.4, 10.5, 12.1, 12.3
+   * Lightweight API Requirements: 5.1, 5.2, 5.3, 5.4
    */
   const processEvent = useCallback((event: GenerateSSEEvent) => {
     lastEventTimeRef.current = Date.now();
@@ -240,6 +299,53 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
             prev.includes(event.filename!) ? prev : [...prev, event.filename!]
           );
         }
+        break;
+
+      // ============================================
+      // Lightweight API Generation Events
+      // Requirements: 5.1, 5.2, 5.3, 5.4
+      // ============================================
+
+      case 'api:started':
+        // Requirements: 5.1 - Handle api:started event
+        setStatus('creating_api');
+        setStatusMessage(event.message || 'Creating API project...');
+        setLightweightAPI(prev => ({
+          ...prev,
+          isLightweightMode: true,
+          projectName: event.projectName || null,
+        }));
+        break;
+
+      case 'api:analyzing':
+        // Requirements: 5.1 - Handle api:analyzing event
+        setStatus('creating_api');
+        setStatusMessage(event.message || 'Analyzing API requirements...');
+        break;
+
+      case 'folder:created':
+        // Requirements: 5.2 - Handle folder:created event
+        setStatus('creating_folders');
+        setStatusMessage(event.message || `Created ${event.path}/`);
+        if (event.path) {
+          setLightweightAPI(prev => ({
+            ...prev,
+            foldersCreated: prev.foldersCreated.includes(event.path!)
+              ? prev.foldersCreated
+              : [...prev.foldersCreated, event.path!],
+          }));
+        }
+        break;
+
+      case 'api:complete':
+        // Requirements: 5.4 - Handle api:complete event
+        setStatus('complete');
+        setStatusMessage(event.message || 'API project created!');
+        setIsGenerating(false);
+        setLightweightAPI(prev => ({
+          ...prev,
+          filesCreated: event.filesCreated || 0,
+        }));
         break;
 
       case 'complete':
@@ -448,6 +554,7 @@ export function useCodeGeneration(): UseCodeGenerationReturn {
     turnIndex,
     reconnectAttempts,
     isReconnecting,
+    lightweightAPI,
     reset,
     abort,
     retry,

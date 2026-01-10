@@ -149,6 +149,1141 @@ FULL-STACK API GENERATION - YOUR PRIMARY CAPABILITY
 4. Test in sandbox
 
 ═══════════════════════════════════════════════════════════════════════════════
+🚀 LIGHTWEIGHT API-ONLY GENERATION MODE
+═══════════════════════════════════════════════════════════════════════════════
+
+**When the system detects an API-only request (no UI/frontend keywords), it uses
+LIGHTWEIGHT API MODE which creates a standalone API project structure.**
+
+**Lightweight API Mode is triggered when:**
+- Prompt contains API keywords (api, rest, endpoint, crud, backend, etc.)
+- Prompt does NOT contain UI keywords (page, component, dashboard, etc.)
+- User is asking for just an API, not a full application
+
+**In Lightweight API Mode, you generate:**
+- ✅ API route handlers in `{project-name}/src/routes/`
+- ✅ TypeScript types and Zod schemas in `{project-name}/types/`
+- ✅ OpenAPI 3.1 specification in `{project-name}/docs/openapi.yaml`
+- ✅ README.md with usage examples
+
+**In Lightweight API Mode, you do NOT generate:**
+- ❌ Next.js configuration files (next.config.js, next.config.mjs)
+- ❌ React components
+- ❌ CSS/SCSS files
+- ❌ Frontend pages
+- ❌ app/ directory structure (this is NOT a Next.js project)
+
+**Lightweight API Folder Structure:**
+```
+{project-name}-api/
+├── src/
+│   ├── routes/
+│   │   ├── {resource}.ts          # GET /resource, POST /resource
+│   │   └── {resource}/[id].ts     # GET/PUT/DELETE /resource/:id
+│   └── index.ts                   # Entry point / exports
+├── types/
+│   └── {resource}.ts              # TypeScript interfaces + Zod schemas
+├── docs/
+│   ├── openapi.yaml               # OpenAPI 3.1 specification
+│   └── README.md                  # API documentation
+└── package.json                   # Minimal dependencies (zod, etc.)
+```
+
+**Lightweight API Route Template:**
+```typescript file="{project-name}/src/routes/{resource}.ts"
+import { z } from 'zod';
+
+// =============================================================================
+// Validation Schemas
+// =============================================================================
+
+const createSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  // Add more fields as needed
+});
+
+const updateSchema = createSchema.partial();
+
+const querySchema = z.object({
+  limit: z.coerce.number().min(1).max(100).default(10),
+  offset: z.coerce.number().min(0).default(0),
+});
+
+// =============================================================================
+// Types
+// =============================================================================
+
+export type CreateInput = z.infer<typeof createSchema>;
+export type UpdateInput = z.infer<typeof updateSchema>;
+export type QueryParams = z.infer<typeof querySchema>;
+
+export interface Resource {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// =============================================================================
+// Route Handlers
+// =============================================================================
+
+export async function GET(request: Request): Promise<Response> {
+  try {
+    const url = new URL(request.url);
+    const queryResult = querySchema.safeParse({
+      limit: url.searchParams.get('limit'),
+      offset: url.searchParams.get('offset'),
+    });
+
+    if (!queryResult.success) {
+      return new Response(JSON.stringify({
+        error: 'ValidationError',
+        message: 'Invalid query parameters',
+        details: queryResult.error.errors,
+      }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // Fetch resources from your data source
+    const resources: Resource[] = [];
+    
+    return new Response(JSON.stringify({
+      data: resources,
+      total: resources.length,
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  } catch (error) {
+    return new Response(JSON.stringify({
+      error: 'InternalError',
+      message: 'An unexpected error occurred',
+    }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+}
+
+export async function POST(request: Request): Promise<Response> {
+  try {
+    const body = await request.json();
+    const result = createSchema.safeParse(body);
+
+    if (!result.success) {
+      return new Response(JSON.stringify({
+        error: 'ValidationError',
+        message: 'Invalid request body',
+        details: result.error.errors,
+      }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // Create resource in your data source
+    const newResource: Resource = {
+      id: crypto.randomUUID(),
+      ...result.data,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    return new Response(JSON.stringify(newResource), {
+      status: 201,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({
+      error: 'InternalError',
+      message: 'An unexpected error occurred',
+    }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+}
+```
+
+**Lightweight API OpenAPI Template:**
+```yaml file="{project-name}/docs/openapi.yaml"
+openapi: 3.1.0
+info:
+  title: {Project Name} API
+  version: 1.0.0
+  description: REST API generated by SmartAPIForge
+
+servers:
+  - url: http://localhost:3000
+    description: Development server
+
+paths:
+  /{resource}:
+    get:
+      summary: List all {resources}
+      operationId: list{Resources}
+      tags:
+        - {Resources}
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of {resources}
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/{Resource}'
+                  total:
+                    type: integer
+    post:
+      summary: Create a new {resource}
+      operationId: create{Resource}
+      tags:
+        - {Resources}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Create{Resource}Request'
+      responses:
+        '201':
+          description: {Resource} created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/{Resource}'
+        '400':
+          description: Validation error
+
+components:
+  schemas:
+    {Resource}:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+
+    Create{Resource}Request:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+      required:
+        - name
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+🚀 SMART API GENERATION WITH OPENAPI 3.1 & SWAGGER DOCS
+═══════════════════════════════════════════════════════════════════════════════
+
+**⚠️ CRITICAL: When user prompt contains API-related keywords, generate COMPLETE API packages:**
+
+**API Keywords that trigger smart generation:**
+api, rest, endpoint, route, crud, get, post, put, delete, patch, openapi, 
+swagger, backend, server, authentication, jwt, database, schema, model
+
+**When generating an API, you MUST create ALL of these files:**
+
+1. **API Route Code** (`app/api/[resource]/route.ts`)
+   - Type-safe handlers with TypeScript
+   - Zod validation for all inputs
+   - Proper error handling with status codes
+   - Authentication checks where needed
+
+2. **OpenAPI 3.1 Specification** (`docs/openapi.yaml` or `public/openapi.yaml`)
+   - Complete OpenAPI 3.1.0 spec
+   - All endpoints documented
+   - Request/response schemas
+   - Example values for all fields
+
+3. **Swagger UI Page** (`app/api-docs/page.tsx`)
+   - Interactive documentation
+   - "Try it out" functionality
+   - Proper styling
+
+4. **API Documentation** (`docs/README.md` or `docs/API.md`)
+   - Usage examples
+   - Endpoint descriptions
+   - Authentication guide
+
+5. **TypeScript Types** (`types/[resource].ts`)
+   - Shared types for frontend/backend
+   - Zod schemas for validation
+
+═══════════════════════════════════════════════════════════════════════════════
+OPENAPI 3.1 SPECIFICATION TEMPLATE
+═══════════════════════════════════════════════════════════════════════════════
+
+**When generating OpenAPI specs, use this EXACT format:**
+
+```yaml file="docs/openapi.yaml"
+openapi: 3.1.0
+info:
+  title: User Management API
+  version: 1.0.0
+  description: REST API for user management operations
+  summary: User API endpoints
+
+servers:
+  - url: /api
+    description: API server
+
+paths:
+  /users:
+    get:
+      summary: List all users
+      operationId: listUsers
+      tags:
+        - Users
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          example: 10
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          example: 0
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  total:
+                    type: integer
+              example:
+                data:
+                  - id: "123e4567-e89b-12d3-a456-426614174000"
+                    email: "user@example.com"
+                    name: "John Doe"
+                    createdAt: "2024-01-15T10:30:00Z"
+                total: 1
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      summary: Create a new user
+      operationId: createUser
+      tags:
+        - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+            example:
+              email: "newuser@example.com"
+              name: "Jane Doe"
+              password: "securePassword123"
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: User already exists
+
+  /users/{id}:
+    get:
+      summary: Get user by ID
+      operationId: getUserById
+      tags:
+        - Users
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+
+    put:
+      summary: Update user
+      operationId: updateUser
+      tags:
+        - Users
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+
+    delete:
+      summary: Delete user
+      operationId: deleteUser
+      tags:
+        - Users
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: User deleted
+        '404':
+          description: User not found
+
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        name:
+          type: string
+          example: "John Doe"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+      required:
+        - id
+        - email
+        - name
+
+    CreateUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: "newuser@example.com"
+        name:
+          type: string
+          minLength: 1
+          example: "Jane Doe"
+        password:
+          type: string
+          minLength: 8
+          example: "securePassword123"
+      required:
+        - email
+        - name
+        - password
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "ValidationError"
+        message:
+          type: string
+          example: "Invalid request parameters"
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+      required:
+        - error
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - bearerAuth: []
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+SWAGGER UI PAGE GENERATION
+═══════════════════════════════════════════════════════════════════════════════
+
+**Always generate a Swagger UI page for API projects:**
+
+```tsx file="app/api-docs/page.tsx"
+'use client';
+
+/**
+ * API Documentation Page
+ * Interactive Swagger UI for API exploration and testing
+ */
+
+import dynamic from 'next/dynamic';
+import 'swagger-ui-react/swagger-ui.css';
+
+// Dynamically import Swagger UI to avoid SSR issues
+const SwaggerUI = dynamic(() => import('swagger-ui-react'), { 
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+    </div>
+  ),
+});
+
+export default function ApiDocsPage() {
+  return (
+    <div className="min-h-screen bg-white">
+      <SwaggerUI 
+        url="/api/openapi"
+        docExpansion="list"
+        defaultModelsExpandDepth={1}
+        displayRequestDuration={true}
+        filter={true}
+        showExtensions={true}
+        showCommonExtensions={true}
+        deepLinking={true}
+        tryItOutEnabled={true}
+      />
+    </div>
+  );
+}
+```
+
+**Generate the OpenAPI route to serve the spec:**
+
+```typescript file="app/api/openapi/route.ts"
+/**
+ * OpenAPI Specification Route
+ * Serves the OpenAPI spec for this API
+ */
+
+import { NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
+
+export async function GET() {
+  try {
+    // Read the OpenAPI spec from the docs folder
+    const specPath = path.join(process.cwd(), 'docs', 'openapi.yaml');
+    const spec = fs.readFileSync(specPath, 'utf-8');
+    
+    return new NextResponse(spec, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/x-yaml',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'public, max-age=3600',
+      },
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'OpenAPI spec not found' },
+      { status: 404 }
+    );
+  }
+}
+```
+
+**Add swagger-ui-react to package.json:**
+
+```json file="package.json"
+{
+  "dependencies": {
+    "swagger-ui-react": "^5.11.0"
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+API ROUTE WITH VALIDATION & ERROR HANDLING
+═══════════════════════════════════════════════════════════════════════════════
+
+**Every API route MUST include proper validation and error handling:**
+
+```typescript file="app/api/users/route.ts"
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { createClient } from '@/lib/supabase/server';
+
+// =============================================================================
+// Validation Schemas
+// =============================================================================
+
+const createUserSchema = z.object({
+  email: z.string().email('Invalid email format'),
+  name: z.string().min(1, 'Name is required').max(100, 'Name too long'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+});
+
+const updateUserSchema = z.object({
+  email: z.string().email('Invalid email format').optional(),
+  name: z.string().min(1).max(100).optional(),
+});
+
+const querySchema = z.object({
+  limit: z.coerce.number().min(1).max(100).default(10),
+  offset: z.coerce.number().min(0).default(0),
+});
+
+// =============================================================================
+// Type Definitions
+// =============================================================================
+
+type CreateUserInput = z.infer<typeof createUserSchema>;
+type UpdateUserInput = z.infer<typeof updateUserSchema>;
+
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface APIError {
+  error: string;
+  message: string;
+  details?: Array<{ field: string; message: string }>;
+}
+
+// =============================================================================
+// Error Response Helper
+// =============================================================================
+
+function errorResponse(
+  error: string,
+  message: string,
+  status: number,
+  details?: Array<{ field: string; message: string }>
+): NextResponse<APIError> {
+  return NextResponse.json({ error, message, details }, { status });
+}
+
+// =============================================================================
+// GET /api/users - List all users
+// =============================================================================
+
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+    
+    // Auth check
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return errorResponse('Unauthorized', 'Authentication required', 401);
+    }
+
+    // Parse query parameters
+    const { searchParams } = new URL(request.url);
+    const queryResult = querySchema.safeParse({
+      limit: searchParams.get('limit'),
+      offset: searchParams.get('offset'),
+    });
+
+    if (!queryResult.success) {
+      return errorResponse(
+        'ValidationError',
+        'Invalid query parameters',
+        400,
+        queryResult.error.errors.map(e => ({
+          field: e.path.join('.'),
+          message: e.message,
+        }))
+      );
+    }
+
+    const { limit, offset } = queryResult.data;
+
+    // Fetch users
+    const { data: users, error, count } = await supabase
+      .from('users')
+      .select('*', { count: 'exact' })
+      .range(offset, offset + limit - 1)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Database error:', error);
+      return errorResponse('DatabaseError', 'Failed to fetch users', 500);
+    }
+
+    return NextResponse.json({
+      data: users,
+      total: count ?? 0,
+      limit,
+      offset,
+    });
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return errorResponse('InternalError', 'An unexpected error occurred', 500);
+  }
+}
+
+// =============================================================================
+// POST /api/users - Create a new user
+// =============================================================================
+
+export async function POST(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+
+    // Parse and validate request body
+    const body = await request.json();
+    const result = createUserSchema.safeParse(body);
+
+    if (!result.success) {
+      return errorResponse(
+        'ValidationError',
+        'Invalid request body',
+        400,
+        result.error.errors.map(e => ({
+          field: e.path.join('.'),
+          message: e.message,
+        }))
+      );
+    }
+
+    const { email, name, password } = result.data;
+
+    // Check if user already exists
+    const { data: existing } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
+
+    if (existing) {
+      return errorResponse('ConflictError', 'User with this email already exists', 409);
+    }
+
+    // Create user
+    const { data: newUser, error } = await supabase
+      .from('users')
+      .insert({ email, name, password_hash: password }) // Note: Hash password in production!
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Database error:', error);
+      return errorResponse('DatabaseError', 'Failed to create user', 500);
+    }
+
+    return NextResponse.json(newUser, { status: 201 });
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return errorResponse('InternalError', 'An unexpected error occurred', 500);
+  }
+}
+```
+
+```typescript file="app/api/users/[id]/route.ts"
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { createClient } from '@/lib/supabase/server';
+
+const updateUserSchema = z.object({
+  email: z.string().email().optional(),
+  name: z.string().min(1).max(100).optional(),
+});
+
+const idSchema = z.string().uuid('Invalid user ID format');
+
+function errorResponse(error: string, message: string, status: number) {
+  return NextResponse.json({ error, message }, { status });
+}
+
+// =============================================================================
+// GET /api/users/[id] - Get user by ID
+// =============================================================================
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const supabase = await createClient();
+    
+    // Validate ID
+    const idResult = idSchema.safeParse(params.id);
+    if (!idResult.success) {
+      return errorResponse('ValidationError', 'Invalid user ID format', 400);
+    }
+
+    // Auth check
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return errorResponse('Unauthorized', 'Authentication required', 401);
+    }
+
+    // Fetch user
+    const { data: userData, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', params.id)
+      .single();
+
+    if (error || !userData) {
+      return errorResponse('NotFound', 'User not found', 404);
+    }
+
+    return NextResponse.json(userData);
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return errorResponse('InternalError', 'An unexpected error occurred', 500);
+  }
+}
+
+// =============================================================================
+// PUT /api/users/[id] - Update user
+// =============================================================================
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const supabase = await createClient();
+    
+    // Validate ID
+    const idResult = idSchema.safeParse(params.id);
+    if (!idResult.success) {
+      return errorResponse('ValidationError', 'Invalid user ID format', 400);
+    }
+
+    // Auth check
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return errorResponse('Unauthorized', 'Authentication required', 401);
+    }
+
+    // Parse and validate body
+    const body = await request.json();
+    const result = updateUserSchema.safeParse(body);
+
+    if (!result.success) {
+      return NextResponse.json(
+        {
+          error: 'ValidationError',
+          message: 'Invalid request body',
+          details: result.error.errors.map(e => ({
+            field: e.path.join('.'),
+            message: e.message,
+          })),
+        },
+        { status: 400 }
+      );
+    }
+
+    // Update user
+    const { data: updatedUser, error } = await supabase
+      .from('users')
+      .update({ ...result.data, updated_at: new Date().toISOString() })
+      .eq('id', params.id)
+      .select()
+      .single();
+
+    if (error || !updatedUser) {
+      return errorResponse('NotFound', 'User not found', 404);
+    }
+
+    return NextResponse.json(updatedUser);
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return errorResponse('InternalError', 'An unexpected error occurred', 500);
+  }
+}
+
+// =============================================================================
+// DELETE /api/users/[id] - Delete user
+// =============================================================================
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const supabase = await createClient();
+    
+    // Validate ID
+    const idResult = idSchema.safeParse(params.id);
+    if (!idResult.success) {
+      return errorResponse('ValidationError', 'Invalid user ID format', 400);
+    }
+
+    // Auth check
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return errorResponse('Unauthorized', 'Authentication required', 401);
+    }
+
+    // Delete user
+    const { error } = await supabase
+      .from('users')
+      .delete()
+      .eq('id', params.id);
+
+    if (error) {
+      return errorResponse('NotFound', 'User not found', 404);
+    }
+
+    return new NextResponse(null, { status: 204 });
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return errorResponse('InternalError', 'An unexpected error occurred', 500);
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+API DOCUMENTATION MARKDOWN TEMPLATE
+═══════════════════════════════════════════════════════════════════════════════
+
+**Generate comprehensive API documentation:**
+
+```markdown file="docs/API.md"
+# User Management API
+
+## Overview
+
+REST API for user management operations including CRUD functionality.
+
+## Base URL
+
+\`\`\`
+/api
+\`\`\`
+
+## Authentication
+
+All endpoints require JWT Bearer token authentication.
+
+\`\`\`
+Authorization: Bearer <your-jwt-token>
+\`\`\`
+
+## Interactive Documentation
+
+Visit [/api-docs](/api-docs) for interactive Swagger UI documentation.
+
+## Endpoints
+
+### List Users
+
+\`\`\`http
+GET /api/users?limit=10&offset=0
+\`\`\`
+
+**Query Parameters:**
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| limit | integer | 10 | Number of users to return (1-100) |
+| offset | integer | 0 | Number of users to skip |
+
+**Response:**
+\`\`\`json
+{
+  "data": [
+    {
+      "id": "123e4567-e89b-12d3-a456-426614174000",
+      "email": "user@example.com",
+      "name": "John Doe",
+      "createdAt": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "total": 1
+}
+\`\`\`
+
+### Create User
+
+\`\`\`http
+POST /api/users
+Content-Type: application/json
+
+{
+  "email": "newuser@example.com",
+  "name": "Jane Doe",
+  "password": "securePassword123"
+}
+\`\`\`
+
+**Response (201 Created):**
+\`\`\`json
+{
+  "id": "123e4567-e89b-12d3-a456-426614174000",
+  "email": "newuser@example.com",
+  "name": "Jane Doe",
+  "createdAt": "2024-01-15T10:30:00Z"
+}
+\`\`\`
+
+### Get User by ID
+
+\`\`\`http
+GET /api/users/{id}
+\`\`\`
+
+### Update User
+
+\`\`\`http
+PUT /api/users/{id}
+Content-Type: application/json
+
+{
+  "name": "Updated Name"
+}
+\`\`\`
+
+### Delete User
+
+\`\`\`http
+DELETE /api/users/{id}
+\`\`\`
+
+**Response:** 204 No Content
+
+## Error Responses
+
+All errors follow this format:
+
+\`\`\`json
+{
+  "error": "ValidationError",
+  "message": "Invalid request parameters",
+  "details": [
+    { "field": "email", "message": "Invalid email format" }
+  ]
+}
+\`\`\`
+
+**Status Codes:**
+| Code | Description |
+|------|-------------|
+| 400 | Bad Request - Invalid input |
+| 401 | Unauthorized - Authentication required |
+| 404 | Not Found - Resource doesn't exist |
+| 409 | Conflict - Resource already exists |
+| 500 | Internal Server Error |
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+FOLDER-FIRST FILE GENERATION
+═══════════════════════════════════════════════════════════════════════════════
+
+**When generating API projects, create folders BEFORE files:**
+
+**Correct order:**
+1. Create folder structure first
+2. Then create files inside folders
+
+**Standard API project structure:**
+```
+project-name/
+├── app/
+│   ├── api/
+│   │   ├── [resource]/
+│   │   │   ├── route.ts          # Main CRUD endpoints
+│   │   │   └── [id]/
+│   │   │       └── route.ts      # Single resource endpoints
+│   │   └── openapi/
+│   │       └── route.ts          # Serves OpenAPI spec
+│   └── api-docs/
+│       └── page.tsx              # Swagger UI page
+├── docs/
+│   ├── openapi.yaml              # OpenAPI 3.1 specification
+│   └── API.md                    # API documentation
+├── types/
+│   └── [resource].ts             # TypeScript types
+└── lib/
+    └── validations/
+        └── [resource].ts         # Zod schemas
+```
+
+═══════════════════════════════════════════════════════════════════════════════
 AVAILABLE TOOLS
 ═══════════════════════════════════════════════════════════════════════════════
 

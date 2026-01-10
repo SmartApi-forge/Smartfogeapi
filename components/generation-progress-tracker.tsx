@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Loader2, Circle, AlertCircle, FileCode, RefreshCw, Server, Upload } from 'lucide-react';
+import { Check, Loader2, Circle, AlertCircle, FileCode, Server, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { StreamEvent } from '@/src/types/streaming';
 
@@ -16,7 +16,7 @@ interface Step {
 
 interface GenerationProgressTrackerProps {
   currentStep?: string;
-  status: 'idle' | 'initializing' | 'generating' | 'validating' | 'syncing' | 'complete' | 'error';
+  status: 'idle' | 'initializing' | 'generating' | 'validating' | 'syncing' | 'complete' | 'error' | 'creating_api' | 'creating_folders';
   /** Current file being generated */
   currentFile?: string;
   /** Progress percentage (0-100) */
@@ -29,6 +29,10 @@ interface GenerationProgressTrackerProps {
   isServerRestarting?: boolean;
   /** Error message if any */
   errorMessage?: string;
+  /** Whether in lightweight API mode */
+  isLightweightMode?: boolean;
+  /** Folders created in lightweight mode */
+  foldersCreated?: string[];
 }
 
 /**
@@ -42,7 +46,11 @@ interface GenerationProgressTrackerProps {
  * - server:restarting, server:ready
  * - preview:updating, preview:ready
  * 
+ * Lightweight API mode events:
+ * - api:started, api:analyzing, folder:created, api:complete
+ * 
  * Requirements: 14.1, 14.2, 14.3
+ * Lightweight API Requirements: 5.1, 5.2
  */
 export function GenerationProgressTracker({
   currentStep,
@@ -51,10 +59,12 @@ export function GenerationProgressTracker({
   progress,
   events = [],
   isSyncing,
-  isServerRestarting,
   errorMessage,
+  isLightweightMode = false,
+  foldersCreated = [],
 }: GenerationProgressTrackerProps) {
   // Derive detailed status from events
+  // Extended to support lightweight API events
   const derivedStatus = useMemo(() => {
     const lastEvent = events[events.length - 1];
     if (!lastEvent) return { subLabel: currentStep, progress };
@@ -88,6 +98,16 @@ export function GenerationProgressTracker({
         return { subLabel: lastEvent.summary || 'Validation complete', progress: 100 };
       case 'info':
         return { subLabel: lastEvent.message, progress: undefined };
+      // Lightweight API events
+      // Requirements: 5.1, 5.2
+      case 'api:started':
+        return { subLabel: lastEvent.message || 'Creating API project...', progress: undefined };
+      case 'api:analyzing':
+        return { subLabel: lastEvent.message || 'Analyzing API requirements...', progress: undefined };
+      case 'folder:created':
+        return { subLabel: lastEvent.message || `Created ${lastEvent.path}/`, progress: undefined };
+      case 'api:complete':
+        return { subLabel: lastEvent.message || 'API project created!', progress: 100 };
       default:
         return { subLabel: currentStep, progress };
     }
@@ -97,7 +117,39 @@ export function GenerationProgressTracker({
   const showSyncingStep = isSyncing || status === 'syncing' || 
     events.some(e => e.type.startsWith('sandbox:sync') || e.type.startsWith('server:') || e.type.startsWith('preview:'));
 
-  const steps: Step[] = [
+  // Determine if we're in lightweight API mode based on status or prop
+  const isInLightweightMode = isLightweightMode || status === 'creating_api' || status === 'creating_folders' ||
+    events.some(e => e.type === 'api:started' || e.type === 'api:analyzing' || e.type === 'folder:created' || e.type === 'api:complete');
+
+  // Build steps based on mode
+  // Requirements: 5.1, 5.2 - Show "Creating API project..." instead of "Cloning template..."
+  const steps: Step[] = isInLightweightMode ? [
+    {
+      id: 'creating_api',
+      label: 'Creating API',
+      status: getLightweightStepStatus('creating_api', status, showSyncingStep),
+      subLabel: (status === 'creating_api' || status === 'initializing') ? derivedStatus.subLabel : undefined,
+    },
+    {
+      id: 'creating_folders',
+      label: 'Structure',
+      status: getLightweightStepStatus('creating_folders', status, showSyncingStep),
+      subLabel: status === 'creating_folders' ? (foldersCreated.length > 0 ? `${foldersCreated.length} folders` : derivedStatus.subLabel) : undefined,
+      progress: status === 'creating_folders' ? derivedStatus.progress : undefined,
+    },
+    {
+      id: 'generating',
+      label: 'Generating',
+      status: getLightweightStepStatus('generating', status, showSyncingStep),
+      subLabel: status === 'generating' ? (currentFile || derivedStatus.subLabel) : undefined,
+      progress: status === 'generating' ? derivedStatus.progress : undefined,
+    },
+    {
+      id: 'complete',
+      label: 'Complete',
+      status: getLightweightStepStatus('complete', status, showSyncingStep),
+    },
+  ] : [
     {
       id: 'planning',
       label: 'Planning',
@@ -141,13 +193,13 @@ export function GenerationProgressTracker({
         <motion.div
           className="absolute top-5 left-0 h-0.5 bg-primary"
           initial={{ width: '0%' }}
-          animate={{ width: `${getProgressPercentage(status, showSyncingStep)}%` }}
+          animate={{ width: `${isInLightweightMode ? getLightweightProgressPercentage(status) : getProgressPercentage(status, showSyncingStep)}%` }}
           transition={{ duration: 0.5, ease: 'easeInOut' }}
         />
 
         {/* Steps */}
         <div className="relative flex justify-between">
-          {steps.map((step, index) => (
+          {steps.map((step) => (
             <div key={step.id} className="flex flex-col items-center min-w-0 flex-1">
               {/* Step circle */}
               <motion.div
@@ -252,6 +304,7 @@ export function GenerationProgressTracker({
 
 /**
  * Get the appropriate icon for each step
+ * Extended to support lightweight API mode steps
  */
 function getStepIcon(stepId: string) {
   switch (stepId) {
@@ -265,6 +318,11 @@ function getStepIcon(stepId: string) {
       return <Upload className="h-5 w-5 animate-bounce" />;
     case 'complete':
       return <Check className="h-5 w-5" />;
+    // Lightweight API mode steps
+    case 'creating_api':
+      return <Server className="h-5 w-5 animate-pulse" />;
+    case 'creating_folders':
+      return <Upload className="h-5 w-5 animate-bounce" />;
     default:
       return <Loader2 className="h-5 w-5 animate-spin" />;
   }
@@ -337,6 +395,65 @@ function getProgressPercentage(
       return 50;
     case 'validating':
       return 80;
+    case 'complete':
+      return 100;
+    case 'error':
+      return 100;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Determine the status of each step for lightweight API mode
+ * Requirements: 5.1, 5.2
+ */
+function getLightweightStepStatus(
+  stepId: string,
+  overallStatus: GenerationProgressTrackerProps['status'],
+  _hasSyncingStep: boolean = false
+): Step['status'] {
+  const stepOrder = ['creating_api', 'creating_folders', 'generating', 'complete'];
+  
+  // Map overall status to step order position
+  let currentStepId = overallStatus;
+  if (overallStatus === 'initializing') {
+    currentStepId = 'creating_api';
+  }
+  
+  const currentIndex = stepOrder.indexOf(currentStepId);
+  const stepIndex = stepOrder.indexOf(stepId);
+
+  if (overallStatus === 'error') {
+    return stepIndex <= currentIndex ? 'error' : 'pending';
+  }
+
+  if (stepIndex < currentIndex) {
+    return 'complete';
+  } else if (stepIndex === currentIndex) {
+    return 'in-progress';
+  } else {
+    return 'pending';
+  }
+}
+
+/**
+ * Calculate progress percentage for lightweight API mode
+ * Requirements: 5.1, 5.2
+ */
+function getLightweightProgressPercentage(
+  status: GenerationProgressTrackerProps['status']
+): number {
+  switch (status) {
+    case 'idle':
+      return 0;
+    case 'initializing':
+    case 'creating_api':
+      return 15;
+    case 'creating_folders':
+      return 40;
+    case 'generating':
+      return 70;
     case 'complete':
       return 100;
     case 'error':

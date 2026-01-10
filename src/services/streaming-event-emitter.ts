@@ -856,6 +856,101 @@ export class StreamingEventEmitter {
     await streamingService.emit(this.projectId, event);
   }
 
+  // ============================================
+  // Lightweight API Generation Event Methods
+  // Requirements: 5.1-5.5 (Lightweight API Generation)
+  // ============================================
+
+  /**
+   * Emit api:started event when lightweight API generation begins
+   * 
+   * Requirements: 5.1
+   * WHEN lightweight API generation starts THEN the System SHALL emit 
+   * "Creating API project structure..." event
+   * 
+   * @param projectName - The name of the API project being created
+   * @param message - Optional custom message (defaults to "Creating {projectName} project...")
+   */
+  async emitApiStarted(projectName: string, message?: string): Promise<void> {
+    const event: StreamEvent = {
+      type: 'api:started',
+      message: message || `Creating ${projectName} project...`,
+      projectName,
+      timestamp: Date.now(),
+      versionId: this.versionId,
+    };
+
+    await streamingService.emit(this.projectId, event);
+    console.log(`[StreamingEventEmitter] API started: ${event.message}`);
+  }
+
+  /**
+   * Emit api:analyzing event when analyzing API requirements
+   * 
+   * Requirements: 5.1
+   * WHEN lightweight API generation starts THEN the System SHALL emit 
+   * "Creating API project structure..." event
+   * 
+   * @param message - Optional custom message (defaults to "Analyzing API requirements...")
+   */
+  async emitApiAnalyzing(message?: string): Promise<void> {
+    const event: StreamEvent = {
+      type: 'api:analyzing',
+      message: message || 'Analyzing API requirements...',
+      timestamp: Date.now(),
+      versionId: this.versionId,
+    };
+
+    await streamingService.emit(this.projectId, event);
+    console.log(`[StreamingEventEmitter] API analyzing: ${event.message}`);
+  }
+
+  /**
+   * Emit folder:created event when a folder is created in lightweight mode
+   * 
+   * Requirements: 5.2
+   * WHEN creating folders THEN the System SHALL emit folder creation events with paths
+   * 
+   * @param path - The path of the folder created
+   * @param message - Optional custom message (defaults to "Created {path}/")
+   */
+  async emitFolderCreated(path: string, message?: string): Promise<void> {
+    const event: StreamEvent = {
+      type: 'folder:created',
+      path,
+      message: message || `Created ${path}/`,
+      timestamp: Date.now(),
+      versionId: this.versionId,
+    };
+
+    await streamingService.emit(this.projectId, event);
+    console.log(`[StreamingEventEmitter] Folder created: ${event.message}`);
+  }
+
+  /**
+   * Emit api:complete event when lightweight API generation completes
+   * 
+   * Requirements: 5.4
+   * WHEN generation completes THEN the System SHALL emit completion event with file count
+   * 
+   * @param projectName - The name of the API project created
+   * @param filesCreated - Number of files created
+   * @param message - Optional custom message (defaults to "API project created!")
+   */
+  async emitApiComplete(projectName: string, filesCreated: number, message?: string): Promise<void> {
+    const event: StreamEvent = {
+      type: 'api:complete',
+      message: message || 'API project created!',
+      filesCreated,
+      projectName,
+      timestamp: Date.now(),
+      versionId: this.versionId,
+    };
+
+    await streamingService.emit(this.projectId, event);
+    console.log(`[StreamingEventEmitter] API complete: ${event.message} (${filesCreated} files)`);
+  }
+
   // Sandbox sync event methods
   // Requirements: 6.1, 6.3, 6.4
 
