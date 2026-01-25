@@ -4,11 +4,15 @@ import { projectService, jobService, templateService } from '../../services/data
 import { TRPCError } from '@trpc/server';
 
 // Input schemas for API generation
+// Available AI models for code generation (Gemini models have free tier via Google AI Studio)
+const aiModelSchema = z.enum(['gpt-4o', 'gpt-4o-mini', 'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash']);
+
 const generateAPISchema = z.object({
   prompt: z.string().min(10, "Prompt must be at least 10 characters"),
   framework: z.enum(['fastapi', 'express']).default('fastapi'),
   advanced: z.boolean().default(false),
   template: z.string().optional(),
+  model: aiModelSchema.default('gpt-4o'), // Default to GPT-4o (most reliable)
 });
 
 const projectSchema = z.object({
@@ -33,7 +37,7 @@ export const apiGenerationRouter = createTRPCRouter({
         // Create project record (including prompt as required by database schema)
         const project = await projectService.createProject({
           user_id: ctx.user.id,
-          name: `API Project ${new Date().toLocaleDateString()}`, // Shorter, cleaner name
+          name: `${input.framework.toUpperCase()} API Project`,
           description: `API generated from user prompt: ${input.prompt.substring(0, 100)}...`,
           prompt: input.prompt, // Add the required prompt field
           framework: input.framework,
@@ -84,7 +88,8 @@ export const apiGenerationRouter = createTRPCRouter({
             prompt: input.prompt,
             framework: input.framework,
             advanced: input.advanced,
-            template: input.template
+            template: input.template,
+            model: input.model,
           }
         });
 

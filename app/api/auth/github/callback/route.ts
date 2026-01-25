@@ -70,8 +70,8 @@ export async function GET(request: NextRequest) {
     response.cookies.delete('github_oauth_user');
 
     return response;
-  } catch (error: any) {
-    console.error('GitHub OAuth callback error:', error);
+  } catch (err) {
+    console.error('GitHub OAuth callback error:', err);
     // Sanitize error message to prevent leaking sensitive details
     const sanitizedError = 'Failed to connect GitHub account. Please try again.';
     return NextResponse.redirect(

@@ -63,7 +63,7 @@ export function TRPCUsageExample() {
         <CardHeader>
           <CardTitle>Generate New API</CardTitle>
           <CardDescription>
-            Describe the API you want to build and we'll generate it for you
+            Describe the API you want to build and we&apos;ll generate it for you
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -126,7 +126,7 @@ export function TRPCUsageExample() {
         <CardHeader>
           <CardTitle>Your Projects</CardTitle>
           <CardDescription>
-            Recent API projects you've generated
+            Recent API projects you&apos;ve generated
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -136,7 +136,7 @@ export function TRPCUsageExample() {
             </div>
           ) : projects && projects.length > 0 ? (
             <div className="space-y-3">
-              {projects.map((project: any) => (
+              {projects.map((project: { id: string; name: string; status: string; framework: string; prompt: string; deploy_url?: string }) => (
                 <div
                   key={project.id}
                   className="flex items-center justify-between p-4 border rounded-lg"

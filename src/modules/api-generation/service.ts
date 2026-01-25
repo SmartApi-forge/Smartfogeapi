@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
 import { TRPCError } from '@trpc/server'
-import { inngest } from '../../inngest/client'
 import type { 
   GenerateAPIInput, 
   GenerateAPIResponse, 
@@ -169,13 +168,36 @@ export class ApiGenerationService {
    */
   async generateAPI(input: GenerateAPIInput, userId: string): Promise<GenerateAPIResponse> {
     try {
+      // Generate a meaningful project name from the prompt
+      const generateProjectName = (prompt: string): string => {
+        // Extract key words from prompt (remove common words)
+        const commonWords = ['create', 'build', 'make', 'generate', 'api', 'for', 'a', 'an', 'the', 'with', 'that', 'can', 'to', 'and', 'or'];
+        const words = prompt
+          .toLowerCase()
+          .replace(/[^\w\s]/g, '') // Remove punctuation
+          .split(/\s+/)
+          .filter(word => word.length > 2 && !commonWords.includes(word))
+          .slice(0, 3); // Take first 3 meaningful words
+        
+        // Capitalize first letter of each word
+        const capitalizedWords = words.map(word => 
+          word.charAt(0).toUpperCase() + word.slice(1)
+        );
+        
+        // If we got meaningful words, use them; otherwise use a generic name
+        return capitalizedWords.length > 0 
+          ? capitalizedWords.join(' ')
+          : 'New Project';
+      };
+
       // Create project record using Supabase MCP
       const { data: project, error: projectError } = await supabase
         .from('projects')
         .insert({
           user_id: userId,
-          name: `API Project ${new Date().toLocaleDateString()}`, // Shorter, cleaner name
-          description: `API generated from user prompt: ${input.prompt.substring(0, 100)}...`,
+          name: generateProjectName(input.prompt),
+          description: input.prompt.substring(0, 200), // Truncated for display
+          prompt: input.prompt, // Full prompt for generation (required field)
           framework: input.framework,
           advanced: input.advanced,
           status: 'generating'
@@ -191,7 +213,7 @@ export class ApiGenerationService {
       }
 
       // Store user prompt in messages table
-      const { data: message, error: messageError } = await supabase
+      const { error: messageError } = await supabase
         .from('messages')
         .insert({
           content: input.prompt,
@@ -200,58 +222,19 @@ export class ApiGenerationService {
           project_id: project.id,
           sender_id: userId
         })
-        .select()
-        .single()
 
       if (messageError) {
         console.error('Failed to store user message:', messageError)
         // Don't throw error here, just log it as it's not critical for the API generation
       }
 
-      // Create job record using Supabase MCP
-      const { data: job, error: jobError } = await supabase
-        .from('jobs')
-        .insert({
-          project_id: project.id,
-          user_id: userId,
-          type: 'generate_api',
-          status: 'pending',
-          payload: {
-            prompt: input.prompt,
-            framework: input.framework,
-            advanced: input.advanced,
-            template: input.template
-          }
-        })
-        .select()
-        .single()
-
-      if (jobError) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to create job'
-        })
-      }
-
-      // Trigger Inngest workflow for API generation
-      await inngest.send({
-        name: "api/generate",
-        data: {
-          jobId: job.id,
-          projectId: project.id,
-          prompt: input.prompt,
-          framework: input.framework,
-          advanced: input.advanced,
-          template: input.template,
-          userId: userId
-        }
-      });
+      // Note: Jobs table removed - Inngest workflow replaced with direct SSE streaming
+      // The frontend should call /api/generate directly with the projectId
       
       return {
-        jobId: job.id,
         projectId: project.id,
         status: 'generating' as const,
-        message: 'API generation started',
+        message: 'Project created - use /api/generate for streaming',
         estimatedTime: 60, // seconds
       }
     } catch (error) {
@@ -593,21 +576,12 @@ export class ApiGenerationService {
         })
       }
 
-      // Trigger the job again via Inngest
-      await inngest.send({
-        name: `api/${job.type.replace('_', '/')}`,
-        data: {
-          ...job.payload,
-          jobId: job.id,
-          projectId: job.project_id,
-          userId: job.user_id,
-          isRetry: true
-        }
-      })
+      // Note: Inngest workflow removed - retry now handled by direct streaming via /api/generate
+      // The frontend should call /api/generate directly with SSE streaming
 
       return {
         success: true,
-        message: 'Job retry triggered successfully'
+        message: 'Job retry ready - use /api/generate for streaming'
       }
     } catch (error) {
       console.error('Error retrying job:', error)

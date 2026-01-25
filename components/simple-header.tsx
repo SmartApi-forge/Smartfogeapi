@@ -2,8 +2,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { Logo } from "@/components/logo"
-import { Share, Globe, Monitor } from "lucide-react"
-import { Settings5Line } from "./settings-5-line"
+import { Share, Globe, Monitor, HomeIcon, User, Settings, LogOut } from "lucide-react"
 import { GitHubSetupDialog } from "@/components/github-setup-dialog"
 import { GitHubBranchSelectorV0 } from "@/components/github-branch-selector-v0"
 import { ShareDialog } from "@/components/share-dialog"
@@ -11,6 +10,22 @@ import { VercelDeployDialog } from "@/components/vercel-deploy-dialog"
 import { useTheme } from "next-themes"
 import { useState, useEffect } from "react"
 import { createBrowserClient } from "@/lib/supabase/client"
+import { useRouter } from "next/navigation"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator
+} from '@/components/ui/breadcrumb'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 interface Project {
   id: string
@@ -29,12 +44,17 @@ interface SimpleHeaderProps {
   onViewModeChange?: (mode: 'preview' | 'code') => void
   project?: Project
   projectFiles?: Record<string, any>
+  isSidebarOpen?: boolean
+  onSidebarToggle?: () => void
+  onLogoHover?: (hovered: boolean) => void
 }
 
-export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, projectFiles = {} }: SimpleHeaderProps) {
+export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, projectFiles = {}, isSidebarOpen = false, onSidebarToggle, onLogoHover }: SimpleHeaderProps) {
   const { resolvedTheme } = useTheme()
+  const router = useRouter()
   const [mounted, setMounted] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
   
   // Prevent hydration mismatch by waiting for client-side mount
   useEffect(() => {
@@ -44,6 +64,7 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
     const supabase = createBrowserClient()
     supabase.auth.getUser().then(({ data: { user } }) => {
       setCurrentUserId(user?.id || null)
+      setUserEmail(user?.email || null)
     })
   }, [])
   
@@ -58,31 +79,111 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
   
   // Check if current user is the project owner
   const isProjectOwner = currentUserId && project?.user_id && currentUserId === project.user_id
+  
+  // Handle sign out
+  const handleSignOut = async () => {
+    const supabase = createBrowserClient()
+    await supabase.auth.signOut()
+    router.push('/')
+  }
   return (
     <>
-      <header className="sticky top-0 z-40 w-full bg-[#FAFAFA] dark:bg-[#0E100F] backdrop-blur supports-[backdrop-filter]:bg-[#FAFAFA]/60 dark:supports-[backdrop-filter]:bg-[#0E100F]/60 border-b border-border/50">
-      <div className="container flex h-[50px] items-center justify-between px-4">
-        {/* Left side - Logo */}
-        <div className="flex items-center space-x-2 sm:space-x-4">
-          <Link href="/" className="flex items-center space-x-2">
-            <Logo />
-          </Link>
-        </div>
+      <header className="sticky top-0 z-50 w-full bg-[#FAFAFA] dark:bg-[#0E100F] backdrop-blur supports-[backdrop-filter]:bg-[#FAFAFA]/60 dark:supports-[backdrop-filter]:bg-[#0E100F]/60 border-b border-border/50">
+      <div className="flex h-[50px] items-center justify-between w-full pl-2 pr-4">
+        {/* Left side - Logo and Breadcrumb navigation */}
+        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+          {/* Modern S logo button for sidebar toggle */}
+          <button 
+            onClick={onSidebarToggle}
+            onMouseEnter={() => onLogoHover?.(true)}
+            onMouseLeave={() => onLogoHover?.(false)}
+            aria-label="Toggle sidebar"
+            className={`group relative transition-all duration-300 h-9 w-9 sm:h-10 sm:w-10 p-0 rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0 ${
+              isSidebarOpen 
+                ? 'scale-95 shadow-lg' 
+                : 'hover:scale-105 hover:shadow-xl'
+            }`}
+            style={{
+              background: isDark 
+                ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            }}
+          >
+            {/* Animated gradient overlay on hover */}
+            <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            
+            {/* S Letter with modern styling */}
+            <span className="relative z-10 text-xl sm:text-2xl font-bold text-white drop-shadow-sm">
+              S
+            </span>
+            
+            {/* Subtle glow effect */}
+            <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-50" />
+          </button>
 
-        {/* Center - Empty (view toggle is in sandbox preview) */}
-        <div className="flex items-center">
-          {/* View toggle is positioned in the sandbox preview component */}
+          {/* Breadcrumb navigation */}
+          <div className="flex items-center min-w-0 overflow-hidden">
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem className="hidden sm:inline">
+                  <BreadcrumbLink href='/' className='flex items-center gap-1 sm:gap-2 hover:text-foreground transition-colors'>
+                    <HomeIcon className='size-3.5 sm:size-4' />
+                    <span className="text-sm">Home</span>
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden sm:inline">/</BreadcrumbSeparator>
+                <BreadcrumbItem className="hidden sm:inline">
+                  <BreadcrumbLink href='/ask' className='hover:text-foreground transition-colors text-sm'>
+                    Ask
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden md:inline">/</BreadcrumbSeparator>
+                <BreadcrumbItem>
+                  <BreadcrumbPage className="max-w-[140px] sm:max-w-[180px] md:max-w-[220px] lg:max-w-xs truncate text-xs sm:text-sm font-medium">
+                    {project?.name || 'Project'}
+                  </BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+          </div>
         </div>
 
         {/* Right side - Action buttons - Responsive with subtle hover */}
-        <div className="flex items-center space-x-1 sm:space-x-2" style={{ opacity: mounted ? 1 : 0.99 }}>
-          {/* Settings button */}
-          <button 
-            aria-label="Open settings"
-            className={`transition-all duration-300 h-8 w-8 p-0 rounded-md flex items-center justify-center ${isDark ? 'bg-[#1A1A1A] hover:bg-[#262626] border border-gray-600' : 'bg-[#fafafa] hover:bg-[#f2f2f2] border border-gray-300'}`}
-          >
-            <Settings5Line className={`h-[18px] w-[18px] transition-colors duration-300 ${isDark ? 'text-white' : 'text-gray-900'} pointer-events-none`} />
-          </button>
+        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0" style={{ opacity: mounted ? 1 : 0.99 }}>
+          {/* Profile Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button 
+                aria-label="User menu"
+                className={`transition-all duration-300 h-8 w-8 p-0 rounded-md flex items-center justify-center ${isDark ? 'bg-[#1A1A1A] hover:bg-[#262626] border border-gray-600' : 'bg-[#fafafa] hover:bg-[#f2f2f2] border border-gray-300'}`}
+              >
+                <User className={`h-[18px] w-[18px] transition-colors duration-300 ${isDark ? 'text-white' : 'text-gray-900'}`} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              {userEmail && (
+                <>
+                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                    {userEmail}
+                  </div>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              <DropdownMenuItem onClick={() => router.push('/profile')}>
+                <User className="mr-2 h-4 w-4" />
+                <span>Profile</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push('/settings')}>
+                <Settings className="mr-2 h-4 w-4" />
+                <span>Settings</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleSignOut} variant="destructive">
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Sign Out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           
           {/* GitHub button - Icon only - Conditionally rendered */}
           {shouldShowGitHubDialog && project?.id && (
@@ -91,6 +192,7 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
               projectFiles={projectFiles}
             >
               <button 
+                id="github-setup-button"
                 aria-label="Connect to GitHub"
                 className={`transition-all duration-300 h-8 w-8 p-0 rounded-md flex items-center justify-center ${isDark ? 'bg-[#1A1A1A] hover:bg-[#262626] border border-gray-600' : 'bg-[#fafafa] hover:bg-[#f2f2f2] border border-gray-300'}`}
               >
@@ -109,6 +211,7 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
           {shouldShowGitHubBranchSelector && project && (
             <GitHubBranchSelectorV0 project={project}>
               <button 
+                id="github-branch-button"
                 aria-label="Manage GitHub branches"
                 className={`transition-all duration-300 h-8 w-8 p-0 rounded-md flex items-center justify-center ${isDark ? 'bg-[#1A1A1A] hover:bg-[#262626] border border-gray-600' : 'bg-[#fafafa] hover:bg-[#f2f2f2] border border-gray-300'}`}
               >
@@ -147,7 +250,6 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
             <VercelDeployDialog
               projectId={project.id}
               projectName={project.name}
-              projectFiles={projectFiles}
             >
               <button 
                 aria-label="Deploy to Vercel"

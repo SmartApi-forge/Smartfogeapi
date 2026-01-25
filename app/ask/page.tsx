@@ -46,25 +46,37 @@ export default function Dashboard() {
 
   if (!isAuthenticated) {
     return (
-      <div 
-        className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat"
-        style={{
-          backgroundImage: "url('/anime-1.jpeg')"
-        }}
-      >
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+      <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
+        >
+          <source src="/unicorn-1765353511256.webm" type="video/webm" />
+        </video>
+        <div className="relative z-10 animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
       </div>
     )
   }
 
   return (
     <div 
-      className="min-h-screen h-screen overflow-hidden bg-cover bg-center bg-no-repeat font-neue-500 flex flex-col transition-all duration-300 ease-in-out"
+      className="min-h-screen h-screen overflow-hidden font-neue-500 flex flex-col transition-all duration-300 ease-in-out relative"
       style={{
-        backgroundImage: "url('/anime-1.jpeg')",
         marginLeft: sidebarOpen ? '320px' : '0px'
       }}
     >
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover -z-10"
+      >
+        <source src="/unicorn-1765353511256.webm" type="video/webm" />
+      </video>
       <DashboardHeader 
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}

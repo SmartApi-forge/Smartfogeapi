@@ -202,6 +202,7 @@ export class InvitationService {
           projectName: project.name,
           inviterName,
           inviteToken: token,
+          projectId: input.projectId,
         });
       }
     } catch (error) {

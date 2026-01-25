@@ -1,15 +1,13 @@
 import { z } from 'zod'
 import { baseProcedure, protectedProcedure, createTRPCRouter } from '../../trpc/init'
-import { inngest } from '../../inngest/client'
 import { ApiGenerationService } from './service'
 import { 
   generateAPISchema, 
   projectIdSchema, 
   jobStatusSchema 
 } from './types'
-import { classifyCommand } from '../../services/command-classifier'
-import { ContextBuilder } from '../../services/context-builder'
 import { classifyCommandSchema } from '../versions/types'
+import { conversationContextService } from '../../services/conversation-context-service'
 
 const apiGenerationService = new ApiGenerationService()
 
@@ -83,6 +81,7 @@ export const apiGenerationRouter = createTRPCRouter({
     }),
 
   // Background job procedures
+  // Note: Inngest removed - use direct streaming APIs instead
   triggerBackgroundJob: protectedProcedure
     .input(z.discriminatedUnion('jobType', [
       z.object({
@@ -111,20 +110,16 @@ export const apiGenerationRouter = createTRPCRouter({
       })
     ]))
     .mutation(async ({ input, ctx }) => {
-      const eventName = `api/${input.jobType.replaceAll('_', '/')}`
-      
-      await inngest.send({
-        name: eventName,
-        data: {
-          ...input.payload,
-          userId: ctx.user.id,
-          triggeredAt: new Date().toISOString()
-        }
-      })
+      // Note: Inngest removed - use direct streaming APIs instead
+      // For generate_api: use /api/generate with SSE streaming
+      // For analyze_repo: use /api/github/clone with SSE streaming
+      // For deploy_project: use /api/deploy/vercel with SSE streaming
 
       return {
         success: true,
-        message: `Background job ${input.jobType} triggered successfully`
+        message: `Use direct streaming API for ${input.jobType} - Inngest removed`,
+        hint: input.jobType === 'generate_api' ? '/api/generate' : 
+              input.jobType === 'analyze_repo' ? '/api/github/clone' : '/api/deploy/vercel'
       }
     }),
 
@@ -147,38 +142,79 @@ export const apiGenerationRouter = createTRPCRouter({
       return await apiGenerationService.retryJob(input.jobId, ctx.user.id)
     }),
 
-  // Command classification
+  // Command classification (simplified - uses direct streaming API)
+  // Note: DecisionAgent removed - use /api/generate with SSE streaming instead
   classify: baseProcedure
     .input(classifyCommandSchema)
     .mutation(async ({ input }) => {
-      const classification = await classifyCommand(
-        input.prompt,
-        input.currentFiles || []
-      );
+      // Simplified classification - the /api/generate route handles intent detection
+      // Return a basic classification that indicates code generation mode
+      const isQuestion = input.prompt.trim().endsWith('?') || 
+        input.prompt.toLowerCase().startsWith('what') ||
+        input.prompt.toLowerCase().startsWith('how') ||
+        input.prompt.toLowerCase().startsWith('why') ||
+        input.prompt.toLowerCase().startsWith('can you explain');
+      
+      const classification = {
+        type: isQuestion ? 'QUESTION' : 'MODIFY',
+        confidence: 0.8,
+        shouldCreateNewVersion: !isQuestion,
+        entities: [],
+        reasoning: 'Simplified classification - use /api/generate for full processing',
+      };
+      
       return classification;
     }),
 
   // Build context for iteration
+  // Note: ContextBuilder removed - use conversationContextService instead
   buildContext: baseProcedure
     .input(z.object({
       projectId: z.string().uuid(),
       messageLimit: z.number().int().positive().default(20),
     }))
     .query(async ({ input }) => {
-      const context = await ContextBuilder.buildContext(
-        input.projectId,
-        input.messageLimit
-      );
-      return context;
+      // Use new conversationContextService for context building
+      const messages = await conversationContextService.loadMessages(input.projectId);
+      const snapshot = await conversationContextService.loadLatestSnapshot(input.projectId);
+      
+      // Build conversation history array
+      const conversationHistory = messages.map((msg) => ({
+        role: 'user' as const,
+        content: msg.user_message,
+      })).concat(messages.filter(m => m.assistant_response).map((msg) => ({
+        role: 'assistant' as const,
+        content: msg.assistant_response!,
+      })));
+      
+      // Extract files from snapshot
+      const previousFiles = snapshot?.files_jsonb || {};
+      
+      return {
+        conversationHistory,
+        previousFiles,
+        previousVersion: null,
+        projectId: input.projectId,
+        summary: `Context: ${messages.length} messages, ${Object.keys(previousFiles).length} files`,
+        truncated: false,
+      };
     }),
 
   // Trigger iteration workflow
+  // Note: Inngest removed - use /api/generate with SSE streaming instead
   triggerIteration: baseProcedure
     .input(z.object({
       projectId: z.string().uuid(),
       messageId: z.string().uuid(),
       prompt: z.string().min(1),
-      commandType: z.enum(['CREATE_FILE', 'MODIFY_FILE', 'DELETE_FILE', 'REFACTOR_CODE', 'GENERATE_API', 'CLONE_REPO']),
+      // DecisionAgent intent types (new AI-powered classification)
+      commandType: z.enum([
+        'CREATE',
+        'MODIFY',
+        'CREATE_AND_LINK',
+        'FIX_ERROR',
+        'QUESTION'
+      ]),
       shouldCreateNewVersion: z.boolean(),
       parentVersionId: z.string().uuid().optional(),
       conversationHistory: z.array(z.object({
@@ -187,23 +223,14 @@ export const apiGenerationRouter = createTRPCRouter({
       })).optional(),
     }))
     .mutation(async ({ input }) => {
-      // Send event to Inngest to trigger iteration workflow
-      await inngest.send({
-        name: 'api/iterate',
-        data: {
-          projectId: input.projectId,
-          messageId: input.messageId,
-          prompt: input.prompt,
-          commandType: input.commandType,
-          shouldCreateNewVersion: input.shouldCreateNewVersion,
-          parentVersionId: input.parentVersionId,
-          conversationHistory: input.conversationHistory,
-        },
-      });
+      // Note: Inngest removed - use /api/generate with SSE streaming instead
+      // The frontend should call /api/generate directly with the projectId and prompt
 
       return {
         success: true,
-        message: 'Iteration workflow triggered',
+        message: 'Use /api/generate with SSE streaming for iteration - Inngest removed',
+        hint: '/api/generate',
+        projectId: input.projectId,
       };
     }),
 })

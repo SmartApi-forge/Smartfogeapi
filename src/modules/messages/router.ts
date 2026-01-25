@@ -2,7 +2,6 @@ import { z } from 'zod'
 import { createTRPCRouter, baseProcedure, protectedProcedure } from '../../trpc/init'
 import { TRPCError } from '@trpc/server'
 import { MessageService } from './service'
-import { inngest } from '../../inngest/client'
 import {
   CreateMessageSchema,
   UpdateMessageSchema,
@@ -16,6 +15,7 @@ import {
 export const messagesRouter = createTRPCRouter({
   /**
    * Create a new message
+   * Note: Inngest background job removed - using direct streaming via /api/generate
    */
   create: protectedProcedure
     .input(CreateMessageSchema)
@@ -23,19 +23,8 @@ export const messagesRouter = createTRPCRouter({
       // Create a new message using MessageService with user_id
       const createdMessage = await MessageService.create(input, ctx.user.id)
       
-      // Invoke background job like in the YouTube tutorial
-      await inngest.send({
-        name: "message/created",
-        data: {
-          messageId: createdMessage.id,
-          content: createdMessage.content,
-          role: createdMessage.role,
-          type: createdMessage.type,
-          project_id: createdMessage.project_id
-        }
-      })
-      
       // Return the created message as API response
+      // Background processing now handled by direct streaming API routes
       return createdMessage
     }),
 
@@ -168,6 +157,7 @@ export const messagesRouter = createTRPCRouter({
 
   /**
    * Save AI assistant result with message and fragment
+   * Note: Inngest background job removed - using direct streaming via /api/generate
    */
   saveResult: baseProcedure
     .input(SaveResultInputSchema)
@@ -175,19 +165,7 @@ export const messagesRouter = createTRPCRouter({
       try {
         const result = await MessageService.saveResult(input)
         
-        // Emit event for message creation
-        await inngest.send({
-          name: "message/created",
-          data: {
-            messageId: result.message.id,
-            content: result.message.content,
-            role: result.message.role,
-            type: result.message.type,
-            project_id: result.message.project_id,
-            fragmentId: result.fragment?.id
-          }
-        })
-        
+        // Background processing now handled by direct streaming API routes
         return result
       } catch (error) {
         console.error('Error in saveResult procedure:', error)

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scroll Spy Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            background: #f5f5f5;
+        }
+        
+        .sidebar {
+            position: fixed;
+            right: 20px;
+            top: 100px;
+            width: 250px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            max-height: calc(100vh - 120px);
+            overflow-y: auto;
+        }
+        
+        .sidebar h2 {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #333;
+        }
+        
+        .sidebar ul {
+            list-style: none;
+        }
+        
+        .sidebar li {
+            margin-bottom: 8px;
+        }
+        
+        .sidebar a {
+            display: block;
+            padding: 6px 12px;
+            text-decoration: none;
+            color: #666;
+            border-radius: 4px;
+            transition: all 0.2s;
+            font-size: 13px;
+        }
+        
+        .sidebar a:hover {
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        .sidebar a.active {
+            background: #e3f2fd;
+            color: #1976d2;
+            font-weight: 500;
+            border-left: 2px solid #1976d2;
+        }
+        
+        .sidebar .level-3 {
+            padding-left: 12px;
+        }
+        
+        .content {
+            flex: 1;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            padding-right: 300px;
+        }
+        
+        .content h2 {
+            margin-top: 60px;
+            margin-bottom: 20px;
+            padding-top: 20px;
+            font-size: 28px;
+            color: #333;
+        }
+        
+        .content h3 {
+            margin-top: 40px;
+            margin-bottom: 16px;
+            font-size: 22px;
+            color: #444;
+        }
+        
+        .content p {
+            line-height: 1.6;
+            color: #666;
+            margin-bottom: 16px;
+        }
+        
+        .scroll-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #333;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+        
+        .at-bottom {
+            background: #4caf50;
+        }
+    </style>
+</head>
+<body>
+    <div class="content">
+        <h1>Scroll Spy Test Page</h1>
+        <p>Scroll down to test the scroll spy functionality. The right sidebar should highlight the current section.</p>
+        
+        <h2 id="what-is-smartapiforge">What is SmartAPIForge?</h2>
+        <p>SmartAPIForge is an AI-powered platform that helps developers create, test, and deploy APIs quickly and efficiently.</p>
+        <p>It combines the power of artificial intelligence with modern development tools to streamline your API development workflow.</p>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+        
+        <h2 id="key-features">Key Features</h2>
+        <p>SmartAPIForge offers a comprehensive set of features designed to accelerate your API development process.</p>
+        
+        <h3 id="smart-code-generation">Smart Code Generation</h3>
+        <p>Natural language to API endpoint conversion with automatic TypeScript type generation.</p>
+        <p>Database schema inference and migration capabilities built right in.</p>
+        <p>OpenAPI/Swagger documentation generation happens automatically.</p>
+        
+        <h3 id="development-tools">Development Tools</h3>
+        <p>Interactive API playground for testing your endpoints in real-time.</p>
+        <p>Real-time collaboration features let you work with your team seamlessly.</p>
+        <p>Git integration for version control keeps your code organized.</p>
+        
+        <h3 id="database-support">Database Support</h3>
+        <p>PostgreSQL with advanced querying capabilities for complex data operations.</p>
+        <p>MongoDB for document storage when you need flexibility.</p>
+        <p>MySQL compatibility ensures you can work with existing databases.</p>
+        
+        <h3 id="deployment-options">Deployment Options</h3>
+        <p>One-click Vercel deployment gets your API live in seconds.</p>
+        <p>AWS Lambda functions for serverless architecture.</p>
+        <p>Docker containerization for consistent environments.</p>
+        
+        <h2 id="who-is-smartapiforge-for">Who is SmartAPIForge for?</h2>
+        <p>SmartAPIForge is designed for backend developers who want to speed up API development.</p>
+        <p>Full-stack developers building complete applications will find it invaluable.</p>
+        <p>Startups that need to move fast and iterate quickly benefit greatly.</p>
+        <p>Teams looking to standardize their API development process love it.</p>
+        
+        <h2 id="getting-started">Getting Started</h2>
+        <p>Ready to build your first API? Check out our Quick Start Guide to get up and running in minutes.</p>
+        <p>The process is straightforward and you'll have a working API in no time.</p>
+        <p>Our documentation covers everything you need to know.</p>
+        
+        <h2 id="need-help">Need Help?</h2>
+        <p>Browse our Guides for step-by-step tutorials on common tasks.</p>
+        <p>Check the API Reference for detailed documentation on all features.</p>
+        <p>Visit Troubleshooting if you encounter any issues along the way.</p>
+        <p>Our community is here to help you succeed.</p>
+        <p>This is the last section - scroll to the bottom to test bottom detection!</p>
+        <p>Keep scrolling...</p>
+        <p>Almost there...</p>
+        <p>Just a bit more...</p>
+        <p>You're at the bottom! The "Need Help?" section should be highlighted in the sidebar.</p>
+    </div>
+    
+    <div class="sidebar">
+        <h2>On This Page</h2>
+        <ul id="toc">
+            <li><a href="#what-is-smartapiforge" data-id="what-is-smartapiforge">What is SmartAPIForge?</a></li>
+            <li><a href="#key-features" data-id="key-features">Key Features</a></li>
+            <li class="level-3"><a href="#smart-code-generation" data-id="smart-code-generation">Smart Code Generation</a></li>
+            <li class="level-3"><a href="#development-tools" data-id="development-tools">Development Tools</a></li>
+            <li class="level-3"><a href="#database-support" data-id="database-support">Database Support</a></li>
+            <li class="level-3"><a href="#deployment-options" data-id="deployment-options">Deployment Options</a></li>
+            <li><a href="#who-is-smartapiforge-for" data-id="who-is-smartapiforge-for">Who is SmartAPIForge for?</a></li>
+            <li><a href="#getting-started" data-id="getting-started">Getting Started</a></li>
+            <li><a href="#need-help" data-id="need-help">Need Help?</a></li>
+        </ul>
+    </div>
+    
+    <div class="scroll-indicator" id="indicator">
+        Scroll: 0px | At bottom: No
+    </div>
+    
+    <script>
+        const headingIds = [
+            'what-is-smartapiforge',
+            'key-features',
+            'smart-code-generation',
+            'development-tools',
+            'database-support',
+            'deployment-options',
+            'who-is-smartapiforge-for',
+            'getting-started',
+            'need-help'
+        ];
+        
+        let activeId = '';
+        const offset = 100;
+        
+        function isAtBottom() {
+            const scrollHeight = document.documentElement.scrollHeight;
+            const scrollTop = window.scrollY || window.pageYOffset;
+            const clientHeight = window.innerHeight;
+            return scrollTop + clientHeight >= scrollHeight - 50;
+        }
+        
+        function findActiveHeading() {
+            // Check if at bottom first
+            if (isAtBottom()) {
+                return headingIds[headingIds.length - 1];
+            }
+            
+            const scrollPosition = window.scrollY + offset;
+            
+            // Find the last heading above scroll position
+            for (let i = headingIds.length - 1; i >= 0; i--) {
+                const element = document.getElementById(headingIds[i]);
+                if (element && element.offsetTop <= scrollPosition) {
+                    return headingIds[i];
+                }
+            }
+            
+            return headingIds[0];
+        }
+        
+        function updateActiveHeading() {
+            const newActiveId = findActiveHeading();
+            
+            if (newActiveId !== activeId) {
+                // Remove active class from all links
+                document.querySelectorAll('.sidebar a').forEach(link => {
+                    link.classList.remove('active');
+                });
+                
+                // Add active class to current link
+                const activeLink = document.querySelector(`[data-id="${newActiveId}"]`);
+                if (activeLink) {
+                    activeLink.classList.add('active');
+                }
+                
+                activeId = newActiveId;
+            }
+            
+            // Update indicator
+            const indicator = document.getElementById('indicator');
+            const atBottom = isAtBottom();
+            indicator.textContent = `Scroll: ${Math.round(window.scrollY)}px | At bottom: ${atBottom ? 'YES' : 'No'} | Active: ${activeId}`;
+            indicator.className = atBottom ? 'scroll-indicator at-bottom' : 'scroll-indicator';
+        }
+        
+        // Update on scroll
+        window.addEventListener('scroll', updateActiveHeading, { passive: true });
+        
+        // Initial update
+        updateActiveHeading();
+        
+        // Smooth scroll on click
+        document.querySelectorAll('.sidebar a').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const id = link.getAttribute('data-id');
+                const element = document.getElementById(id);
+                if (element) {
+                    const offset = 80;
+                    const elementPosition = element.getBoundingClientRect().top;
+                    const offsetPosition = elementPosition + window.pageYOffset - offset;
+                    
+                    window.scrollTo({
+                        top: offsetPosition,
+                        behavior: 'smooth'
+                    });
+                    
+                    window.history.pushState(null, '', `#${id}`);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,537 @@
+---
+title: Sandbox Execution
+description: Secure, isolated code execution with E2B Firecracker micro-VMs
+category: features
+order: 2
+tags: [sandbox, execution, security, e2b, firecracker]
+lastUpdated: 2024-12-11
+---
+
+# Sandbox Execution
+
+SmartAPIForge uses E2B Firecracker micro-VMs to provide secure, isolated environments for running and testing your generated APIs.
+
+## Key Capabilities
+
+- Instant provisioning in under 3 seconds
+- Full development environment with terminal access
+- Automatic dependency installation
+- Live code reloading and hot reload
+- VM-level isolation for security
+- Resource limits and monitoring
+- Persistent storage options
+
+## What is a Sandbox?
+
+A sandbox is an isolated execution environment where your API code runs safely without affecting your local machine or other projects. Think of it as a disposable, containerized development environment.
+
+<Callout type="info" title="Powered by E2B">
+  SmartAPIForge uses [E2B](https://e2b.dev) Firecracker micro-VMs for ultra-fast, secure sandboxes with full filesystem and terminal access.
+</Callout>
+
+## Key Features
+
+### Instant Provisioning
+
+Sandboxes start in under 3 seconds:
+
+- **Cold Start:** ~2-3 seconds
+- **Warm Start:** ~1 second
+- **Auto-scaling:** Handles multiple projects simultaneously
+
+### Full Development Environment
+
+Each sandbox includes:
+
+- **Runtime:** Python 3.11 or Node.js 18+
+- **Package Managers:** pip, npm, pnpm, yarn
+- **Database Clients:** PostgreSQL, MongoDB, Redis
+- **Build Tools:** gcc, make, git
+- **Terminal Access:** Full bash shell
+
+### Automatic Dependency Installation
+
+Dependencies are installed automatically:
+
+```python
+# requirements.txt detected
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.5.0
+sqlalchemy==2.0.23
+
+# Installed automatically on sandbox start
+```
+
+### Live Code Reloading
+
+Changes to your code trigger automatic reloads:
+
+1. Edit a file in the code editor
+2. Sandbox detects the change
+3. Server restarts automatically
+4. Preview updates in real-time
+
+<Callout type="success" title="Hot Reload">
+  Most changes reflect in under 2 seconds without manual intervention.
+</Callout>
+
+## Sandbox Lifecycle
+
+### Creation
+
+When you generate an API:
+
+**Creation Flow:**
+1. User requests API generation
+2. Frontend sends request to backend
+3. Backend creates sandbox via E2B
+4. E2B provisions Firecracker micro-VM
+5. Sandbox installs dependencies
+6. Sandbox starts server
+7. Frontend receives ready status and URL
+8. User sees preview
+
+**Timeline:**
+- Provision VM: ~1s
+- Install dependencies: ~5-15s
+- Start server: ~1-2s
+- **Total:** ~10-20s
+
+### Running State
+
+While your sandbox is active:
+
+- ✅ Server runs continuously
+- ✅ Handles HTTP requests
+- ✅ Maintains state in memory
+- ✅ Logs to terminal
+- ✅ Auto-restarts on code changes
+
+### Pausing
+
+Inactive sandboxes pause automatically:
+
+- **Trigger:** 30 minutes of inactivity
+- **State:** Preserved in memory
+- **Resume:** Instant on next request
+- **Cost:** Minimal resource usage
+
+<Callout type="info" title="Auto-Pause">
+  Paused sandboxes resume instantly when you return to your project.
+</Callout>
+
+### Termination
+
+Sandboxes terminate when:
+
+- Project is deleted
+- Manual termination requested
+- 7 days of inactivity
+- Resource limits exceeded
+
+## Security Features
+
+### VM-Level Isolation
+
+Each sandbox runs in its own Firecracker micro-VM:
+
+- **Kernel Isolation:** Separate Linux kernel
+- **Network Isolation:** Controlled internet access
+- **Filesystem Isolation:** No access to host filesystem
+- **Process Isolation:** Cannot see other sandboxes
+
+### Resource Limits
+
+Sandboxes have enforced limits:
+
+| Resource | Limit | Reason |
+|----------|-------|--------|
+| **CPU** | 2 vCPUs | Prevent resource hogging |
+| **Memory** | 2 GB RAM | Sufficient for most APIs |
+| **Disk** | 10 GB | Code + dependencies |
+| **Network** | 100 Mbps | API requests + downloads |
+| **Processes** | 100 | Prevent fork bombs |
+
+### Seccomp Filters
+
+System calls are restricted:
+
+```bash
+# Allowed
+read, write, open, close, socket, connect
+
+# Blocked
+mount, reboot, ptrace, kexec_load
+```
+
+<Callout type="warning" title="Security First">
+  Sandboxes cannot access your local files, environment variables, or other projects.
+</Callout>
+
+## Working with Sandboxes
+
+### Accessing the Terminal
+
+Click the terminal panel to access the bash shell:
+
+```bash
+# Check Python version
+python --version
+
+# List installed packages
+pip list
+
+# View running processes
+ps aux
+
+# Check server logs
+tail -f logs/server.log
+
+# Run tests
+pytest tests/
+
+# Install additional packages
+pip install requests
+```
+
+### File System Access
+
+Browse and edit files in the code editor:
+
+```
+/sandbox/
+├── main.py              # Your API code
+├── requirements.txt     # Dependencies
+├── models/              # Data models
+├── routes/              # API routes
+├── tests/               # Test files
+└── .env                 # Environment variables
+```
+
+### Environment Variables
+
+Set environment variables in the sandbox:
+
+```bash
+# In terminal
+export DATABASE_URL="postgresql://..."
+export API_KEY="your-key"
+
+# Or create .env file
+echo "DATABASE_URL=postgresql://..." > .env
+```
+
+<Callout type="info" title="Persistence">
+  Environment variables persist for the sandbox session but reset on restart.
+</Callout>
+
+### Installing Packages
+
+Install additional dependencies:
+
+<Tabs defaultValue="python">
+  <TabsList>
+    <TabsTrigger value="python">Python</TabsTrigger>
+    <TabsTrigger value="node">Node.js</TabsTrigger>
+  </TabsList>
+  
+  <TabsContent value="python">
+    ```bash
+    # Install a package
+    pip install requests
+    
+    # Add to requirements.txt
+    echo "requests==2.31.0" >> requirements.txt
+    
+    # Install from requirements.txt
+    pip install -r requirements.txt
+    ```
+  </TabsContent>
+  
+  <TabsContent value="node">
+    ```bash
+    # Install a package
+    npm install axios
+    
+    # Add to package.json
+    npm install --save axios
+    
+    # Install from package.json
+    npm install
+    ```
+  </TabsContent>
+</Tabs>
+
+### Running Commands
+
+Execute any command in the terminal:
+
+```bash
+# Run tests
+pytest tests/ -v
+
+# Check code quality
+flake8 .
+black --check .
+
+# Database migrations
+alembic upgrade head
+
+# Custom scripts
+python scripts/seed_data.py
+```
+
+## Sandbox Management
+
+### Restarting
+
+Restart your sandbox manually:
+
+1. Click the **Restart** button in the header
+2. Or use the terminal:
+   ```bash
+   # Restart the server
+   pkill -f uvicorn
+   uvicorn main:app --reload
+   ```
+
+### Viewing Logs
+
+Monitor sandbox activity:
+
+```bash
+# Server logs
+tail -f /var/log/server.log
+
+# Application logs
+tail -f logs/app.log
+
+# Error logs
+tail -f logs/error.log
+```
+
+### Debugging
+
+Debug issues in the sandbox:
+
+```python
+# Add print statements
+print(f"Debug: {variable}")
+
+# Use Python debugger
+import pdb; pdb.set_trace()
+
+# Check environment
+import os
+print(os.environ)
+```
+
+### Downloading Code
+
+Download your sandbox code:
+
+1. Click **Download Code** button
+2. Receive a ZIP file with all files
+3. Extract and run locally
+
+## Performance Optimization
+
+### Dependency Caching
+
+Dependencies are cached between sessions:
+
+- **First Install:** ~10-15 seconds
+- **Cached Install:** ~2-3 seconds
+- **Cache Duration:** 7 days
+
+### Warm Sandboxes
+
+Keep sandboxes warm for instant access:
+
+- Active projects stay warm
+- Warm sandboxes respond in less than 100ms
+- Cold starts take ~2-3 seconds
+
+### Resource Monitoring
+
+Monitor sandbox resource usage:
+
+```bash
+# CPU usage
+top
+
+# Memory usage
+free -h
+
+# Disk usage
+df -h
+
+# Network usage
+iftop
+```
+
+## Limitations
+
+### What You Can Do
+
+✅ Run web servers (FastAPI, Express, Flask)
+✅ Install packages from public registries
+✅ Make HTTP requests to external APIs
+✅ Read/write files in sandbox
+✅ Run tests and scripts
+✅ Use databases (PostgreSQL, MongoDB, Redis)
+
+### What You Cannot Do
+
+❌ Access your local filesystem
+❌ Connect to localhost services
+❌ Use privileged operations (mount, reboot)
+❌ Mine cryptocurrency
+❌ Run long-running background jobs (>24h)
+❌ Exceed resource limits
+
+<Callout type="warning" title="Fair Use Policy">
+  Sandboxes are for development and testing. Production workloads should be deployed to proper hosting platforms.
+</Callout>
+
+## Troubleshooting
+
+### Sandbox Won't Start
+
+**Problem:** Sandbox stuck on "Starting..."
+
+**Solutions:**
+1. Check E2B API key is valid
+2. Verify you have available sandbox hours
+3. Check E2B service status
+4. Try creating a new project
+
+### Server Not Responding
+
+**Problem:** Preview shows connection error
+
+**Solutions:**
+1. Check terminal for error messages
+2. Verify server is running: `ps aux | grep uvicorn`
+3. Restart the sandbox
+4. Check port is correct (usually 8000)
+
+### Out of Memory
+
+**Problem:** Sandbox crashes with OOM error
+
+**Solutions:**
+1. Reduce memory usage in code
+2. Optimize database queries
+3. Limit concurrent requests
+4. Consider upgrading sandbox tier
+
+### Slow Performance
+
+**Problem:** Sandbox is slow or unresponsive
+
+**Solutions:**
+1. Check CPU usage: `top`
+2. Optimize expensive operations
+3. Add caching where appropriate
+4. Reduce logging verbosity
+
+## Best Practices
+
+### Development Workflow
+
+1. **Generate API** - Let AI create the initial code
+2. **Test in Sandbox** - Verify functionality
+3. **Iterate** - Make changes and test
+4. **Download** - Get the code locally
+5. **Deploy** - Push to production
+
+### Resource Management
+
+- Close unused projects to free resources
+- Use environment variables for configuration
+- Clean up temporary files regularly
+- Monitor resource usage
+
+### Security
+
+- Never commit secrets to code
+- Use environment variables for sensitive data
+- Validate all user input
+- Keep dependencies updated
+
+## Advanced Features
+
+### Custom Docker Images
+
+Use custom base images (Enterprise):
+
+```dockerfile
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    redis-tools
+
+# Install Python packages
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+```
+
+### Persistent Storage
+
+Mount persistent volumes (Enterprise):
+
+```yaml
+volumes:
+  - name: data
+    size: 10GB
+    mount: /data
+```
+
+### Network Configuration
+
+Configure network settings (Enterprise):
+
+```yaml
+network:
+  ingress:
+    - port: 8000
+      protocol: http
+  egress:
+    - allow: api.example.com
+    - deny: "*"
+```
+
+## Next Steps
+
+<CardGrid cols={2}>
+  <Card
+    title="GitHub Integration"
+    description="Version control your sandbox code"
+    href="/docs/features/github"
+  />
+  <Card
+    title="Deployment"
+    description="Deploy sandboxes to production"
+    href="/docs/deployment"
+  />
+  <Card
+    title="API Reference"
+    description="Sandbox API documentation"
+    href="/docs/api-reference/sandbox"
+  />
+  <Card
+    title="Troubleshooting"
+    description="Common sandbox issues"
+    href="/docs/troubleshooting"
+  />
+</CardGrid>
+
+## Learn More
+
+- [E2B Documentation](https://e2b.dev/docs)
+- [Firecracker](https://firecracker-microvm.github.io/)
+- [Sandbox Security Whitepaper](https://e2b.dev/security)

@@ -91,13 +91,14 @@ export const apiRouter = createTRPCRouter({
           });
         }
 
-        // TODO: Trigger Inngest workflow here
-        // await inngest.send({ name: 'api/generate', data: { jobId: job.id } });
+        // Note: Inngest removed - use /api/generate with SSE streaming instead
+        // The frontend should call /api/generate directly with the projectId
 
         return {
           projectId: project.id,
           jobId: job.id,
           status: 'started',
+          hint: 'Use /api/generate with SSE streaming for code generation',
         };
       } catch (error) {
         throw new TRPCError({

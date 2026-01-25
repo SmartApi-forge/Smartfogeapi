@@ -3,32 +3,37 @@
 import { useRouter } from 'next/navigation'
 import { PromptInputBox } from "@/components/ui/ai-prompt-box"
 import { api } from "@/lib/trpc-client"
+import type { Attachment } from '@/src/types/chat-ux'
+import type { AIModel } from '@/components/model-selector'
 
 export function DashboardContent() {
   const router = useRouter()
   
-  // tRPC hook for automatic Inngest invocation
-  const invokeInngest = api.apiGeneration.invoke.useMutation({
+  // tRPC hook for API generation
+  const generateAPI = api.apiGeneration.generateAPI.useMutation({
     onSuccess: (data) => {
-      console.log("Inngest function invoked successfully!", data)
+      console.log("API generation started!", data)
       // Redirect to the loading page with the project ID
       if (data.projectId) {
         router.push(`/loading?projectId=${data.projectId}`)
       }
     },
     onError: (error: any) => {
-      console.error("Failed to invoke Inngest function:", error)
+      console.error("Failed to start API generation:", error)
     }
   })
 
-  const handleSendMessage = (message: string, githubRepo?: any) => {
+  const handleSendMessage = (message: string, model: AIModel, attachments: Attachment[]) => {
     if (!message.trim()) return
 
-    // Invoke Inngest function with the user's input
-    invokeInngest.mutate({ 
-      text: message
+    // Start API generation with the selected model
+    generateAPI.mutate({ 
+      prompt: message,
+      framework: 'fastapi',
+      advanced: false,
+      model: model,
     })
-    console.log('Message:', message, 'GitHub Repo:', githubRepo)
+    console.log('Message:', message, 'Model:', model, 'Attachments:', attachments.length)
   }
 
   return (
@@ -49,7 +54,7 @@ export function DashboardContent() {
       <div className="w-full max-w-2xl">
         <PromptInputBox
           onSend={handleSendMessage}
-          isLoading={invokeInngest.isLoading}
+          isLoading={generateAPI.isPending}
           className="border-gray-600 bg-gray-800"
         />
       </div>
@@ -57,7 +62,7 @@ export function DashboardContent() {
 
 
       {/* Error Message */}
-      {invokeInngest.isError && (
+      {generateAPI.isError && (
         <div className="mt-6 p-4 bg-red-600/20 border border-red-500/30 rounded-lg backdrop-blur-sm">
           <p className="text-white text-sm text-center">
             ❌ Something went wrong. Please try again.

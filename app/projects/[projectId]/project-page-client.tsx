@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -45,7 +45,10 @@ import {
   FilePlus,
   FolderPlus,
   ChevronsUpDown,
-  Trash2
+  Trash2,
+  GitBranch,
+  Package,
+  Play
 } from "lucide-react";
 import { SimpleHeader } from "@/components/simple-header";
 import { Highlight, themes } from "prism-react-renderer";
@@ -53,12 +56,19 @@ import Editor from "@monaco-editor/react";
 import { useTheme } from "next-themes";
 import { api } from "@/lib/trpc-client";
 import { useGenerationStream } from "../../../hooks/use-generation-stream";
+import { useCodeGeneration } from "../../../hooks/use-code-generation";
+import { useGitHubClone } from "../../../hooks/use-github-clone";
 import { StreamingCodeViewer } from "../../../components/streaming-code-viewer";
 import { GenerationProgressTracker } from "../../../components/generation-progress-tracker";
+import { ProgressStepsRenderer, createProgressSteps } from "../../../components/progress-steps-renderer";
 import { TextShimmer } from "@/components/ui/text-shimmer";
 import { VersionCard } from "@/components/version-card";
 import { SandboxPreview } from "@/components/sandbox-preview";
+import { V0Sidebar } from "@/components/v0-sidebar";
 import JSZip from "jszip";
+import { sanitizeMessages } from "@/src/utils/message-sanitizer";
+import { MESSAGE_STYLES } from "@/components/chat-message";
+import { MarkdownPreview } from "@/components/markdown-preview";
 
 interface Message {
   id: string;
@@ -70,6 +80,7 @@ interface Message {
   sender_id?: string;
   receiver_id?: string;
   project_id?: string;
+  version_id?: string; // Links message to a version for version card display
   fragments?: Fragment[];
 }
 
@@ -90,7 +101,7 @@ interface Project {
   name: string;
   description?: string;
   framework: 'fastapi' | 'express' | 'python' | 'nextjs' | 'react' | 'vue' | 'angular' | 'flask' | 'django' | 'unknown';
-  status: 'pending' | 'generating' | 'testing' | 'deploying' | 'deployed' | 'failed';
+  status: 'pending' | 'generating' | 'testing' | 'deploying' | 'deployed' | 'failed' | 'completed' | 'paused';
   created_at: string;
   updated_at: string;
   deploy_url?: string;
@@ -348,7 +359,9 @@ function TreeItem({
   onNewItemConfirm,
   onNewItemCancel,
   newItemName,
-  onContextMenu
+  onContextMenu,
+  modifiedFiles = [],
+  isNewlyAdded = false
 }: {
   node: TreeNode;
   depth?: number;
@@ -364,13 +377,31 @@ function TreeItem({
   onNewItemCancel?: () => void;
   newItemName?: string;
   onContextMenu?: (e: React.MouseEvent, fileId: string) => void;
+  modifiedFiles?: string[]; // Requirements: 18.3, 18.4 - Visual indicator for modified files
+  isNewlyAdded?: boolean; // Requirements: 8.3, 8.4 - Animation for new files
 }) {
   const isExpanded = expanded.has(node.id);
   const isSelected = selectedId === node.id;
   const isCreatingHere = creatingInFolder === node.id;
+  // Check if this file was recently modified
+  const isModified = node.type === 'file' && modifiedFiles.some(f => 
+    node.id === f || node.id.endsWith(f) || f.endsWith(node.id)
+  );
+
+  // Animation variants for file items - Requirements: 8.3, 8.4, 8.5, 8.6
+  const itemVariants = {
+    initial: { opacity: 0, x: -10 },
+    animate: { opacity: 1, x: 0 },
+    exit: { opacity: 0, x: -10 },
+  };
 
   return (
-    <div>
+    <motion.div
+      variants={itemVariants}
+      initial={isModified ? "initial" : false}
+      animate="animate"
+      transition={{ duration: 0.2, ease: "easeOut" }}
+    >
       <div
         className={`flex items-center gap-1.5 sm:gap-2 px-1.5 sm:px-2 py-2 sm:py-1 cursor-pointer hover:bg-muted/50 transition-colors rounded-md ${
           isSelected ? 'bg-[#E6E6E6] dark:bg-[#333433] text-foreground' : 'text-foreground'
@@ -401,7 +432,16 @@ function TreeItem({
         ) : (
           <span className="flex-shrink-0">{getFileIcon(node.name)}</span>
         )}
-        <span className="truncate min-w-0 font-sans text-[14px] font-normal">{node.name}</span>
+        <span className={`truncate min-w-0 font-sans text-[14px] font-normal ${isModified ? 'text-green-500 dark:text-green-400' : ''}`}>{node.name}</span>
+        {/* Requirements: 18.3, 18.4 - Visual indicator for newly created/modified files */}
+        {isModified && (
+          <motion.span 
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="ml-1 w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" 
+            title="Recently modified" 
+          />
+        )}
       </div>
       
       {node.type === "folder" && isExpanded && (
@@ -458,11 +498,12 @@ function TreeItem({
               onNewItemCancel={onNewItemCancel}
               newItemName={newItemName}
               onContextMenu={onContextMenu}
+              modifiedFiles={modifiedFiles}
             />
           ))}
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -484,6 +525,8 @@ function CodeViewer({
   const [copySuccess, setCopySuccess] = useState(false);
   const [editorContent, setEditorContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  // Requirements: 5.1, 5.5, 5.6 - Raw/Preview toggle for markdown files
+  const [markdownViewMode, setMarkdownViewMode] = useState<'raw' | 'preview'>('preview');
 
   const selectedFile = useMemo(() => {
     const findFile = (nodes: TreeNode[], id: string): TreeNode | null => {
@@ -498,6 +541,13 @@ function CodeViewer({
     };
     return filename ? findFile(fileTree, filename) : null;
   }, [filename, fileTree]);
+
+  // Check if current file is a markdown file
+  const isMarkdownFile = useMemo(() => {
+    if (!selectedFile?.name) return false;
+    const ext = selectedFile.name.split('.').pop()?.toLowerCase();
+    return ext === 'md' || ext === 'mdx' || ext === 'markdown';
+  }, [selectedFile?.name]);
 
   // Track if content has changed
   const hasUnsavedChanges = useMemo(() => {
@@ -520,6 +570,7 @@ function CodeViewer({
       const response = await fetch('/api/sandbox/file/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           sandboxId,
           projectId,
@@ -588,26 +639,57 @@ function CodeViewer({
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Code viewer header - sticky and always visible with clear filename - NO bottom border for unified look */}
-      <div className="sticky top-0 z-10 h-12 sm:h-10 px-2 sm:px-3 flex items-center justify-between gap-3 text-xs text-foreground bg-white dark:bg-[#1D1D1D] backdrop-blur-sm flex-shrink-0">
+      <div className="sticky top-0 z-10 h-11 sm:h-10 px-2 sm:px-3 flex items-center justify-between gap-2 sm:gap-3 text-xs text-foreground bg-white dark:bg-[#1D1D1D] backdrop-blur-sm flex-shrink-0 border-b border-border/50 dark:border-[#333433]/50">
         {/* Filename section with FULL PATH - responsive spacing */}
-        <div className="flex items-center gap-4 sm:gap-5 lg:gap-2.5 min-w-0 flex-1 overflow-hidden">
-          <div className="flex-shrink-0 flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1 overflow-hidden">
+          <div className="flex-shrink-0 flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5">
             {getFileIcon(selectedFile.name)}
           </div>
-          <div className="flex items-center gap-2 min-w-0 flex-1 py-1">
-            <span className="font-sans font-medium truncate text-[12px] sm:text-[13px] text-foreground">{filename || selectedFile.name}</span>
-            <span className="font-sans text-muted-foreground flex-shrink-0 hidden md:inline text-[10px] sm:text-[11px] whitespace-nowrap opacity-70">
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
+            <span className="font-sans font-medium truncate text-[11px] sm:text-[12px] text-foreground">{filename || selectedFile.name}</span>
+            <span className="font-sans text-muted-foreground flex-shrink-0 hidden md:inline text-[10px] whitespace-nowrap opacity-70">
               • {selectedFile.language || 'text'}
             </span>
           </div>
         </div>
         
         {/* Action buttons */}
-        <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+        <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
+          {/* Requirements: 5.1, 5.5, 5.6 - Raw/Preview toggle for markdown files */}
+          {isMarkdownFile && (
+            <div className="flex items-center bg-muted/50 dark:bg-[#262726]/50 rounded-md p-0.5 mr-1">
+              <button
+                onClick={() => setMarkdownViewMode('raw')}
+                className={`flex items-center justify-center gap-1 px-1.5 sm:px-2 py-1 rounded text-xs transition-colors ${
+                  markdownViewMode === 'raw'
+                    ? 'bg-background dark:bg-[#1D1D1D] text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                title="View raw markdown"
+                aria-label="Raw view"
+              >
+                <Code2 className="size-3.5 flex-shrink-0" />
+                <span className="hidden sm:inline text-[10px] sm:text-[11px]">Raw</span>
+              </button>
+              <button
+                onClick={() => setMarkdownViewMode('preview')}
+                className={`flex items-center justify-center gap-1 px-1.5 sm:px-2 py-1 rounded text-xs transition-colors ${
+                  markdownViewMode === 'preview'
+                    ? 'bg-background dark:bg-[#1D1D1D] text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                title="Preview markdown"
+                aria-label="Preview"
+              >
+                <Eye className="size-3.5 flex-shrink-0" />
+                <span className="hidden sm:inline text-[10px] sm:text-[11px]">Preview</span>
+              </button>
+            </div>
+          )}
           <button
             onClick={handleSave}
             disabled={isSaving || !hasUnsavedChanges}
-            className={`flex items-center justify-center gap-1 px-2 py-2 sm:py-1.5 rounded text-xs transition-colors focus:outline-none focus:ring-1 focus:ring-primary ${
+            className={`flex items-center justify-center gap-1 px-1.5 sm:px-2 py-1.5 rounded text-xs transition-colors focus:outline-none focus:ring-1 focus:ring-primary ${
               hasUnsavedChanges && !isSaving
                 ? 'bg-blue-500 hover:bg-blue-600 text-white'
                 : 'bg-muted text-muted-foreground cursor-not-allowed opacity-50'
@@ -616,46 +698,46 @@ function CodeViewer({
             aria-label="Save file"
           >
             {isSaving ? (
-              <Loader2 className="size-4 sm:size-3.5 animate-spin flex-shrink-0" />
+              <Loader2 className="size-3.5 sm:size-3.5 animate-spin flex-shrink-0" />
             ) : (
-              <Check className="size-4 sm:size-3.5 flex-shrink-0" />
+              <Check className="size-3.5 sm:size-3.5 flex-shrink-0" />
             )}
-            <span className="hidden lg:inline text-[11px] whitespace-nowrap">
+            <span className="hidden lg:inline text-[10px] sm:text-[11px] whitespace-nowrap">
               {isSaving ? 'Saving...' : 'Save'}
             </span>
           </button>
           <button
             onClick={handleCopyCode}
-            className="flex items-center justify-center gap-1 px-2 py-2 sm:py-1.5 rounded text-xs hover:bg-muted dark:hover:bg-[#262726] active:bg-muted/70 dark:active:bg-[#262726]/70 transition-colors focus:outline-none focus:ring-1 focus:ring-primary w-8 h-8 sm:w-auto sm:h-auto"
+            className="flex items-center justify-center gap-1 px-1.5 sm:px-2 py-1.5 rounded text-xs hover:bg-muted dark:hover:bg-[#262726] active:bg-muted/70 dark:active:bg-[#262726]/70 transition-colors focus:outline-none focus:ring-1 focus:ring-primary"
             title="Copy code to clipboard"
             aria-label="Copy code"
           >
             {copySuccess ? (
               <>
-                <Check className="size-4 sm:size-3.5 text-emerald-500 flex-shrink-0" />
-                <span className="text-emerald-500 hidden lg:inline text-[11px] whitespace-nowrap">Copied!</span>
+                <Check className="size-3.5 sm:size-3.5 text-emerald-500 flex-shrink-0" />
+                <span className="text-emerald-500 hidden lg:inline text-[10px] sm:text-[11px] whitespace-nowrap">Copied!</span>
               </>
             ) : (
               <>
-                <Copy className="size-4 sm:size-3.5 flex-shrink-0" />
-                <span className="hidden lg:inline text-[11px] whitespace-nowrap">Copy</span>
+                <Copy className="size-3.5 sm:size-3.5 flex-shrink-0" />
+                <span className="hidden lg:inline text-[10px] sm:text-[11px] whitespace-nowrap">Copy</span>
               </>
             )}
           </button>
           
           <button
             onClick={handleDownload}
-            className="flex items-center justify-center gap-1 px-2 py-2 sm:py-1.5 rounded text-xs hover:bg-muted dark:hover:bg-[#262726] active:bg-muted/70 dark:active:bg-[#262726]/70 transition-colors focus:outline-none focus:ring-1 focus:ring-primary w-8 h-8 sm:w-auto sm:h-auto"
+            className="flex items-center justify-center gap-1 px-1.5 sm:px-2 py-1.5 rounded text-xs hover:bg-muted dark:hover:bg-[#262726] active:bg-muted/70 dark:active:bg-[#262726]/70 transition-colors focus:outline-none focus:ring-1 focus:ring-primary"
             title="Download file"
             aria-label="Download file"
           >
-            <Download className="size-4 sm:size-3.5 flex-shrink-0" />
-            <span className="hidden lg:inline text-[11px] whitespace-nowrap">Download</span>
+            <Download className="size-3.5 sm:size-3.5 flex-shrink-0" />
+            <span className="hidden lg:inline text-[10px] sm:text-[11px] whitespace-nowrap">Download</span>
           </button>
         </div>
       </div>
 
-            {/* Monaco Editor - editable with syntax highlighting */}
+            {/* Monaco Editor or Markdown Preview - based on file type and view mode */}
             <div 
               className="flex-1 bg-white dark:bg-[#1D1D1D]" 
               style={{ 
@@ -663,24 +745,31 @@ function CodeViewer({
                 width: '100%',
               }}
             >
-          <Editor
-            height="100%"
-            language={selectedFile.language || 'text'}
-            value={editorContent}
-            onChange={(value) => setEditorContent(value || '')}
-            theme={codeTheme === themes.vsDark ? 'vs-dark' : 'light'}
-            options={{
-              fontSize: 13,
-              lineHeight: 20,
-              fontFamily: 'var(--font-geist-mono), "Geist Mono", monospace',
-              minimap: { enabled: false },
-              scrollBeyondLastLine: false,
-              wordWrap: 'on',
-              automaticLayout: true,
-              tabSize: 2,
-              insertSpaces: true,
-            }}
-          />
+          {/* Requirements: 5.1, 5.5, 5.6 - Show markdown preview or raw editor */}
+          {isMarkdownFile && markdownViewMode === 'preview' ? (
+            <div className="h-full overflow-auto p-4 sm:p-6">
+              <MarkdownPreview content={editorContent} />
+            </div>
+          ) : (
+            <Editor
+              height="100%"
+              language={selectedFile.language || 'text'}
+              value={editorContent}
+              onChange={(value) => setEditorContent(value || '')}
+              theme={codeTheme === themes.vsDark ? 'vs-dark' : 'light'}
+              options={{
+                fontSize: 13,
+                lineHeight: 20,
+                fontFamily: 'var(--font-geist-mono), "Geist Mono", monospace',
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                wordWrap: 'on',
+                automaticLayout: true,
+                tabSize: 2,
+                insertSpaces: true,
+              }}
+            />
+          )}
       </div>
     </div>
   );
@@ -692,15 +781,128 @@ export function ProjectPageClient({
   project 
 }: ProjectPageClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { theme, resolvedTheme } = useTheme();
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["src"]));
   const [selected, setSelected] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null); // Track user message during generation
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isMobileExplorerOpen, setIsMobileExplorerOpen] = useState(false);
   const [mobileView, setMobileView] = useState<'chat' | 'code'>('chat');
   const [isChatPanelCollapsed, setIsChatPanelCollapsed] = useState(false);
+  
+  // GitHub clone hook for showing progress in chat
+  const gitHubClone = useGitHubClone();
+  const [hasStartedClone, setHasStartedClone] = useState(false);
+  
+  // Track if we've started generation (use ref to survive strict mode double-render)
+  const [hasStartedGeneration, setHasStartedGeneration] = useState(false);
+  const generationStartedRef = useRef(false);
+  
+  // Check if we should start cloning (from ?clone=true query param)
+  // Only clone if project is not already completed
+  useEffect(() => {
+    const shouldClone = searchParams?.get('clone') === 'true';
+    const isProjectCompleted = project.status === 'completed' || project.status === 'deployed';
+    
+    // Remove the query param immediately to prevent re-clone on reload
+    if (shouldClone) {
+      router.replace(`/projects/${projectId}`, { scroll: false });
+    }
+    
+    // Only start clone if:
+    // 1. Clone param was present
+    // 2. Haven't started clone yet
+    // 3. Clone hook is idle
+    // 4. Project is NOT already completed (prevents re-clone on reload)
+    if (shouldClone && !hasStartedClone && gitHubClone.status === 'idle' && !isProjectCompleted) {
+      setHasStartedClone(true);
+      gitHubClone.clone(projectId);
+    }
+  }, [searchParams, hasStartedClone, gitHubClone, projectId, router, project.status]);
+
+  // Check if we should start code generation (from ?generate=true query param)
+  // This is for normal prompts (not GitHub imports)
+  useEffect(() => {
+    const shouldGenerate = searchParams?.get('generate') === 'true';
+    const isProjectCompleted = project.status === 'completed' || project.status === 'deployed';
+    
+    // Remove the query param immediately to prevent re-generation on reload
+    if (shouldGenerate) {
+      router.replace(`/projects/${projectId}`, { scroll: false });
+    }
+    
+    // Only start generation if:
+    // 1. Generate param was present
+    // 2. Haven't started generation yet (check both state and ref for strict mode)
+    // 3. Project is NOT already completed
+    // 4. Project has a prompt to generate from (use prompt field, not description which is truncated)
+    if (shouldGenerate && !hasStartedGeneration && !generationStartedRef.current && !isProjectCompleted && project.prompt) {
+      generationStartedRef.current = true; // Prevent strict mode double-call
+      setHasStartedGeneration(true);
+      
+      // Call the /api/generate endpoint with SSE streaming
+      const startGeneration = async () => {
+        try {
+          const response = await fetch('/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              projectId,
+              userMessage: project.prompt, // Use the full prompt (not description which is truncated to 200 chars)
+            }),
+          });
+          
+          if (!response.ok) {
+            console.error('Generation failed:', response.statusText);
+            return;
+          }
+          
+          // Handle SSE stream
+          const reader = response.body?.getReader();
+          const decoder = new TextDecoder();
+          
+          if (reader) {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              
+              const chunk = decoder.decode(value);
+              const lines = chunk.split('\n');
+              
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  try {
+                    const event = JSON.parse(line.slice(6));
+                    console.log('[Generate] Event:', event.type, event);
+                    
+                    // Refresh data when generation completes
+                    if (event.type === 'complete') {
+                      // Requirements: 9.1, 9.2, 9.3, 9.4 - No page reload on complete
+                      // Update state in-place via React instead of reloading
+                      console.log('[Generate] Generation complete, refetching data...');
+                      // Refetch will happen via the useEffect hooks that watch for completion
+                    }
+                  } catch (e) {
+                    // Ignore parse errors for incomplete chunks
+                  }
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Generation error:', error);
+        }
+      };
+      
+      startGeneration();
+    }
+  }, [searchParams, hasStartedGeneration, projectId, router, project.status, project.prompt]);
+
+  // Track previous clone status to detect completion
+  const wasCloning = useRef(false);
 
   // Check authentication
   useEffect(() => {
@@ -746,6 +948,8 @@ export function ProjectPageClient({
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [manuallyCreatedFiles, setManuallyCreatedFiles] = useState<Record<string, string>>({});
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; fileId: string } | null>(null);
+  const [activeSection, setActiveSection] = useState<string>('chat');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const versionDropdownRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -781,6 +985,10 @@ export function ProjectPageClient({
 
   // Use streaming hook for real-time updates
   const streamState = useGenerationStream(projectId);
+  
+  // Use new code generation hook for direct SSE streaming (v0-style)
+  // Requirements: 10.1 - React hook that handles SSE streaming
+  const codeGeneration = useCodeGeneration();
   
   // Track when stream completed to limit refetch duration
   const [completionTime, setCompletionTime] = useState<number | null>(null);
@@ -862,25 +1070,76 @@ export function ProjectPageClient({
     }
   );
 
-  // Refetch versions and messages when streaming completes to get the newly created version
+  // Fetch latest file snapshot (v0-style architecture)
+  // Requirements: 18.1 - Display file tree from latest file_snapshot
+  const { data: fileSnapshot, refetch: refetchSnapshot } = api.projects.getLatestSnapshot.useQuery(
+    { projectId },
+    {
+      refetchOnWindowFocus: true,
+      // Poll when streaming to catch new snapshots
+      refetchInterval: (streamState.isStreaming || codeGeneration.isGenerating) ? 3000 : false,
+    }
+  );
+
+  // Refetch versions, messages, and snapshots when streaming completes
   const wasStreaming = useRef(false);
+  const wasCodeGenerating = useRef(false);
   useEffect(() => {
+    // Handle legacy streamState completion
     if (wasStreaming.current && !streamState.isStreaming && streamState.status === 'complete') {
-      console.log('Streaming completed, refetching versions and messages...');
+      console.log('Streaming completed, refetching versions, messages, and snapshots...');
       // Refetch immediately, then again after 500ms and 1500ms to catch delayed DB writes
       refetchVersions();
       refetch(); // Refetch messages to get updated version_id links
+      refetchSnapshot(); // Refetch file snapshot
       setTimeout(() => {
         refetchVersions();
         refetch();
+        refetchSnapshot();
       }, 500);
       setTimeout(() => {
         refetchVersions();
         refetch();
+        refetchSnapshot();
       }, 1500);
     }
     wasStreaming.current = streamState.isStreaming;
-  }, [streamState.isStreaming, streamState.status, refetchVersions, refetch]);
+    
+    // Handle codeGeneration hook completion (v0-style)
+    if (wasCodeGenerating.current && !codeGeneration.isGenerating && codeGeneration.status === 'complete') {
+      console.log('Code generation completed, refetching snapshots...');
+      refetchSnapshot();
+      refetch();
+      setTimeout(() => {
+        refetchSnapshot();
+        refetch();
+      }, 500);
+    }
+    wasCodeGenerating.current = codeGeneration.isGenerating;
+    
+    // Handle GitHub clone completion
+    if (wasCloning.current && gitHubClone.status === 'complete') {
+      console.log('Clone completed, refetching messages, project, versions, and snapshots...');
+      // Refetch immediately, then again after delays to catch DB writes
+      refetch();
+      refetchProject();
+      refetchSnapshot();
+      refetchVersions(); // Also refetch versions to show the initial clone version
+      setTimeout(() => {
+        refetch();
+        refetchProject();
+        refetchSnapshot();
+        refetchVersions();
+      }, 500);
+      setTimeout(() => {
+        refetch();
+        refetchProject();
+        refetchSnapshot();
+        refetchVersions();
+      }, 1500);
+    }
+    wasCloning.current = gitHubClone.isCloning;
+  }, [streamState.isStreaming, streamState.status, refetchVersions, refetch, refetchSnapshot, codeGeneration.isGenerating, codeGeneration.status, gitHubClone.status, gitHubClone.isCloning, refetchProject]);
 
   // State for selected version - MUST be declared before useMemos that use it
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
@@ -932,10 +1191,118 @@ export function ProjectPageClient({
   // Combine streaming events with regular messages for display
   // Memoize with explicit dependencies to prevent unnecessary recalculations
   // Optimized for instant display - no debouncing
+  // Requirements: 10.2, 10.3, 10.4, 10.5 - Hook state updates for SSE events
   const streamingMessages = useMemo(() => {
     const msgs: any[] = [];
     const fileStatusMap = new Map<string, { generating: any; complete: any }>();
     const validationStatus: { start: any; complete: any } = { start: null, complete: null };
+    
+    // Show GitHub clone progress in chat ONLY when actively cloning
+    // Don't show if status is 'error' after clone failed - let user continue with prompts
+    const isActivelyCloning = gitHubClone.isCloning && 
+      gitHubClone.status !== 'idle' && 
+      gitHubClone.status !== 'complete' && 
+      gitHubClone.status !== 'error';
+    
+    if (isActivelyCloning) {
+      // Show clone status message
+      const getCloneIcon = () => {
+        switch (gitHubClone.status) {
+          case 'cloning': return 'generating';
+          case 'installing': return 'processing';
+          case 'starting_preview': return 'processing';
+          case 'creating_snapshot': return 'processing';
+          case 'error': return 'error';
+          default: return 'generating';
+        }
+      };
+      
+      msgs.push({
+        id: 'github-clone-progress',
+        content: gitHubClone.progress || 'Cloning repository...',
+        role: 'assistant' as const,
+        type: gitHubClone.status === 'error' ? 'error' as const : 'text' as const,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        isStreaming: gitHubClone.status !== 'error',
+        icon: getCloneIcon(),
+        cloneStatus: gitHubClone.status,
+        framework: gitHubClone.framework,
+      });
+      
+      // Show error details if any
+      if (gitHubClone.error) {
+        msgs.push({
+          id: 'github-clone-error',
+          content: gitHubClone.error,
+          role: 'assistant' as const,
+          type: 'error' as const,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          isStreaming: false,
+          icon: 'error',
+        });
+      }
+      
+      return msgs;
+    }
+    
+    // NEW: Show status from useCodeGeneration hook (v0-style direct streaming)
+    // Code streams to file editor, chat shows progress steps with text shimmer
+    // Requirements: 7.6, 11.1-11.6 - Step-by-step progress messages
+    if (codeGeneration.isGenerating) {
+      // Show pending user message FIRST (before assistant response)
+      if (pendingUserMessage) {
+        msgs.push({
+          id: 'pending-user-message',
+          content: pendingUserMessage,
+          role: 'user' as const,
+          type: 'text' as const,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          isStreaming: false,
+        });
+      }
+      
+      // Create progress steps based on current status
+      const fileReadingCount = codeGeneration.fileReadingEvents.filter(e => e.type === 'file:reading').length;
+      const progressSteps = createProgressSteps(
+        codeGeneration.status,
+        codeGeneration.filesModified,
+        fileReadingCount
+      );
+      
+      // Show progress steps as a single assistant message with custom rendering
+      msgs.push({
+        id: 'codegen-progress',
+        content: '', // Content rendered via progressSteps
+        role: 'assistant' as const,
+        type: 'progress' as const,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        isStreaming: true,
+        progressSteps, // Custom field for progress steps
+        status: codeGeneration.status,
+        statusMessage: codeGeneration.statusMessage,
+      });
+      
+      return msgs;
+    }
+    
+    // Show error from codeGeneration hook
+    if (codeGeneration.error) {
+      msgs.push({
+        id: 'codegen-error',
+        content: `Error: ${codeGeneration.error}`,
+        role: 'assistant' as const,
+        type: 'error' as const,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        isStreaming: false,
+        icon: 'error',
+      });
+      return msgs;
+    }
     
     // Show immediate feedback even with no events yet
     if (streamState.isStreaming && streamState.events.length === 0 && streamState.status === 'generating') {
@@ -988,6 +1355,17 @@ export function ProjectPageClient({
           existing.complete = event;
         } else {
           stepStatusMap.set(stepKey, { start: null, complete: event });
+        }
+      } else if (event.type === 'server:restarting') {
+        // Server restart started - show in steps
+        stepStatusMap.set('Server Restart', { start: event, complete: null });
+      } else if (event.type === 'server:ready') {
+        // Server is ready - mark step complete and trigger preview refresh
+        const existing = stepStatusMap.get('Server Restart');
+        if (existing) {
+          existing.complete = event;
+        } else {
+          stepStatusMap.set('Server Restart', { start: null, complete: event });
         }
       }
     });
@@ -1076,7 +1454,7 @@ export function ProjectPageClient({
     });
     
     return msgs;
-  }, [streamState.events, streamState.isStreaming, streamState.status]); // Added dependencies for instant updates
+  }, [streamState.events, streamState.isStreaming, streamState.status, codeGeneration.isGenerating, codeGeneration.status, codeGeneration.statusMessage, codeGeneration.output, codeGeneration.filesModified, codeGeneration.fileReadingEvents, codeGeneration.error, gitHubClone.isCloning, gitHubClone.status, gitHubClone.progress, gitHubClone.error, gitHubClone.framework, pendingUserMessage]); // Added dependencies for instant updates
 
   // Convert persisted generation events from database into message format
   const persistedEventMessages = useMemo(() => {
@@ -1107,36 +1485,62 @@ export function ProjectPageClient({
     // If we have streaming events OR persisted events, filter out database messages
     const hasGenerationEvents = streamState.isStreaming || streamState.events.length > 0 || persistedEventMessages.length > 0;
     
-    const filteredDbMessages = hasGenerationEvents
-      ? sortedMessages.filter((dbMsg) => {
-          // Always keep user messages and errors
-          if (dbMsg.role === 'user') return true;
-          if (dbMsg.type === 'error') return true;
-          
-          // Filter out assistant messages that duplicate generation events
-          if (dbMsg.role === 'assistant') {
-            // Filter out messages that look like completion summaries
-            if (dbMsg.content.includes('API Generation Complete') ||
-                dbMsg.content.includes('Generated Files:') ||
-                dbMsg.content.includes('Validation:') ||
-                dbMsg.content.toLowerCase().includes('this api allows')) {
-              return false; // Skip these, we show them via generation events
-            }
-          }
-          
-          return true;
-        })
-      : sortedMessages;
+    // Add clone user message if cloning is actively in progress (not complete or idle)
+    // Once clone completes, the DB messages will be fetched and shown instead
+    const isActivelyCloning = gitHubClone.isCloning && 
+      gitHubClone.status !== 'idle' && 
+      gitHubClone.status !== 'complete' && 
+      gitHubClone.status !== 'error';
+    
+    const cloneUserMessage = isActivelyCloning && project.name ? {
+      id: 'clone-user-message',
+      content: `Clone: ${project.name}`,
+      role: 'user' as const,
+      type: 'text' as const,
+      created_at: new Date(Date.now() - 1000).toISOString(), // Slightly before clone progress
+      updated_at: new Date(Date.now() - 1000).toISOString(),
+    } : null;
+    
+    // Filter DB messages to avoid duplicates with streaming/pending messages
+    const filteredDbMessages = sortedMessages.filter((dbMsg) => {
+      // If we have a pending user message being shown in streaming, filter out
+      // the matching DB message to prevent duplicate display
+      if (pendingUserMessage && dbMsg.role === 'user' && dbMsg.content === pendingUserMessage) {
+        return false; // Skip - already shown as pending message
+      }
+      
+      // During active generation, filter out assistant messages that duplicate events
+      if (hasGenerationEvents && dbMsg.role === 'assistant') {
+        // Filter out messages that look like completion summaries
+        if (dbMsg.content.includes('API Generation Complete') ||
+            dbMsg.content.includes('Generated Files:') ||
+            dbMsg.content.includes('Validation:') ||
+            dbMsg.content.toLowerCase().includes('this api allows')) {
+          return false; // Skip these, we show them via generation events
+        }
+      }
+      
+      return true;
+    });
 
     // Combine database messages, streaming messages, and persisted generation events
-    const combined = [...filteredDbMessages, ...streamingMessages, ...persistedEventMessages];
+    const combined = [
+      ...(cloneUserMessage ? [cloneUserMessage] : []),
+      ...filteredDbMessages, 
+      ...streamingMessages, 
+      ...persistedEventMessages
+    ];
     
     // Sort by timestamp
     combined.sort((a, b) => 
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
 
-    // Inject version cards after the messages that created them
+    // Sanitize messages to remove duplicated prompts from assistant responses
+    // Requirements: 1.5 - Strip duplicated prompts from legacy data display
+    const sanitizedCombined = sanitizeMessages(combined);
+
+    // Inject version cards after the ASSISTANT messages that created them
     // Only show COMPLETED versions (not generating ones) to avoid premature display
     const completedVersions = versions.filter(v => v.status === 'complete');
     
@@ -1144,38 +1548,41 @@ export function ProjectPageClient({
       const messagesWithVersions: any[] = [];
       const addedVersionIds = new Set<string>();
       
-      combined.forEach((msg, index) => {
+      sanitizedCombined.forEach((msg, index) => {
         messagesWithVersions.push(msg);
         
         // After each message, check if there's a version that should appear
-        // Either linked by version_id or created around the same time
+        // Only add version card after ASSISTANT messages (not user messages)
         if ('id' in msg) {
-          // Method 1: Direct link via version_id (most reliable)
-          const directLinkedVersion = completedVersions.find(v => 
-            'version_id' in msg && msg.version_id === v.id
-          );
-          
-          if (directLinkedVersion && !addedVersionIds.has(directLinkedVersion.id)) {
-            messagesWithVersions.push({
-              id: `version-card-${directLinkedVersion.id}`,
-              role: 'version' as const,
-              type: 'version-card' as const,
-              created_at: directLinkedVersion.created_at,
-              updated_at: directLinkedVersion.updated_at,
-              versionData: directLinkedVersion,
-            });
-            addedVersionIds.add(directLinkedVersion.id);
-          } else if (msg.role === 'user') {
-            // Method 2: Time-based matching for versions without direct links
+          // Method 1: Direct link via version_id on ASSISTANT message (most reliable)
+          // Version card should appear after the assistant's response, not the user's prompt
+          if (msg.role === 'assistant' && 'version_id' in msg && msg.version_id) {
+            const directLinkedVersion = completedVersions.find(v => v.id === msg.version_id);
+            
+            if (directLinkedVersion && !addedVersionIds.has(directLinkedVersion.id)) {
+              messagesWithVersions.push({
+                id: `version-card-${directLinkedVersion.id}`,
+                role: 'version' as const,
+                type: 'version-card' as const,
+                created_at: directLinkedVersion.created_at,
+                updated_at: directLinkedVersion.updated_at,
+                versionData: directLinkedVersion,
+              });
+              addedVersionIds.add(directLinkedVersion.id);
+            }
+          } 
+          // Method 2: Time-based matching for ASSISTANT messages without direct links (legacy)
+          // Version cards should appear after assistant messages, not user messages
+          else if (msg.role === 'assistant' && !('version_id' in msg && msg.version_id)) {
             const timeBasedVersions = completedVersions.filter(v => {
               if (addedVersionIds.has(v.id)) return false;
               const msgTime = new Date(msg.created_at).getTime();
               const versionTime = new Date(v.created_at).getTime();
-              // Version should be created within 10 seconds after the message
-              return versionTime >= msgTime && versionTime - msgTime < 10000;
+              // Version should be created within 60 seconds after the assistant message
+              return versionTime >= msgTime && versionTime - msgTime < 60000;
             });
             
-            // Add time-based matched versions
+            // Add time-based matched versions after assistant message
             timeBasedVersions.forEach(version => {
               messagesWithVersions.push({
                 id: `version-card-${version.id}`,
@@ -1191,7 +1598,7 @@ export function ProjectPageClient({
         }
       });
       
-      // Add any versions that haven't been added yet (orphaned versions)
+      // Add any versions that haven't been added yet (orphaned versions) at the END
       completedVersions.forEach(version => {
         if (!addedVersionIds.has(version.id)) {
           messagesWithVersions.push({
@@ -1205,16 +1612,54 @@ export function ProjectPageClient({
         }
       });
       
-      // Re-sort to ensure proper chronological order
-      messagesWithVersions.sort((a, b) => 
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-      );
-      
+      // DON'T re-sort - version cards should stay after their associated messages
+      // The insertion order is correct (version card after assistant message)
       return messagesWithVersions;
     }
     
-    return combined;
-  }, [sortedMessages, streamingMessages, persistedEventMessages, versions, streamState.isStreaming, streamState.events.length]);
+    return sanitizedCombined;
+  }, [sortedMessages, streamingMessages, persistedEventMessages, versions, streamState.isStreaming, streamState.events.length, gitHubClone.isCloning, gitHubClone.status, project.name, pendingUserMessage]);
+
+  // Auto-refresh preview when server:ready event is received
+  useEffect(() => {
+    const serverReadyEvent = streamState.events.find(
+      (event) => event.type === 'server:ready'
+    );
+    
+    if (serverReadyEvent) {
+      console.log('[AUTO-REFRESH] Server ready event received, refreshing preview...');
+      // Small delay to ensure server is fully ready
+      const timer = setTimeout(() => {
+        setRefreshKey(prev => prev + 1);
+        console.log('[AUTO-REFRESH] Preview refreshed!');
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [streamState.events]);
+
+  // Auto-refresh preview when files are modified via codeGeneration hook (v0-style)
+  // Requirements: 5.5 - Ensure iframe refreshes when files are written
+  const prevFilesModifiedCount = useRef(0);
+  useEffect(() => {
+    // Only trigger refresh when new files are modified
+    if (codeGeneration.filesModified.length > prevFilesModifiedCount.current) {
+      console.log('[AUTO-REFRESH] Files modified via codeGeneration, refreshing preview...');
+      // Small delay to ensure files are written to Daytona
+      const timer = setTimeout(() => {
+        setRefreshKey(prev => prev + 1);
+        console.log('[AUTO-REFRESH] Preview refreshed after file:complete!');
+      }, 1500);
+      
+      prevFilesModifiedCount.current = codeGeneration.filesModified.length;
+      return () => clearTimeout(timer);
+    }
+    
+    // Reset counter when generation completes
+    if (codeGeneration.status === 'complete' || codeGeneration.status === 'idle') {
+      prevFilesModifiedCount.current = 0;
+    }
+  }, [codeGeneration.filesModified, codeGeneration.status]);
 
   // Extract project files for GitHub push
   const projectFiles = useMemo(() => {
@@ -1238,28 +1683,52 @@ export function ProjectPageClient({
     return {};
   }, [selectedVersionId, versions, streamState.generatedFiles, streamState.isStreaming]);
 
-  // Build file tree from selected version or streaming files
+  // Build file tree from file_snapshots, versions, or streaming files
+  // Requirements: 18.1, 18.2 - Display file tree from file_snapshots.files_jsonb
   const fileTree = useMemo(() => {
     let baseFiles: Record<string, any> = {};
     
-    // Priority 1: Use streaming files only while currently generating
-    if (streamState.isStreaming && streamState.generatedFiles.length > 0) {
+    // Priority 1: Use streaming files from codeGeneration hook (v0-style)
+    // Also merge with streamState.generatedFiles which has actual file content
+    if (codeGeneration.isGenerating && (codeGeneration.filesModified.length > 0 || streamState.generatedFiles.length > 0)) {
+      // Start with existing snapshot files
+      if (fileSnapshot?.files_jsonb) {
+        Object.entries(fileSnapshot.files_jsonb).forEach(([path, fileData]) => {
+          baseFiles[path] = fileData.content;
+        });
+      }
+      // Merge with streaming files that have content (from useGenerationStream hook)
+      // This enables real-time file tree updates during generation
+      streamState.generatedFiles.forEach(file => {
+        if (file.content) {
+          baseFiles[file.filename] = file.content;
+        }
+      });
+    }
+    // Priority 2: Use streaming files from legacy streamState (when not using codeGeneration)
+    else if (streamState.isStreaming && streamState.generatedFiles.length > 0) {
       streamState.generatedFiles.forEach(file => {
         baseFiles[file.filename] = file.content;
       });
     }
-    // Priority 2: Load from selected version if available
+    // Priority 3: Load from file_snapshots (v0-style architecture)
+    else if (fileSnapshot?.files_jsonb && Object.keys(fileSnapshot.files_jsonb).length > 0) {
+      Object.entries(fileSnapshot.files_jsonb).forEach(([path, fileData]) => {
+        baseFiles[path] = fileData.content;
+      });
+    }
+    // Priority 4: Load from selected version if available
     else if (selectedVersionId && versions.length > 0) {
       const selectedVersion = versions.find(v => v.id === selectedVersionId);
       if (selectedVersion?.files) {
         baseFiles = { ...selectedVersion.files };
       }
     }
-    // Priority 3: If streaming is active but no files yet, show empty tree
-    else if (streamState.isStreaming) {
+    // Priority 5: If streaming is active but no files yet, show empty tree
+    else if (streamState.isStreaming || codeGeneration.isGenerating) {
       baseFiles = {};
     }
-    // Priority 4: Use project messages
+    // Priority 6: Use project messages (legacy fallback)
     else {
       const tree = generateFileTreeFromProject(currentProject, sortedMessages, streamState.generatedFiles);
       // Convert tree back to flat files for merging
@@ -1282,7 +1751,7 @@ export function ProjectPageClient({
     const allFiles = { ...baseFiles, ...manuallyCreatedFiles };
     
     return buildTreeFromPaths(allFiles);
-  }, [selectedVersionId, versions, streamState.generatedFiles, streamState.isStreaming, currentProject, sortedMessages, manuallyCreatedFiles]);
+  }, [selectedVersionId, versions, streamState.generatedFiles, streamState.isStreaming, currentProject, sortedMessages, manuallyCreatedFiles, fileSnapshot, codeGeneration.isGenerating, codeGeneration.filesModified]);
 
   // When switching versions, ensure the selected file exists in that version.
   // If not, select the first file of the chosen version.
@@ -1306,6 +1775,47 @@ export function ProjectPageClient({
       setSelected(streamState.currentFile);
     }
   }, [streamState.isStreaming, streamState.currentFile]);
+
+  // Auto-open modified files during generation (v0-style)
+  // Requirements: 18.5, 19.3 - Auto-open modified files during generation
+  const prevModifiedFilesRef = useRef<string[]>([]);
+  useEffect(() => {
+    if (codeGeneration.isGenerating && codeGeneration.filesModified.length > 0) {
+      // Check if there are new modified files
+      const newFiles = codeGeneration.filesModified.filter(
+        f => !prevModifiedFilesRef.current.includes(f)
+      );
+      
+      if (newFiles.length > 0) {
+        // Select the most recently modified file
+        const latestFile = newFiles[newFiles.length - 1];
+        setSelected(latestFile);
+        
+        // Expand parent folders for the selected file
+        const pathParts = latestFile.split('/');
+        if (pathParts.length > 1) {
+          const newExpanded = new Set(expanded);
+          for (let i = 0; i < pathParts.length - 1; i++) {
+            const folderPath = pathParts.slice(0, i + 1).join('/');
+            newExpanded.add(folderPath);
+          }
+          setExpanded(newExpanded);
+        }
+        
+        // Switch to code view if not already there
+        if (viewMode !== 'code') {
+          setViewMode('code');
+        }
+      }
+      
+      prevModifiedFilesRef.current = [...codeGeneration.filesModified];
+    }
+    
+    // Reset when generation completes
+    if (!codeGeneration.isGenerating && codeGeneration.status === 'idle') {
+      prevModifiedFilesRef.current = [];
+    }
+  }, [codeGeneration.isGenerating, codeGeneration.filesModified, codeGeneration.status, expanded, viewMode]);
 
   // Auto-select default file when switching to code mode
   useEffect(() => {
@@ -1450,56 +1960,38 @@ export function ProjectPageClient({
   const select = (id: string) => setSelected(id);
 
   const send = async () => {
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || codeGeneration.isGenerating) return;
     
     setIsLoading(true);
     const messageContent = input.trim();
     setInput(""); // Clear input immediately for better UX
+    setPendingUserMessage(messageContent); // Show user message immediately in chat
     
     try {
-      // 1. Save user message
-      const message = await createMessage.mutateAsync({
-        content: messageContent,
-        role: 'user',
-        type: 'text',
-        project_id: projectId,
-      });
+      // NOTE: Don't save user message here - the generate route saves both user and assistant messages
+      // This prevents duplicate messages in the chat
       
-      // Refetch messages to show user's message
-      refetch();
+      // Use direct SSE streaming via useCodeGeneration hook
+      // Requirements: 10.1 - Hook initiates fetch request to streaming API
+      await codeGeneration.generate(messageContent, projectId, 'code');
       
-      // 2. Classify command (with current file list for context)
-      const currentFiles = selectedVersionId 
-        ? Object.keys(versions.find(v => v.id === selectedVersionId)?.files || {})
-        : [];
+      // Clear pending message IMMEDIATELY after generation completes
+      // This prevents showing duplicate when DB messages are refetched
+      setPendingUserMessage(null);
+      setIsLoading(false);
       
-      const classification = await classifyCommand.mutateAsync({
-        prompt: messageContent,
-        projectId,
-        currentFiles,
-      });
-      
-      console.log('Command classified:', classification);
-      
-      // 3. Trigger iteration workflow
-      await triggerIteration.mutateAsync({
-        projectId,
-        messageId: message.id,
-        prompt: messageContent,
-        commandType: classification.type,
-        shouldCreateNewVersion: classification.shouldCreateNewVersion,
-        parentVersionId: selectedVersionId || undefined,
-      });
-      
-      // Refetch versions to get the new one
+      // Refetch data after a short delay to allow DB writes to complete
       setTimeout(() => {
         refetchVersions();
-      }, 1000);
+        refetch();
+        refetchProject();
+        refetchSnapshot();
+      }, 500);
       
-      setIsLoading(false);
     } catch (error) {
       console.error("Error processing message:", error);
       setIsLoading(false);
+      setPendingUserMessage(null);
       // Re-add the message to input on error
       setInput(messageContent);
     }
@@ -1627,6 +2119,7 @@ export function ProjectPageClient({
         const response = await fetch('/api/sandbox/file/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({
             sandboxId: currentProject?.metadata?.sandboxId,
             projectId,
@@ -1673,6 +2166,7 @@ export function ProjectPageClient({
         const response = await fetch('/api/sandbox/file/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({
             sandboxId: currentProject?.metadata?.sandboxId,
             projectId,
@@ -1760,6 +2254,7 @@ export function ProjectPageClient({
         await fetch('/api/sandbox/file/delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({
             sandboxId: currentProject.metadata.sandboxId,
             projectId,
@@ -1787,41 +2282,124 @@ export function ProjectPageClient({
     );
   }
 
+  const handleSidebarToggle = () => {
+    setIsSidebarOpen(prev => !prev);
+  };
+
+  const handleSidebarNavigate = (section: string) => {
+    console.log('Navigating to:', section);
+    setActiveSection(section);
+    
+    // Handle navigation based on section
+    switch (section) {
+      case 'chat':
+        setMobileView('chat');
+        setIsChatPanelCollapsed(false);
+        break;
+      case 'code':
+        setViewMode('code');
+        setMobileView('code');
+        break;
+      case 'files':
+        setViewMode('code');
+        setMobileView('code');
+        setIsMobileExplorerOpen(true);
+        break;
+      case 'terminal':
+        setViewMode('preview');
+        setShowTerminal(true);
+        setMobileView('code');
+        break;
+      case 'versions':
+        setIsVersionDropdownOpen(true);
+        setMobileView('code');
+        break;
+      case 'github':
+        // GitHub integration - trigger GitHub button in header
+        console.log('GitHub integration clicked');
+        // Try GitHub setup button first (for new projects)
+        const githubSetupButton = document.getElementById('github-setup-button');
+        if (githubSetupButton) {
+          githubSetupButton.click();
+        } else {
+          // Try GitHub branch button (for cloned projects)
+          const githubBranchButton = document.getElementById('github-branch-button');
+          if (githubBranchButton) {
+            githubBranchButton.click();
+          }
+        }
+        setMobileView('code');
+        break;
+      case 'settings':
+        // Settings - could open a modal or navigate to settings page
+        console.log('Settings clicked');
+        // For now, just log - you can implement settings modal later
+        break;
+      default:
+        break;
+    }
+  };
+
   return (
-    <div className="h-screen bg-background flex flex-col overflow-hidden">
-      <SimpleHeader 
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        project={currentProject}
-        projectFiles={projectFiles}
+    <>
+      {/* V0-inspired Sidebar - rendered at root level */}
+      <V0Sidebar 
+        projectId={projectId}
+        projectName={currentProject?.name}
+        messages={sortedMessages}
+        onNavigate={handleSidebarNavigate}
+        activeSection={activeSection}
+        project={{
+          id: currentProject?.id || projectId,
+          framework: currentProject?.framework,
+          status: currentProject?.status,
+          deploy_url: currentProject?.deploy_url,
+          swagger_url: currentProject?.swagger_url,
+          sandbox_url: 'sandbox_url' in currentProject ? currentProject.sandbox_url : undefined,
+        }}
+        onTerminalToggle={() => setShowTerminal(!showTerminal)}
+        onPreviewToggle={() => setViewMode(viewMode === 'preview' ? 'code' : 'preview')}
+        showTerminal={showTerminal}
+        isOpen={isSidebarOpen}
+        onOpenChange={setIsSidebarOpen}
       />
+      
+      <div className="h-screen bg-background flex flex-col overflow-hidden relative">
+        <SimpleHeader 
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          project={currentProject}
+          projectFiles={projectFiles}
+          isSidebarOpen={isSidebarOpen}
+          onSidebarToggle={handleSidebarToggle}
+        />
 
       {/* Mobile view toggle buttons */}
-      <div className="sm:hidden flex border-b border-border dark:border-[#333433] bg-white dark:bg-[#0E100F]">
+      <div className="sm:hidden flex border-b border-border dark:border-[#333433] bg-white dark:bg-[#0E100F] sticky top-[50px] z-30">
         <button
           onClick={() => setMobileView('chat')}
-          className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+          className={`flex-1 px-3 py-2.5 text-sm font-medium transition-colors ${
             mobileView === 'chat'
               ? 'text-foreground border-b-2 border-primary bg-muted/30'
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          <div className="flex items-center justify-center gap-2">
+          <div className="flex items-center justify-center gap-1.5">
             <MessageSquare className="size-4" />
-            <span>Chat</span>
+            <span className="text-xs sm:text-sm">Chat</span>
           </div>
         </button>
         <button
           onClick={() => setMobileView('code')}
-          className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+          className={`flex-1 px-3 py-2.5 text-sm font-medium transition-colors ${
             mobileView === 'code'
               ? 'text-foreground border-b-2 border-primary bg-muted/30'
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          <div className="flex items-center justify-center gap-2">
+          <div className="flex items-center justify-center gap-1.5">
             <FileCode className="size-4" />
-            <span>Code</span>
+            <span className="text-xs sm:text-sm">Code</span>
           </div>
         </button>
       </div>
@@ -1831,10 +2409,11 @@ export function ProjectPageClient({
         <motion.section 
           initial={false}
           animate={isMobileScreen ? {} : { 
-            // Only apply motion animations on desktop
-            width: isChatPanelCollapsed ? 0 : 'auto',
-            minWidth: isChatPanelCollapsed ? 0 : '256px',
-            maxWidth: isChatPanelCollapsed ? 0 : '400px',
+            // Only apply motion animations on desktop - use fixed width for consistency
+            // Requirements: 10.1, 10.2, 10.3, 10.4, 10.5 - Wider chat panel (380px min, up to 45% viewport)
+            width: isChatPanelCollapsed ? 0 : '380px',
+            minWidth: isChatPanelCollapsed ? 0 : '380px',
+            maxWidth: isChatPanelCollapsed ? 0 : '45vw',
             opacity: isChatPanelCollapsed ? 0 : 1
           }}
           transition={{ 
@@ -1854,7 +2433,7 @@ export function ProjectPageClient({
           className={`flex-col h-full bg-[#FAFAFA] dark:bg-[#0E100F] ${
             isChatPanelCollapsed 
               ? 'overflow-hidden' 
-              : 'w-full sm:w-64 md:w-72 lg:w-80 xl:w-96 overflow-hidden'
+              : 'w-full sm:w-[380px] sm:min-w-[380px] sm:max-w-[45vw] overflow-hidden'
           } ${mobileView === 'chat' ? 'flex flex-1 sm:flex-none' : 'hidden sm:flex'}`}
         >
           
@@ -1896,32 +2475,41 @@ export function ProjectPageClient({
                           </div>
                         )}
                       </div>
+                    ) : message.type === "progress" && 'progressSteps' in message ? (
+                      // Progress steps with text shimmer - Requirements: 7.6, 11.1-11.6
+                      <div className={MESSAGE_STYLES.assistantMessage.container}>
+                        <ProgressStepsRenderer 
+                          steps={message.progressSteps}
+                          showCompleted={true}
+                          animate={true}
+                        />
+                      </div>
                     ) : message.role === "user" ? (
-                      // User message - compact spacing
-                      <div className="flex justify-end mb-1.5">
-                        <div className="rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 bg-[#EBEBEB] dark:bg-[#262626] border border-[#d1d5db] dark:border-[#262626] max-w-[90%]">
-                          <div className="whitespace-pre-wrap break-words leading-[1.5] text-[14px] sm:text-[15px] text-gray-900 dark:text-white font-medium">
+                      // User message - consistent styling (Requirements 2.1, 2.2, 2.3)
+                      <div className={MESSAGE_STYLES.userBubble.container}>
+                        <div className={MESSAGE_STYLES.userBubble.bubble}>
+                          <div className={MESSAGE_STYLES.userBubble.text}>
                             {message.content}
                           </div>
                         </div>
                       </div>
                     ) : (
-                      // AI message - clean modern UI like ChatGPT/Claude with compact spacing
-                      <div className="flex gap-2 sm:gap-3 items-start mb-1.5 pr-2 sm:pr-4">
+                      // AI message - consistent styling (Requirement 2.4)
+                      <div className={MESSAGE_STYLES.assistantMessage.container}>
                         {/* Only show spinner when actively generating, no checkmarks */}
                         {isStreamingMsg && (streamIcon === 'generating' || streamIcon === 'processing') && (
-                          <Loader2 className="size-4 animate-spin text-primary mt-1 flex-shrink-0" />
+                          <Loader2 className={MESSAGE_STYLES.streaming.spinner} />
                         )}
-                        <div className="whitespace-pre-wrap break-words leading-[1.5] text-[14px] sm:text-[15px] flex-1">
+                        <div className={MESSAGE_STYLES.assistantMessage.text}>
                           {isStreamingMsg && (streamIcon === 'generating' || streamIcon === 'processing') ? (
                             <TextShimmer 
                               duration={1.5} 
-                              className="text-[14px] sm:text-[15px] font-normal text-foreground"
+                              className={MESSAGE_STYLES.streaming.shimmer}
                             >
                               {message.content}
                             </TextShimmer>
                           ) : (
-                            <span className="text-foreground dark:text-gray-200">
+                            <span className={MESSAGE_STYLES.assistantMessage.textColor}>
                               {message.content}
                             </span>
                           )}
@@ -1968,7 +2556,7 @@ export function ProjectPageClient({
                   maxHeight: '120px',
                   height: '32px'
                 }}
-                disabled={isLoading}
+                disabled={isLoading || codeGeneration.isGenerating}
                 rows={1}
                 ref={textareaRef}
               />
@@ -2013,14 +2601,14 @@ export function ProjectPageClient({
 
 
         {/* Code viewer section - conditionally shown on mobile based on mobileView */}
-        <section className={`p-1 sm:p-2 min-h-0 relative bg-white dark:bg-[#0E100F] sm:min-w-0 flex-col ${
-          mobileView === 'code' ? 'flex flex-1' : 'hidden sm:flex sm:flex-1'
+        <section className={`p-1 sm:p-2 min-h-0 relative bg-white dark:bg-[#0E100F] flex-col ${
+          mobileView === 'code' ? 'flex flex-1 w-full' : 'hidden sm:flex sm:flex-1 sm:min-w-0'
         }`}>
           {/* Folder toggle button - only show when explorer is closed AND in code mode */}
           {!isMobileExplorerOpen && viewMode === 'code' && (
             <button
               onClick={() => setIsMobileExplorerOpen(true)}
-              className="sm:hidden absolute top-16 left-4 z-50 p-2 rounded-md bg-white dark:bg-[#1D1D1D] border border-border dark:border-[#333433] text-foreground hover:bg-muted transition-colors shadow-lg"
+              className="sm:hidden absolute top-14 left-3 z-50 p-2 rounded-lg bg-white dark:bg-[#1D1D1D] border border-border dark:border-[#333433] text-foreground hover:bg-muted transition-colors shadow-lg"
               aria-label="Open file explorer"
             >
               <Folder className="size-4" />
@@ -2283,15 +2871,15 @@ export function ProjectPageClient({
             {/* File explorer sidebar - NO header, just files - hidden in preview mode */}
             <aside
               className={`
-                border-r border-border dark:border-[#333433] flex-shrink-0 flex flex-col overflow-hidden
+                border-r border-border dark:border-[#333433] flex-shrink-0 flex flex-col overflow-hidden transition-transform duration-300
                 ${viewMode === 'preview' ? 'hidden' : ''}
                 ${isMobileExplorerOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}
-                sm:relative absolute sm:z-auto z-40 h-full bg-[#FAFAFA] dark:bg-[#1D1D1D]
+                absolute sm:relative z-40 sm:z-auto h-full bg-[#FAFAFA] dark:bg-[#1D1D1D]
               `}
               style={{
-                width: viewMode === 'code' ? 'clamp(144px, 15vw, 208px)' : '0',
-                minWidth: viewMode === 'code' ? 'clamp(144px, 15vw, 208px)' : '0',
-                maxWidth: viewMode === 'code' ? 'clamp(144px, 15vw, 208px)' : '0',
+                width: viewMode === 'code' ? (isMobileScreen ? '75vw' : 'clamp(180px, 18vw, 240px)') : '0',
+                minWidth: viewMode === 'code' ? (isMobileScreen ? '75vw' : 'clamp(180px, 18vw, 240px)') : '0',
+                maxWidth: viewMode === 'code' ? (isMobileScreen ? '75vw' : 'clamp(180px, 18vw, 240px)') : '0',
               }}
             >
               {/* File Explorer Toolbar - VS Code style */}
@@ -2338,6 +2926,22 @@ export function ProjectPageClient({
                 >
                   ×
                 </button>
+                
+                {/* Loading state - Requirements: 8.1, 8.2, 8.7 */}
+                {(codeGeneration.isGenerating || gitHubClone.isCloning) && fileTree.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
+                    <Loader2 className="size-6 animate-spin text-muted-foreground mb-3" />
+                    <TextShimmer 
+                      className="text-sm font-medium"
+                      duration={1.5}
+                    >
+                      {gitHubClone.isCloning ? 'Cloning repository...' : 'Scaffolding project...'}
+                    </TextShimmer>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Files will appear here
+                    </p>
+                  </div>
+                )}
                 
                 {/* Show inline creator at root level if no folder selected */}
                 {creatingNewItem && !creatingNewItem.parentId && (
@@ -2390,14 +2994,16 @@ export function ProjectPageClient({
                       e.preventDefault();
                       setContextMenu({ x: e.clientX, y: e.clientY, fileId });
                     }}
+                    modifiedFiles={codeGeneration.filesModified}
                   />
                 ))}
               </div>
             </aside>
 
+            {/* Mobile backdrop for file explorer */}
             {isMobileExplorerOpen && (
               <div
-                className="sm:hidden absolute inset-0 bg-black/50 z-30"
+                className="sm:hidden fixed inset-0 bg-black/50 z-30"
                 onClick={() => setIsMobileExplorerOpen(false)}
               />
             )}
@@ -2417,6 +3023,7 @@ export function ProjectPageClient({
                     <SandboxPreview 
                       sandboxUrl={
                         ('sandbox_url' in currentProject ? currentProject.sandbox_url : undefined) ||
+                        gitHubClone.sandboxUrl ||
                         currentProject.deploy_url || 
                         ''
                       }
@@ -2426,6 +3033,7 @@ export function ProjectPageClient({
                       hideHeader={true}
                       path={previewPath}
                       showTerminal={showTerminal}
+                      onRefresh={() => setRefreshKey(prev => prev + 1)}
                     />
                   </motion.div>
                 ) : (
@@ -2437,15 +3045,18 @@ export function ProjectPageClient({
                     transition={{ duration: 0.25, ease: "easeInOut" }}
                     className="absolute inset-0"
                   >
-                    {streamState.isStreaming && streamState.generatedFiles.length > 0 ? (
+                    {/* Show StreamingCodeViewer when generating via either hook */}
+                    {(streamState.isStreaming && streamState.generatedFiles.length > 0) || codeGeneration.isGenerating ? (
                       <StreamingCodeViewer
                         files={streamState.generatedFiles}
                         currentFile={streamState.currentFile}
-                        isStreaming={streamState.isStreaming}
+                        isStreaming={streamState.isStreaming || codeGeneration.isGenerating}
                         selectedFile={selected || undefined}
                         versions={versions}
                         selectedVersionId={selectedVersionId}
                         onVersionChange={setSelectedVersionId}
+                        streamingOutput={codeGeneration.output}
+                        streamingStatus={codeGeneration.status}
                       />
                     ) : (
                       <CodeViewer 
@@ -2672,6 +3283,7 @@ export function ProjectPageClient({
               <SandboxPreview 
                 sandboxUrl={
                   ('sandbox_url' in currentProject ? currentProject.sandbox_url : undefined) ||
+                  gitHubClone.sandboxUrl ||
                   currentProject.deploy_url || 
                   ''
                 }
@@ -2711,5 +3323,6 @@ export function ProjectPageClient({
         </div>
       )}
     </div>
+    </>
   );
 }

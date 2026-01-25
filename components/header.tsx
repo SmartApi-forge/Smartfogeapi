@@ -28,7 +28,7 @@ const panels: Record<string, { title: string; items: { icon: React.ReactNode; ti
     {
       title: "Tools",
       items: [
-        { icon: <NotebookText className="size-4 text-muted-foreground group-hover:text-accent-foreground" />, title: "Docs", desc: "API & guides.", href: "#" },
+        { icon: <NotebookText className="size-4 text-muted-foreground group-hover:text-accent-foreground" />, title: "Docs", desc: "API & guides.", href: "/docs" },
         { icon: <Code2 className="size-4 text-muted-foreground group-hover:text-accent-foreground" />, title: "Sandbox", desc: "Experiment quickly.", href: "#" },
       ],
     },

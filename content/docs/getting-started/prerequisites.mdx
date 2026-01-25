@@ -1,0 +1,314 @@
+---
+title: Prerequisites
+description: System requirements and prerequisites for running SmartAPIForge
+category: getting-started
+order: 0
+tags: [prerequisites, requirements, setup]
+lastUpdated: 2024-12-11
+---
+
+# Prerequisites
+
+Before you begin using SmartAPIForge, ensure your development environment meets the following requirements.
+
+## System Requirements
+
+### Operating System
+
+SmartAPIForge supports the following operating systems:
+
+- **macOS** 10.15 (Catalina) or later
+- **Windows** 10/11 with WSL2
+- **Linux** (Ubuntu 20.04+, Debian 11+, or equivalent)
+
+### Hardware Requirements
+
+**Minimum:**
+- 4 GB RAM
+- 2 CPU cores
+- 10 GB available disk space
+
+**Recommended:**
+- 8 GB RAM or more
+- 4 CPU cores or more
+- 20 GB available disk space
+- SSD for better performance
+
+## Required Software
+
+### Node.js
+
+SmartAPIForge requires **Node.js 18.17.0 or higher**.
+
+<Tabs defaultValue="nvm">
+  <TabsList>
+    <TabsTrigger value="nvm">Using NVM (Recommended)</TabsTrigger>
+    <TabsTrigger value="direct">Direct Download</TabsTrigger>
+  </TabsList>
+  
+  <TabsContent value="nvm">
+    Install Node.js using Node Version Manager:
+    
+    ```bash
+    # Install NVM
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+    
+    # Install Node.js 18
+    nvm install 18
+    nvm use 18
+    
+    # Verify installation
+    node --version  # Should show v18.x.x or higher
+    ```
+  </TabsContent>
+  
+  <TabsContent value="direct">
+    Download and install from the official website:
+    
+    1. Visit [nodejs.org](https://nodejs.org/)
+    2. Download the LTS version (18.x or higher)
+    3. Run the installer
+    4. Verify installation:
+    
+    ```bash
+    node --version  # Should show v18.x.x or higher
+    ```
+  </TabsContent>
+</Tabs>
+
+<Callout type="info" title="Why Node.js 18+?">
+  SmartAPIForge uses Next.js 15 and React 19, which require Node.js 18.17.0 or higher for optimal performance and compatibility.
+</Callout>
+
+### Package Manager
+
+You'll need a package manager to install dependencies. We recommend **pnpm** for faster installs and better disk space usage.
+
+<Tabs defaultValue="pnpm">
+  <TabsList>
+    <TabsTrigger value="pnpm">pnpm (Recommended)</TabsTrigger>
+    <TabsTrigger value="npm">npm</TabsTrigger>
+    <TabsTrigger value="yarn">yarn</TabsTrigger>
+  </TabsList>
+  
+  <TabsContent value="pnpm">
+    ```bash
+    # Install pnpm globally
+    npm install -g pnpm
+    
+    # Verify installation
+    pnpm --version  # Should show 8.0.0 or higher
+    ```
+  </TabsContent>
+  
+  <TabsContent value="npm">
+    npm comes bundled with Node.js:
+    
+    ```bash
+    # Verify installation
+    npm --version  # Should show 9.0.0 or higher
+    ```
+  </TabsContent>
+  
+  <TabsContent value="yarn">
+    ```bash
+    # Install Yarn globally
+    npm install -g yarn
+    
+    # Verify installation
+    yarn --version  # Should show 1.22.0 or higher
+    ```
+  </TabsContent>
+</Tabs>
+
+### Git
+
+Git is required for version control and GitHub integration.
+
+```bash
+# Check if Git is installed
+git --version  # Should show 2.40.0 or higher
+
+# Install Git if needed
+# macOS (using Homebrew)
+brew install git
+
+# Ubuntu/Debian
+sudo apt-get install git
+
+# Windows
+# Download from https://git-scm.com/download/win
+```
+
+## Required Accounts
+
+### Supabase Account
+
+SmartAPIForge uses Supabase for authentication and database management.
+
+1. Sign up at [supabase.com](https://supabase.com)
+2. Create a new project
+3. Note your project URL and API keys
+
+<Callout type="success" title="Free Tier Available">
+  Supabase offers a generous free tier that's perfect for development and small projects.
+</Callout>
+
+### OpenAI Account
+
+Required for AI-powered code generation.
+
+1. Sign up at [platform.openai.com](https://platform.openai.com)
+2. Generate an API key
+3. Add credits to your account (minimum $5 recommended)
+
+**Estimated Costs:**
+- Average API generation: $0.02 - $0.05
+- 100 generations: ~$3-5
+
+### E2B Account
+
+Required for secure sandbox execution.
+
+1. Sign up at [e2b.dev](https://e2b.dev)
+2. Get your API key from the dashboard
+3. Note your template ID
+
+**Free Tier:**
+- 100 sandbox hours per month
+- Sufficient for development and testing
+
+### Inngest Account
+
+Required for background job processing.
+
+1. Sign up at [inngest.com](https://inngest.com)
+2. Create a new app
+3. Get your event key and signing key
+
+**Free Tier:**
+- 50,000 function runs per month
+- Perfect for getting started
+
+## Optional Accounts
+
+### GitHub Account
+
+Required only if you want to use GitHub integration features:
+
+- Repository creation
+- Code synchronization
+- Branch management
+- Automated deployments
+
+Sign up at [github.com](https://github.com) if you don't have an account.
+
+### Vercel Account
+
+Required only for one-click deployments:
+
+1. Sign up at [vercel.com](https://vercel.com)
+2. Connect your GitHub account
+3. Get your deployment token
+
+**Free Tier:**
+- Unlimited deployments
+- 100 GB bandwidth per month
+
+## Development Tools (Optional but Recommended)
+
+### Code Editor
+
+We recommend **Visual Studio Code** with the following extensions:
+
+- ESLint
+- Prettier
+- TypeScript and JavaScript Language Features
+- Tailwind CSS IntelliSense
+- GitLens
+
+Download from [code.visualstudio.com](https://code.visualstudio.com)
+
+### Database Client
+
+For inspecting your Supabase database:
+
+- **TablePlus** (macOS/Windows) - [tableplus.com](https://tableplus.com)
+- **DBeaver** (Cross-platform) - [dbeaver.io](https://dbeaver.io)
+- **pgAdmin** (Cross-platform) - [pgadmin.org](https://www.pgadmin.org)
+
+### API Testing Tools
+
+For testing your generated APIs:
+
+- **Postman** - [postman.com](https://www.postman.com)
+- **Insomnia** - [insomnia.rest](https://insomnia.rest)
+- **Thunder Client** (VS Code extension)
+
+## Verification Checklist
+
+Before proceeding to installation, verify you have:
+
+- [ ] Node.js 18.17.0 or higher installed
+- [ ] Package manager (pnpm/npm/yarn) installed
+- [ ] Git 2.40.0 or higher installed
+- [ ] Supabase account created
+- [ ] OpenAI API key obtained
+- [ ] E2B account created
+- [ ] Inngest account created
+- [ ] (Optional) GitHub account for integration features
+- [ ] (Optional) Vercel account for deployments
+
+<Callout type="success" title="Ready to Install">
+  Once you've completed this checklist, you're ready to proceed to the [Installation Guide](/docs/getting-started/installation).
+</Callout>
+
+## Troubleshooting
+
+### Node.js Version Issues
+
+If you have an older version of Node.js:
+
+```bash
+# Using NVM
+nvm install 18
+nvm alias default 18
+
+# Verify
+node --version
+```
+
+### Permission Errors
+
+If you encounter permission errors when installing packages globally:
+
+```bash
+# macOS/Linux: Use sudo (not recommended)
+sudo npm install -g pnpm
+
+# Better: Configure npm to use a different directory
+mkdir ~/.npm-global
+npm config set prefix '~/.npm-global'
+echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
+source ~/.bashrc
+```
+
+### WSL2 Setup (Windows)
+
+For Windows users, we recommend using WSL2:
+
+1. Enable WSL2: [docs.microsoft.com/en-us/windows/wsl/install](https://docs.microsoft.com/en-us/windows/wsl/install)
+2. Install Ubuntu from Microsoft Store
+3. Follow Linux installation instructions
+
+## Next Steps
+
+Now that you have all prerequisites in place, proceed to the [Installation Guide](/docs/getting-started/installation) to set up SmartAPIForge.
+
+## Need Help?
+
+If you're having trouble with prerequisites:
+
+- Check our [Troubleshooting Guide](/docs/troubleshooting)
+- Ask in our [Discord Community](https://discord.gg/smartapiforge)
+- Open an issue on [GitHub](https://github.com/Shashank4507/smart-forge-api/issues)

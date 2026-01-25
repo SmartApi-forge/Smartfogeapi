@@ -209,7 +209,7 @@ export const githubRouter = createTRPCRouter({
             .insert({
               user_id: ctx.user.id,
               name: repo.name,
-              description: repo.description || `Connected from GitHub: ${repo.full_name}`,
+              description: repo.description || repo.full_name,
               prompt: `Clone and preview GitHub repository: ${repo.full_name}`,
               framework: 'express', // Will be detected during clone
               status: 'generating',
@@ -236,26 +236,18 @@ export const githubRouter = createTRPCRouter({
           projectId
         );
 
-        // Trigger clone and preview workflow
-        if (input.createProject && projectId) {
-          const { inngest } = await import('../../inngest/client');
-          
-          await inngest.send({
-            name: 'github/clone-and-preview',
-            data: {
-              projectId,
-              repoUrl: repo.html_url,
-              repoFullName: repo.full_name,
-              githubRepoId: savedRepo.id,
-              userId: ctx.user.id,
-            },
-          });
-        }
+        // V0/Lovable Architecture: Return projectId for SSE streaming
+        // The client will call /api/github/clone SSE endpoint directly
+        // instead of using Inngest background jobs
+        // Requirements: 6.3, 9.7
 
         return {
           success: true,
           repository: savedRepo,
           projectId,
+          // Include repo info for the client to use with SSE clone endpoint
+          repoUrl: repo.html_url,
+          repoFullName: repo.full_name,
         };
       } catch (error: any) {
         if (error instanceof TRPCError) {

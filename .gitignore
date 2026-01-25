@@ -1,28 +1,273 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
+# ===================
+# Dependencies
+# ===================
 /node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
 
-# next.js
+# ===================
+# Next.js
+# ===================
 /.next/
 /out/
+next-env.d.ts
 
-# production
+# ===================
+# Production Build
+# ===================
 /build
+/dist
+/.output
 
-# debug
+# ===================
+# Debug & Logs
+# ===================
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+*.log
+logs/
 
-# env files
-.env*
+# ===================
+# Environment Files
+# ===================
+.env
+.env.*
+!.env.example
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# vercel
+# ===================
+# Vercel
+# ===================
 .vercel
 
-# typescript
+# ===================
+# TypeScript
+# ===================
 *.tsbuildinfo
-next-env.d.ts
+tsconfig.tsbuildinfo
 /src/generated/prisma
+
+# ===================
+# IDE & Editors
+# ===================
+.kiro/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# ===================
+# Cursor AI
+# ===================
+.cursor/
+
+# ===================
+# OS Generated Files
+# ===================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ===================
+# Testing & Coverage
+# ===================
+/coverage
+/.nyc_output
+*.lcov
+.jest/
+junit.xml
+
+# ===================
+# Bundle Analysis
+# ===================
+.next/analyze/
+/analyze/
+*.stats.json
+bundle-stats.json
+
+# ===================
+# Lighthouse CI
+# ===================
+.lighthouseci/
+lhci_reports/
+
+# ===================
+# Supabase Local
+# ===================
+supabase/.branches/
+supabase/.temp/
+
+# ===================
+# E2B Sandbox
+# ===================
+.e2b/
+
+# ===================
+# Orchids
+# ===================
+.orchids/
+
+# ===================
+# Temporary Files
+# ===================
+*.tmp
+*.temp
+*.bak
+*.backup
+*.cache
+.cache/
+
+# ===================
+# Documentation Notes (Internal)
+# ===================
+# Exclude all .md files except specific ones
+*.md
+!README.md
+!CHANGELOG.md
+!CONTRIBUTING.md
+!LICENSE.md
+!content/**/*.md
+!content/**/*.mdx
+!.kiro/**/*.md
+
+# Legacy patterns (kept for reference)
+*_IMPLEMENTATION.md
+*_FEATURES.md
+*_GUIDE.md
+*_FIX.md
+*_FIXES.md
+*_SUMMARY.md
+*_CHANGES.md
+*_IMPROVEMENTS.md
+*_SIMPLIFICATION.md
+*_UPGRADE.md
+*_COMPLETE.md
+*_STATUS.md
+*_PLAN.md
+*_NOTES.md
+*_TODO.md
+SIDEBAR_*.md
+TERMINAL_*.md
+GITHUB_*.md
+HEADER_*.md
+USER_*.md
+V0_*.md
+BEFORE_AFTER_*.md
+COLOR_*.md
+QUICK_START.md
+READY_TO_INTEGRATE.md
+REFACTORING_*.md
+RESPONSIVE_*.md
+INTEGRATION_*.md
+MIGRATION_*.md
+TRANSFORMATION_*.md
+TROUBLESHOOTING_*.md
+DEPLOYMENT_*.md
+STREAMING_*.md
+EXACT_*.md
+FINAL_*.md
+CRITICAL_*.md
+AUTO_*.md
+CODE_QUALITY_*.md
+COMPACT_*.md
+POPOVER_*.md
+SSE_*.md
+STEP*_*.md
+SMART_*.md
+
+# ===================
+# Misc Project Files
+# ===================
+*.txt
+!LICENSE.txt
+!src/prompts/*.txt
+*.sql
+!supabase/migrations/*.sql
+
+# ===================
+# Internal Documentation (Not for repo)
+# ===================
+3000-3020.md
+line*.md
+streamlogs.md
+svg.md
+orchidsvercel.md
+vercelintegration.md
+nextjs-*.md
+optimization-*.md
+visual-reference-guide.md
+daytona-official-docs-guide.md
+daytona_init_guide.md
+"how does loveable or bolt or v0 work when user pro.md"
+"Decision-making prompt.txt"
+"PRD— SmartAPIForge.md"
+"Prompt.txt"
+Tools.json
+comparison.md
+inngest-removal.md
+migration-plan.md
+AUTO_EXTRACTION_FIX.md
+CODE_QUALITY_FIX.md
+COMPLETE_SYSTEM_GUIDE.md
+quick-ref.md
+
+# ===================
+# Debug/One-time Scripts (Not needed for collaborators)
+# ===================
+scripts/check-invitations.js
+scripts/check-token.js
+scripts/update-project-sandbox-id.ts
+scripts/test-template-local.ps1
+compile_*.sh
+create-test-data.sql
+FIX_VECTOR_SEARCH.sql
+
+# ===================
+# Backup Files
+# ===================
+*.backup
+*.bak
+
+# ===================
+# Compiled Files
+# ===================
+*.js.map
+*.d.ts.map
+
+# ===================
+# Package Manager Locks (keep one)
+# ===================
+# Uncomment the ones you don't use:
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# ===================
+# Storybook
+# ===================
+storybook-static/
+
+# ===================
+# PWA Generated
+# ===================
+public/sw.js
+public/workbox-*.js

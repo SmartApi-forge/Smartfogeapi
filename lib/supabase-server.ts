@@ -41,6 +41,7 @@ export interface Message {
   sender_id?: string
   receiver_id?: string
   project_id?: string
+  version_id?: string // Links message to a version for version card display
   created_at: string
   updated_at: string
 }

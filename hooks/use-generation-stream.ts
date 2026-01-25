@@ -175,6 +175,57 @@ export function useGenerationStream(projectId: string | undefined): UseGeneratio
               // Keep validating status until complete event
               break;
 
+            // New sandbox sync events (Requirements: 6.1, 6.3)
+            case 'sandbox:sync:start':
+              newState.status = 'syncing' as any;
+              newState.currentStep = streamEvent.message;
+              break;
+
+            case 'sandbox:sync:progress':
+              newState.currentStep = `Syncing ${streamEvent.currentFile}...`;
+              break;
+
+            case 'sandbox:sync:complete':
+              newState.currentStep = streamEvent.message;
+              break;
+
+            case 'sandbox:sync:error':
+              newState.error = streamEvent.message;
+              break;
+
+            // Server restart events (Requirements: 6.2)
+            case 'server:restarting':
+              newState.currentStep = streamEvent.message;
+              break;
+
+            case 'server:ready':
+              newState.currentStep = streamEvent.message;
+              break;
+
+            // Preview events
+            case 'preview:updating':
+              newState.currentStep = streamEvent.message;
+              break;
+
+            case 'preview:ready':
+              newState.currentStep = streamEvent.message;
+              break;
+
+            // Info and warning events (Requirements: 14.4)
+            case 'info':
+              newState.currentStep = streamEvent.message;
+              break;
+
+            case 'warning':
+              // Don't change status, just log the warning
+              console.warn('[useGenerationStream] Warning:', streamEvent.message);
+              break;
+
+            // Step progress event (Requirements: 14.2)
+            case 'step:progress':
+              newState.currentStep = streamEvent.message || newState.currentStep;
+              break;
+
             case 'complete':
               newState.status = 'complete';
               newState.currentStep = streamEvent.summary;

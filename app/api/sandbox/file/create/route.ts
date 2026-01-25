@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getWorkspace } from '@/src/lib/daytona-client';
 import { createRouteHandlerClient } from '@/lib/supabase-route-handler';
+import { VersionManager } from '@/src/services/version-manager';
 
 export async function POST(request: NextRequest) {
   try {
@@ -120,7 +121,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`✅ Created file: ${fullPath}`);
+    console.log(`✅ Created file in sandbox: ${fullPath}`);
+
+    // Update the latest version in the database with the new file content
+    try {
+      const latestVersion = await VersionManager.getLatestVersion(projectId);
+      
+      if (latestVersion) {
+        // Update the files object with the new/modified file
+        const updatedFiles = {
+          ...(latestVersion.files || {}),
+          [filePath]: content || '',
+        };
+
+        await VersionManager.updateVersion(latestVersion.id, {
+          files: updatedFiles,
+        });
+
+        console.log(`✅ Updated version ${latestVersion.version_number} with file: ${filePath}`);
+      } else {
+        console.warn(`⚠️ No complete version found for project ${projectId}, file saved to sandbox only`);
+      }
+    } catch (versionError: any) {
+      // Log but don't fail - file is still saved to sandbox
+      console.error('Failed to update version with file:', versionError.message);
+    }
 
     return NextResponse.json({
       success: true,

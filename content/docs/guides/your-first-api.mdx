@@ -1,0 +1,621 @@
+---
+title: Your First API - Complete Tutorial
+description: Step-by-step guide to building your first API with SmartAPIForge
+category: guides
+order: 1
+tags: [tutorial, guide, first-api, beginner]
+lastUpdated: 2024-12-11
+---
+
+# Your First API - Complete Tutorial
+
+Build a complete Todo API from scratch in under 10 minutes. This tutorial covers everything from generation to deployment.
+
+## What You'll Build
+
+A fully functional Todo API with:
+
+- ✅ Create, read, update, and delete todos
+- ✅ Mark todos as complete
+- ✅ Filter by status
+- ✅ Input validation
+- ✅ Error handling
+- ✅ Automated tests
+- ✅ OpenAPI documentation
+- ✅ Live deployment
+
+<Callout type="info" title="Prerequisites">
+  Make sure you've completed the [Installation](/docs/getting-started/installation) and are signed in to SmartAPIForge.
+</Callout>
+
+## Step 1: Create Your Project
+
+1. Navigate to [http://localhost:3000](http://localhost:3000)
+2. Click **New Project** or the **+** button
+3. Enter project details:
+   - **Name:** Todo API
+   - **Description:** A simple todo management API
+4. Click **Create Project**
+
+You'll be redirected to the project workspace.
+
+## Step 2: Write Your Prompt
+
+In the AI prompt box, describe your API in detail:
+
+```
+Create a REST API for managing todos with the following features:
+
+Data Model:
+- id: unique identifier (UUID)
+- title: string (required, max 200 characters)
+- description: string (optional, max 1000 characters)
+- status: enum ("pending" or "completed")
+- priority: enum ("low", "medium", "high")
+- due_date: datetime (optional)
+- created_at: datetime (auto-generated)
+- updated_at: datetime (auto-updated)
+
+Endpoints:
+1. POST /todos - Create a new todo
+2. GET /todos - List all todos with optional filters (status, priority)
+3. GET /todos/\{id\} - Get a specific todo by ID
+4. PUT /todos/\{id\} - Update a todo
+5. DELETE /todos/\{id\} - Delete a todo
+6. POST /todos/\{id\}/complete - Mark a todo as completed
+
+Requirements:
+- Input validation for all fields
+- Proper error handling with meaningful messages
+- Return 404 for non-existent todos
+- Return 400 for invalid input
+- Include automated tests for all endpoints
+- Use FastAPI framework
+- Include OpenAPI/Swagger documentation
+```
+
+<Callout type="success" title="Detailed Prompts Work Best">
+  The more specific your prompt, the better the generated API will match your needs.
+</Callout>
+
+## Step 3: Generate the API
+
+1. Click **Generate** or press `Cmd/Ctrl + Enter`
+2. Watch the real-time progress:
+   - 🤖 Analyzing requirements (5s)
+   - 📝 Generating OpenAPI spec (8s)
+   - 💻 Creating FastAPI code (12s)
+   - 🧪 Writing tests (10s)
+   - 🏗️ Setting up sandbox (15s)
+   - ✅ Running tests (10s)
+
+**Total time:** ~60 seconds
+
+## Step 4: Explore the Generated Code
+
+### File Structure
+
+Your generated project includes:
+
+```
+todo-api/
+├── main.py                 # FastAPI application
+├── models/
+│   └── todo.py            # Todo data model
+├── routes/
+│   └── todos.py           # API endpoints
+├── schemas/
+│   └── todo_schema.py     # Request/response schemas
+├── database/
+│   └── db.py              # Database connection
+├── tests/
+│   ├── test_todos.py      # Endpoint tests
+│   └── conftest.py        # Test configuration
+├── requirements.txt        # Dependencies
+└── openapi.yaml           # API specification
+```
+
+### Key Files
+
+**main.py** - Application entry point:
+
+```python
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from routes import todos
+
+app = FastAPI(
+    title="Todo API",
+    description="A simple todo management API",
+    version="1.0.0"
+)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+app.include_router(todos.router, prefix="/todos", tags=["todos"])
+
+@app.get("/")
+async def root():
+    return {"message": "Todo API is running"}
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+```
+
+**models/todo.py** - Data model:
+
+```python
+from pydantic import BaseModel, Field
+from datetime import datetime
+from enum import Enum
+from typing import Optional
+import uuid
+
+class TodoStatus(str, Enum):
+    PENDING = "pending"
+    COMPLETED = "completed"
+
+class TodoPriority(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+class Todo(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str = Field(..., max_length=200)
+    description: Optional[str] = Field(None, max_length=1000)
+    status: TodoStatus = TodoStatus.PENDING
+    priority: TodoPriority = TodoPriority.MEDIUM
+    due_date: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "title": "Complete project documentation",
+                "description": "Write comprehensive docs for the API",
+                "status": "pending",
+                "priority": "high",
+                "due_date": "2024-12-31T23:59:59"
+            }
+        }
+```
+
+**routes/todos.py** - API endpoints:
+
+```python
+from fastapi import APIRouter, HTTPException, Query
+from typing import List, Optional
+from models.todo import Todo, TodoStatus, TodoPriority
+from schemas.todo_schema import TodoCreate, TodoUpdate
+
+router = APIRouter()
+
+# In-memory storage (replace with database in production)
+todos_db: dict[str, Todo] = {}
+
+@router.post("/", response_model=Todo, status_code=201)
+async def create_todo(todo: TodoCreate):
+    """Create a new todo"""
+    new_todo = Todo(**todo.dict())
+    todos_db[new_todo.id] = new_todo
+    return new_todo
+
+@router.get("/", response_model=List[Todo])
+async def list_todos(
+    status: Optional[TodoStatus] = Query(None),
+    priority: Optional[TodoPriority] = Query(None)
+):
+    """List all todos with optional filters"""
+    todos = list(todos_db.values())
+    
+    if status:
+        todos = [t for t in todos if t.status == status]
+    if priority:
+        todos = [t for t in todos if t.priority == priority]
+    
+    return todos
+
+@router.get("/{todo_id}", response_model=Todo)
+async def get_todo(todo_id: str):
+    """Get a specific todo by ID"""
+    if todo_id not in todos_db:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    return todos_db[todo_id]
+
+@router.put("/{todo_id}", response_model=Todo)
+async def update_todo(todo_id: str, todo_update: TodoUpdate):
+    """Update a todo"""
+    if todo_id not in todos_db:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    
+    todo = todos_db[todo_id]
+    update_data = todo_update.dict(exclude_unset=True)
+    
+    for field, value in update_data.items():
+        setattr(todo, field, value)
+    
+    todo.updated_at = datetime.now()
+    return todo
+
+@router.delete("/{todo_id}", status_code=204)
+async def delete_todo(todo_id: str):
+    """Delete a todo"""
+    if todo_id not in todos_db:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    
+    del todos_db[todo_id]
+    return None
+
+@router.post("/{todo_id}/complete", response_model=Todo)
+async def complete_todo(todo_id: str):
+    """Mark a todo as completed"""
+    if todo_id not in todos_db:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    
+    todo = todos_db[todo_id]
+    todo.status = TodoStatus.COMPLETED
+    todo.updated_at = datetime.now()
+    return todo
+```
+
+## Step 5: Test Your API
+
+### Using Swagger UI
+
+The right panel shows interactive Swagger documentation:
+
+1. Click **POST /todos** to expand
+2. Click **Try it out**
+3. Enter test data:
+   ```json
+   {
+     "title": "Buy groceries",
+     "description": "Milk, eggs, bread",
+     "priority": "high",
+     "due_date": "2024-12-15T18:00:00"
+   }
+   ```
+4. Click **Execute**
+5. View the response:
+   ```json
+   {
+     "id": "123e4567-e89b-12d3-a456-426614174000",
+     "title": "Buy groceries",
+     "description": "Milk, eggs, bread",
+     "status": "pending",
+     "priority": "high",
+     "due_date": "2024-12-15T18:00:00",
+     "created_at": "2024-12-11T10:30:00",
+     "updated_at": "2024-12-11T10:30:00"
+   }
+   ```
+
+### Test All Endpoints
+
+<Tabs defaultValue="create">
+  <TabsList>
+    <TabsTrigger value="create">Create</TabsTrigger>
+    <TabsTrigger value="list">List</TabsTrigger>
+    <TabsTrigger value="get">Get</TabsTrigger>
+    <TabsTrigger value="update">Update</TabsTrigger>
+    <TabsTrigger value="complete">Complete</TabsTrigger>
+    <TabsTrigger value="delete">Delete</TabsTrigger>
+  </TabsList>
+  
+  <TabsContent value="create">
+    **POST /todos**
+    
+    ```json
+    {
+      "title": "Write documentation",
+      "description": "Complete API docs",
+      "priority": "high"
+    }
+    ```
+    
+    Expected: 201 Created with todo object
+  </TabsContent>
+  
+  <TabsContent value="list">
+    **GET /todos**
+    
+    Query parameters:
+    - `status=pending`
+    - `priority=high`
+    
+    Expected: 200 OK with array of todos
+  </TabsContent>
+  
+  <TabsContent value="get">
+    **GET /todos/\{id\}**
+    
+    Replace `\{id\}` with actual todo ID
+    
+    Expected: 200 OK with todo object
+  </TabsContent>
+  
+  <TabsContent value="update">
+    **PUT /todos/\{id\}**
+    
+    ```json
+    {
+      "title": "Updated title",
+      "priority": "low"
+    }
+    ```
+    
+    Expected: 200 OK with updated todo
+  </TabsContent>
+  
+  <TabsContent value="complete">
+    **POST /todos/\{id\}/complete**
+    
+    No body required
+    
+    Expected: 200 OK with completed todo
+  </TabsContent>
+  
+  <TabsContent value="delete">
+    **DELETE /todos/\{id\}**
+    
+    No body required
+    
+    Expected: 204 No Content
+  </TabsContent>
+</Tabs>
+
+### Using cURL
+
+Test from the terminal:
+
+```bash
+# Create a todo
+curl -X POST http://localhost:8000/todos \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Test todo",
+    "priority": "medium"
+  }'
+
+# List todos
+curl http://localhost:8000/todos
+
+# Get specific todo
+curl http://localhost:8000/todos/\{id\}
+
+# Update todo
+curl -X PUT http://localhost:8000/todos/\{id\} \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Updated title"
+  }'
+
+# Complete todo
+curl -X POST http://localhost:8000/todos/\{id\}/complete
+
+# Delete todo
+curl -X DELETE http://localhost:8000/todos/\{id\}
+```
+
+## Step 6: Run Automated Tests
+
+View test results in the terminal panel:
+
+```bash
+# Tests run automatically during generation
+pytest tests/ -v
+
+# Output:
+tests/test_todos.py::test_create_todo PASSED
+tests/test_todos.py::test_list_todos PASSED
+tests/test_todos.py::test_get_todo PASSED
+tests/test_todos.py::test_update_todo PASSED
+tests/test_todos.py::test_delete_todo PASSED
+tests/test_todos.py::test_complete_todo PASSED
+tests/test_todos.py::test_filter_by_status PASSED
+tests/test_todos.py::test_filter_by_priority PASSED
+tests/test_todos.py::test_todo_not_found PASSED
+tests/test_todos.py::test_invalid_input PASSED
+
+========== 10 passed in 2.34s ==========
+```
+
+<Callout type="success" title="All Tests Passing">
+  Your API is working correctly and ready for deployment!
+</Callout>
+
+## Step 7: Customize Your API
+
+Want to add features? Just ask the AI:
+
+```
+Add a new endpoint GET /todos/stats that returns:
+- Total number of todos
+- Number of pending todos
+- Number of completed todos
+- Todos by priority breakdown
+```
+
+The AI will update your code and tests automatically.
+
+## Step 8: Deploy to Production
+
+### Option 1: Deploy to Vercel
+
+1. Click the **Publish** button (Vercel logo)
+2. Click **Connect Vercel Account** (first time)
+3. Click **Deploy to Vercel**
+4. Wait ~1-2 minutes
+5. Click **View Live Site**
+
+Your API is now live at `https://todo-api-xyz.vercel.app`!
+
+### Option 2: Push to GitHub
+
+1. Click the **GitHub** icon
+2. Click **Create Repository**
+3. Enter repository name: `todo-api`
+4. Choose visibility: Public or Private
+5. Click **Create**
+
+Your code is now on GitHub and ready for CI/CD.
+
+## Step 9: Test Production API
+
+Test your deployed API:
+
+```bash
+# Replace with your actual deployment URL
+API_URL="https://todo-api-xyz.vercel.app"
+
+# Create a todo
+curl -X POST $API_URL/todos \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Production test",
+    "priority": "high"
+  }'
+
+# List todos
+curl $API_URL/todos
+
+# View API docs
+open $API_URL/docs
+```
+
+## Next Steps
+
+### Add Database Persistence
+
+Replace in-memory storage with PostgreSQL:
+
+```python
+# Install dependencies
+pip install sqlalchemy psycopg2-binary
+
+# Update database/db.py
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+DATABASE_URL = "postgresql://user:password@localhost/tododb"
+
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(bind=engine)
+```
+
+### Add Authentication
+
+Protect your API with JWT:
+
+```python
+from fastapi.security import HTTPBearer
+from jose import jwt
+
+security = HTTPBearer()
+
+@router.post("/", dependencies=[Depends(security)])
+async def create_todo(todo: TodoCreate):
+    # Only authenticated users can create todos
+    pass
+```
+
+### Add Rate Limiting
+
+Prevent abuse:
+
+```python
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
+
+@router.get("/", dependencies=[Depends(limiter.limit("100/minute"))])
+async def list_todos():
+    pass
+```
+
+### Add Caching
+
+Improve performance:
+
+```python
+from fastapi_cache import FastAPICache
+from fastapi_cache.decorator import cache
+
+@router.get("/")
+@cache(expire=60)  # Cache for 60 seconds
+async def list_todos():
+    pass
+```
+
+## Troubleshooting
+
+### API Not Responding
+
+**Problem:** Endpoints return 404
+
+**Solution:**
+1. Check server is running in terminal
+2. Verify URL is correct
+3. Check route prefixes in main.py
+
+### Validation Errors
+
+**Problem:** 422 Unprocessable Entity
+
+**Solution:**
+1. Check request body matches schema
+2. Verify required fields are present
+3. Check data types are correct
+
+### Tests Failing
+
+**Problem:** Some tests fail
+
+**Solution:**
+1. Read test output carefully
+2. Check test expectations match implementation
+3. Run tests individually: `pytest tests/test_todos.py::test_name -v`
+
+## Congratulations!
+
+You've successfully:
+
+- ✅ Generated a complete REST API
+- ✅ Tested all endpoints
+- ✅ Deployed to production
+- ✅ Learned the basics of SmartAPIForge
+
+<CardGrid cols={2}>
+  <Card
+    title="Advanced Guide"
+    description="Learn advanced features and patterns"
+    href="/docs/guides/advanced"
+  />
+  <Card
+    title="API Reference"
+    description="Complete API documentation"
+    href="/docs/api-reference"
+  />
+  <Card
+    title="Deployment Guide"
+    description="Deploy to multiple platforms"
+    href="/docs/deployment"
+  />
+  <Card
+    title="Best Practices"
+    description="Production-ready patterns"
+    href="/docs/guides/best-practices"
+  />
+</CardGrid>

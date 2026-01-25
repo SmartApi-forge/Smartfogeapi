@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import Image from "next/image";
 
 export default function InvitePage() {
   const router = useRouter();
@@ -145,14 +144,14 @@ export default function InvitePage() {
 
               <DialogHeader className="text-center">
                 <DialogTitle className="text-3xl font-bold mb-2">
-                  You've been invited!
+                  You&apos;ve been invited!
                 </DialogTitle>
                 <p className="text-base text-muted-foreground">
-                  You've been invited to collaborate on "
+                  You&apos;ve been invited to collaborate on &quot;
                   <span className="font-semibold text-foreground">
                     {invitation.projects?.name || "a project"}
                   </span>
-                  " by {invitation.profiles?.full_name || "a team member"}
+                  &quot; by {invitation.profiles?.full_name || "a team member"}
                 </p>
               </DialogHeader>
 

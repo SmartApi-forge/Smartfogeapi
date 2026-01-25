@@ -1,0 +1,614 @@
+---
+title: Advanced Usage Guide
+description: Advanced features, patterns, and best practices for SmartAPIForge
+category: guides
+order: 2
+tags: [advanced, guide, patterns, best-practices]
+lastUpdated: 2024-12-11
+---
+
+# Advanced Usage Guide
+
+Master advanced SmartAPIForge features to build production-grade APIs with complex requirements.
+
+## Advanced Prompting Techniques
+
+### Structured Prompts
+
+Use structured prompts for complex APIs:
+
+```
+Project: E-commerce API
+Framework: FastAPI
+Database: PostgreSQL with SQLAlchemy
+
+Data Models:
+1. User
+   - id: UUID (primary key)
+   - email: string (unique, indexed)
+   - password_hash: string
+   - role: enum (customer, admin)
+   - created_at: timestamp
+
+2. Product
+   - id: UUID (primary key)
+   - name: string (max 200 chars)
+   - description: text
+   - price: decimal (2 decimal places)
+   - stock: integer (non-negative)
+   - category_id: UUID (foreign key)
+
+3. Order
+   - id: UUID (primary key)
+   - user_id: UUID (foreign key)
+   - status: enum (pending, paid, shipped, delivered)
+   - total: decimal
+   - created_at: timestamp
+
+Relationships:
+- User has many Orders
+- Order has many OrderItems
+- Product belongs to Category
+
+Endpoints:
+[List all endpoints with HTTP methods, paths, and descriptions]
+
+Business Rules:
+- Cannot order out-of-stock products
+- Orders cannot be modified after payment
+- Admin users can access all orders
+- Regular users can only access their own orders
+
+Security:
+- JWT authentication required for all endpoints except login/register
+- Password hashing with bcrypt
+- Rate limiting: 100 requests per minute per IP
+
+Testing:
+- Unit tests for all business logic
+- Integration tests for all endpoints
+- Test authentication and authorization
+```
+
+<Callout type="success" title="Detailed Specifications">
+  The more structured and detailed your prompt, the better the generated code will match your requirements.
+</Callout>
+
+### Iterative Refinement
+
+Build complex APIs iteratively:
+
+**Step 1:** Generate basic CRUD
+
+```
+Create a basic user management API with:
+- User registration
+- User login
+- Get user profile
+- Update user profile
+```
+
+**Step 2:** Add authentication
+
+```
+Add JWT authentication to the user API:
+- Generate JWT tokens on login
+- Protect profile endpoints with JWT middleware
+- Add token refresh endpoint
+```
+
+**Step 3:** Add advanced features
+
+```
+Add the following features:
+- Email verification on registration
+- Password reset via email
+- Two-factor authentication
+- Session management
+```
+
+### Domain-Specific Prompts
+
+Leverage domain knowledge:
+
+<Tabs defaultValue="fintech">
+  <TabsList>
+    <TabsTrigger value="fintech">FinTech</TabsTrigger>
+    <TabsTrigger value="healthcare">Healthcare</TabsTrigger>
+    <TabsTrigger value="iot">IoT</TabsTrigger>
+  </TabsList>
+  
+  <TabsContent value="fintech">
+    ```
+    Create a payment processing API following PCI DSS guidelines:
+    
+    - Never store full credit card numbers
+    - Use tokenization for card data
+    - Implement idempotency for payment requests
+    - Add webhook support for payment status updates
+    - Include fraud detection checks
+    - Support multiple currencies
+    - Implement proper audit logging
+    ```
+  </TabsContent>
+  
+  <TabsContent value="healthcare">
+    ```
+    Create a HIPAA-compliant patient records API:
+    
+    - Encrypt all PHI (Protected Health Information)
+    - Implement role-based access control
+    - Add audit trails for all data access
+    - Support patient consent management
+    - Include data anonymization for research
+    - Implement secure data export
+    ```
+  </TabsContent>
+  
+  <TabsContent value="iot">
+    ```
+    Create an IoT device management API:
+    
+    - Device registration and provisioning
+    - Real-time telemetry data ingestion
+    - Command and control endpoints
+    - Firmware update management
+    - Device health monitoring
+    - Time-series data storage
+    - Support for MQTT protocol
+    ```
+  </TabsContent>
+</Tabs>
+
+## Advanced Database Integration
+
+### Using PostgreSQL with SQLAlchemy
+
+```python
+# database/db.py
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+import os
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+```
+
+```python
+# models/user.py
+from sqlalchemy import Column, String, DateTime, Enum
+from sqlalchemy.dialects.postgresql import UUID
+from database.db import Base
+import uuid
+from datetime import datetime
+
+class User(Base):
+    __tablename__ = "users"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    role = Column(Enum("customer", "admin", name="user_role"), default="customer")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+```
+
+### Database Migrations with Alembic
+
+```bash
+# Install Alembic
+pip install alembic
+
+# Initialize Alembic
+alembic init migrations
+
+# Create migration
+alembic revision --autogenerate -m "Create users table"
+
+# Apply migration
+alembic upgrade head
+
+# Rollback migration
+alembic downgrade -1
+```
+
+### Connection Pooling
+
+```python
+from sqlalchemy.pool import QueuePool
+
+engine = create_engine(
+    DATABASE_URL,
+    poolclass=QueuePool,
+    pool_size=20,
+    max_overflow=0,
+    pool_pre_ping=True,
+    pool_recycle=3600
+)
+```
+
+## Advanced Authentication
+
+### JWT with Refresh Tokens
+
+```python
+from datetime import datetime, timedelta
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+
+SECRET_KEY = os.getenv("JWT_SECRET")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 15
+REFRESH_TOKEN_EXPIRE_DAYS = 7
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire, "type": "access"})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def create_refresh_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode.update({"exp": expire, "type": "refresh"})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def verify_token(token: str, token_type: str):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("type") != token_type:
+            raise JWTError("Invalid token type")
+        return payload
+    except JWTError:
+        return None
+```
+
+### Role-Based Access Control (RBAC)
+
+```python
+from fastapi import Depends, HTTPException, status
+from functools import wraps
+
+def require_role(*allowed_roles):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, current_user=None, **kwargs):
+            if current_user.role not in allowed_roles:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Insufficient permissions"
+                )
+            return await func(*args, current_user=current_user, **kwargs)
+        return wrapper
+    return decorator
+
+# Usage
+@router.delete("/users/{user_id}")
+@require_role("admin")
+async def delete_user(user_id: str, current_user: User = Depends(get_current_user)):
+    # Only admins can delete users
+    pass
+```
+
+### API Key Authentication
+
+```python
+from fastapi.security import APIKeyHeader
+from fastapi import Security, HTTPException
+
+api_key_header = APIKeyHeader(name="X-API-Key")
+
+async def verify_api_key(api_key: str = Security(api_key_header)):
+    # Check API key in database
+    key_record = await db.api_keys.find_one({"key": api_key, "active": True})
+    
+    if not key_record:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key"
+        )
+    
+    # Update usage statistics
+    await db.api_keys.update_one(
+        {"_id": key_record["_id"]},
+        {"$inc": {"usage_count": 1}}
+    )
+    
+    return key_record
+
+# Usage
+@router.get("/protected")
+async def protected_endpoint(api_key: dict = Depends(verify_api_key)):
+    return {"message": "Access granted"}
+```
+
+## Performance Optimization
+
+### Response Caching
+
+```python
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.redis import RedisBackend
+from fastapi_cache.decorator import cache
+import aioredis
+
+@app.on_event("startup")
+async def startup():
+    redis = aioredis.from_url("redis://localhost")
+    FastAPICache.init(RedisBackend(redis), prefix="api-cache")
+
+@router.get("/products")
+@cache(expire=300)  # Cache for 5 minutes
+async def list_products():
+    # Expensive database query
+    products = await db.products.find().to_list(length=100)
+    return products
+```
+
+### Database Query Optimization
+
+```python
+# Bad: N+1 query problem
+users = await db.users.find().to_list()
+for user in users:
+    orders = await db.orders.find({"user_id": user.id}).to_list()
+    user.orders = orders
+
+# Good: Use joins or eager loading
+from sqlalchemy.orm import joinedload
+
+users = await db.query(User).options(
+    joinedload(User.orders)
+).all()
+```
+
+### Pagination
+
+```python
+from fastapi import Query
+
+@router.get("/products")
+async def list_products(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100)
+):
+    skip = (page - 1) * page_size
+    
+    products = await db.products.find().skip(skip).limit(page_size).to_list()
+    total = await db.products.count_documents({})
+    
+    return {
+        "items": products,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "pages": (total + page_size - 1) // page_size
+    }
+```
+
+### Background Tasks
+
+```python
+from fastapi import BackgroundTasks
+
+def send_email(email: str, message: str):
+    # Send email (slow operation)
+    time.sleep(5)
+    print(f"Email sent to {email}")
+
+@router.post("/register")
+async def register(user: UserCreate, background_tasks: BackgroundTasks):
+    # Create user (fast)
+    new_user = await create_user(user)
+    
+    # Send welcome email in background (slow)
+    background_tasks.add_task(
+        send_email,
+        user.email,
+        "Welcome to our platform!"
+    )
+    
+    return new_user
+```
+
+## Advanced Error Handling
+
+### Custom Exception Handlers
+
+```python
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+class BusinessLogicError(Exception):
+    def __init__(self, message: str, code: str):
+        self.message = message
+        self.code = code
+
+@app.exception_handler(BusinessLogicError)
+async def business_logic_exception_handler(request: Request, exc: BusinessLogicError):
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": {
+                "code": exc.code,
+                "message": exc.message,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        }
+    )
+
+# Usage
+@router.post("/orders")
+async def create_order(order: OrderCreate):
+    product = await get_product(order.product_id)
+    
+    if product.stock < order.quantity:
+        raise BusinessLogicError(
+            message="Insufficient stock",
+            code="INSUFFICIENT_STOCK"
+        )
+    
+    return await create_order_record(order)
+```
+
+### Structured Logging
+
+```python
+import logging
+import json
+from datetime import datetime
+
+class JSONFormatter(logging.Formatter):
+    def format(self, record):
+        log_data = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "level": record.levelname,
+            "message": record.getMessage(),
+            "module": record.module,
+            "function": record.funcName,
+        }
+        
+        if record.exc_info:
+            log_data["exception"] = self.formatException(record.exc_info)
+        
+        return json.dumps(log_data)
+
+# Configure logging
+handler = logging.StreamHandler()
+handler.setFormatter(JSONFormatter())
+logger = logging.getLogger(__name__)
+logger.addHandler(handler)
+logger.setLevel(logging.INFO)
+
+# Usage
+@router.post("/orders")
+async def create_order(order: OrderCreate):
+    logger.info("Creating order", extra={
+        "user_id": order.user_id,
+        "product_id": order.product_id,
+        "quantity": order.quantity
+    })
+    
+    try:
+        result = await process_order(order)
+        logger.info("Order created successfully", extra={"order_id": result.id})
+        return result
+    except Exception as e:
+        logger.error("Order creation failed", exc_info=True)
+        raise
+```
+
+## Testing Strategies
+
+### Integration Tests
+
+```python
+from fastapi.testclient import TestClient
+import pytest
+
+@pytest.fixture
+def client():
+    return TestClient(app)
+
+@pytest.fixture
+def auth_headers(client):
+    # Create test user and get token
+    response = client.post("/auth/login", json={
+        "email": "test@example.com",
+        "password": "testpass123"
+    })
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+def test_create_order(client, auth_headers):
+    # Create product first
+    product_response = client.post("/products", json={
+        "name": "Test Product",
+        "price": 99.99,
+        "stock": 10
+    }, headers=auth_headers)
+    product_id = product_response.json()["id"]
+    
+    # Create order
+    order_response = client.post("/orders", json={
+        "product_id": product_id,
+        "quantity": 2
+    }, headers=auth_headers)
+    
+    assert order_response.status_code == 201
+    assert order_response.json()["total"] == 199.98
+```
+
+### Load Testing
+
+```python
+# locustfile.py
+from locust import HttpUser, task, between
+
+class APIUser(HttpUser):
+    wait_time = between(1, 3)
+    
+    def on_start(self):
+        # Login and get token
+        response = self.client.post("/auth/login", json={
+            "email": "test@example.com",
+            "password": "testpass123"
+        })
+        self.token = response.json()["access_token"]
+        self.headers = {"Authorization": f"Bearer {self.token}"}
+    
+    @task(3)
+    def list_products(self):
+        self.client.get("/products", headers=self.headers)
+    
+    @task(1)
+    def create_order(self):
+        self.client.post("/orders", json={
+            "product_id": "product-123",
+            "quantity": 1
+        }, headers=self.headers)
+```
+
+Run load tests:
+
+```bash
+locust -f locustfile.py --host=http://localhost:8000
+```
+
+## Next Steps
+
+<CardGrid cols={2}>
+  <Card
+    title="Deployment Guide"
+    description="Deploy to production"
+    href="/docs/deployment"
+  />
+  <Card
+    title="Monitoring Guide"
+    description="Monitor your APIs"
+    href="/docs/guides/monitoring"
+  />
+  <Card
+    title="Security Guide"
+    description="Secure your APIs"
+    href="/docs/guides/security"
+  />
+  <Card
+    title="Scaling Guide"
+    description="Scale for high traffic"
+    href="/docs/guides/scaling"
+  />
+</CardGrid>

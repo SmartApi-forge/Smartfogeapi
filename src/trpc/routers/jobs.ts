@@ -116,10 +116,11 @@ export const jobsRouter = createTRPCRouter({
     }),
 
   // Cancel a running job
+  // Note: Inngest removed - job cancellation now handled by direct streaming APIs
   cancelJob: baseProcedure
     .input(z.object({ jobId: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      // TODO: Cancel Inngest workflow and update status
+      // Job cancellation is now handled by aborting the SSE stream connection
 
       const cancelledJob = {
         id: input.jobId,

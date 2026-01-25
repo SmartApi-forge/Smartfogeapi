@@ -163,6 +163,10 @@
     @apply border-border outline-ring/50;
   }
   
+  html {
+    scroll-behavior: smooth;
+  }
+  
   /* Apply transitions only to specific elements, not globally to avoid interfering with streaming */
   button, a, [role="button"], .transition-colors {
     transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
@@ -547,5 +551,17 @@
   
   .dark .hero-background-image {
     opacity: 0.1;
+  }
+}
+
+/* Hide scrollbar while maintaining scroll functionality */
+@layer utilities {
+  .scrollbar-hide {
+    /* Firefox */
+    scrollbar-width: none;
+    /* Safari and Chrome */
+    &::-webkit-scrollbar {
+      display: none;
+    }
   }
 }

@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       stdout: result.result || '',
-      stderr: result.error || '',
+      stderr: (result as any).error || '',
       exitCode: result.exitCode || 0,
       sessionId,
     });

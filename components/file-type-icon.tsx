@@ -77,7 +77,7 @@ export function FileTypeIcon({ filename, size = 16, className = '', ...props }: 
         width={size}
         {...props}
       >
-        <path d={iconPath} fill="#666666" />
+        <path d={iconPath} fill="currentColor" className="fill-gray-500 dark:fill-gray-400" />
       </svg>
     );
   }

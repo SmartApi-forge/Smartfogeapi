@@ -1,16 +1,27 @@
-import { EmbeddingService, SearchResult } from './embedding-service';
 import { VersionManager } from './version-manager';
 import { messageOperations } from '../../lib/supabase-server';
 import { createClient } from '@supabase/supabase-js';
 import type { Version } from '../modules/versions/types';
 import type { Message } from '../modules/messages/types';
+import { conversationContextService, buildConversationHistory } from './conversation-context-service';
+import type { FileSnapshot, FileSnapshotData, ConversationMessage } from '../types/database';
+
+// SearchResult type (previously from embedding-service)
+interface SearchResult {
+  filePath: string;
+  similarity: number;
+  fileType?: string;
+  imports?: string[];
+}
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const MAX_CONTEXT_TOKENS = 100000; // ~75K for context
+// Reduced to stay under OpenAI's 30K TPM rate limit
+// Reserve ~8K for system prompt + response, leaving ~20K for context
+const MAX_CONTEXT_TOKENS = 20000;
 const CHARS_PER_TOKEN = 4;
 const MAX_CONTEXT_CHARS = MAX_CONTEXT_TOKENS * CHARS_PER_TOKEN;
 
@@ -56,7 +67,8 @@ export class SmartContextBuilder {
     } = {}
   ): Promise<SmartGenerationContext> {
     const startTime = Date.now();
-    const { messageLimit = 20, maxFiles = 15, includeTests = false, isGitHubProject = false, errorFileName = null } = options;
+    // Reduced defaults to stay under OpenAI rate limits
+    const { messageLimit = 10, maxFiles = 5, includeTests = false, isGitHubProject = false, errorFileName = null } = options;
     
     console.log(`🔧 Building smart context for project ${projectId}`);
     console.log(`📝 User prompt: "${userPrompt}"`);
@@ -97,10 +109,18 @@ export class SmartContextBuilder {
       console.log(`   Matched files: ${keywordMatches.join(', ')}`);
     }
     
+    // Step 2.5.5: 🚨 CRITICAL - Search for UI elements mentioned in prompt within file CONTENTS
+    // This finds files containing "sign in button", "login button", etc. even if filename doesn't match
+    const uiElementMatches = this.findFilesContainingUIElements(userPrompt, allFiles);
+    console.log(`🎯 UI element content matches: ${uiElementMatches.length} files`);
+    if (uiElementMatches.length > 0) {
+      console.log(`   Files containing UI elements: ${uiElementMatches.join(', ')}`);
+    }
+    
     // Step 2.6: For GitHub projects, be extra aggressive about finding relevant files
     // Look for files that might be related even if not explicitly mentioned
     let contextualMatches: string[] = [];
-    if (isGitHubProject && keywordMatches.length === 0) {
+    if (isGitHubProject && keywordMatches.length === 0 && uiElementMatches.length === 0) {
       console.log(`🔍 GitHub project with no keyword matches - searching for contextual files...`);
       contextualMatches = this.findContextualFiles(userPrompt, allFiles);
       console.log(`📍 Contextual matches: ${contextualMatches.length} files`);
@@ -109,18 +129,15 @@ export class SmartContextBuilder {
       }
     }
     
-    // Step 3: Semantic search for relevant files
+    // Step 3: Keyword-based search for relevant files (embeddings removed)
     console.log(`🔍 Searching for relevant files for: "${userPrompt}"`);
     
-    let searchResults = await EmbeddingService.searchRelevantFiles(
-      projectId,
+    // Use keyword-based search instead of embeddings
+    let searchResults: SearchResult[] = this.keywordBasedSearch(
       userPrompt,
-      {
-        versionId: previousVersion?.id,
-        limit: maxFiles,
-        threshold: 0.3, // Lower threshold to get more candidates
-        fileTypes: includeTests ? undefined : ['component', 'utility', 'api', 'config'],
-      }
+      allFiles,
+      maxFiles,
+      includeTests
     );
     
     const embeddingSearchTime = Date.now() - startTime;
@@ -165,6 +182,18 @@ export class SmartContextBuilder {
       }
     }
     
+    // Step 4b.5: Add UI element content matches with HIGHEST relevance (0.98)
+    // These are files that CONTAIN the actual UI element mentioned (e.g., "sign in button")
+    for (const filePath of uiElementMatches) {
+      if (allFiles[filePath] && !relevantFiles[filePath]) {
+        relevantFiles[filePath] = {
+          content: allFiles[filePath],
+          relevance: 0.98, // Highest relevance - file contains the actual element to modify
+          reason: 'Contains UI element mentioned in prompt - THIS FILE NEEDS MODIFICATION',
+        };
+      }
+    }
+    
     // Step 4a.5: Add contextual matches with high relevance (0.92)
     for (const filePath of contextualMatches) {
       if (allFiles[filePath] && !relevantFiles[filePath]) {
@@ -199,7 +228,8 @@ export class SmartContextBuilder {
       }
     }
     
-    console.log(`📊 Total relevant files: ${Object.keys(relevantFiles).length} (${keywordMatches.length} keyword + ${contentMatches.length} content + ${Object.keys(relevantFiles).length - keywordMatches.length - contentMatches.length} semantic)`);
+    console.log(`📊 Total relevant files: ${Object.keys(relevantFiles).length}`);
+    console.log(`   Breakdown: ${keywordMatches.length} keyword + ${uiElementMatches.length} UI element + ${contentMatches.length} content + ${contextualMatches.length} contextual + ${searchResults.length} semantic`);
     if (Object.keys(relevantFiles).length > 0) {
       console.log(`   Files: ${Object.keys(relevantFiles).join(', ')}`);
     }
@@ -314,17 +344,17 @@ export class SmartContextBuilder {
     configFiles: Record<string, string>;
     conversationHistory: Array<{ role: string; content: string }>;
   }) {
-    // Allocate token budget:
-    // - 20% for conversation
-    // - 10% for config files
-    // - 40% for highly relevant files
-    // - 20% for dependency files
+    // Allocate token budget - OPTIMIZED for 30K TPM rate limit:
+    // - 10% for conversation (reduced)
+    // - 5% for config files (reduced)
+    // - 70% for highly relevant files (increased - most important)
+    // - 5% for dependency files (reduced)
     // - 10% buffer
     
-    const historyBudget = Math.floor(MAX_CONTEXT_CHARS * 0.20);
-    const configBudget = Math.floor(MAX_CONTEXT_CHARS * 0.10);
-    const relevantBudget = Math.floor(MAX_CONTEXT_CHARS * 0.40);
-    const dependencyBudget = Math.floor(MAX_CONTEXT_CHARS * 0.20);
+    const historyBudget = Math.floor(MAX_CONTEXT_CHARS * 0.10);
+    const configBudget = Math.floor(MAX_CONTEXT_CHARS * 0.05);
+    const relevantBudget = Math.floor(MAX_CONTEXT_CHARS * 0.70);
+    const dependencyBudget = Math.floor(MAX_CONTEXT_CHARS * 0.05);
     
     // Truncate each category
     const truncatedHistory = this.truncateHistory(context.conversationHistory, historyBudget);
@@ -544,52 +574,140 @@ export class SmartContextBuilder {
   
   /**
    * Format context for AI prompt
+   * OPTIMIZED: Aggressive truncation to stay under OpenAI rate limits
    */
   static formatForPrompt(context: SmartGenerationContext, newPrompt: string): string {
     const sections: string[] = [];
+    const MAX_FILE_CONTENT = 3000; // Max chars per file to include
+    const MAX_TOTAL_CHARS = 60000; // ~15K tokens max for context
+    let totalChars = 0;
     
-    // Add stats
-    sections.push(`# Context Summary\n${context.summary}\n`);
+    // Add stats (minimal)
+    sections.push(`# Context: ${context.summary}\n`);
+    totalChars += sections[sections.length - 1].length;
     
-    // Add conversation history (last 5 messages)
+    // Add conversation history (last 3 messages only, truncated)
     if (context.conversationHistory.length > 0) {
       sections.push('## Recent Conversation\n');
-      context.conversationHistory.slice(-5).forEach(msg => {
-        sections.push(`**${msg.role}**: ${msg.content}\n`);
+      context.conversationHistory.slice(-3).forEach(msg => {
+        const truncatedContent = msg.content.length > 500 
+          ? msg.content.substring(0, 500) + '...' 
+          : msg.content;
+        sections.push(`**${msg.role}**: ${truncatedContent}\n`);
       });
+      totalChars += sections.slice(-4).reduce((sum, s) => sum + s.length, 0);
     }
     
-    // Add config files
-    if (Object.keys(context.configFiles).length > 0) {
-      sections.push('\n## Configuration Files\n');
-      Object.entries(context.configFiles).forEach(([filename, content]) => {
-        sections.push(`### ${filename}\n\`\`\`\n${content}\n\`\`\`\n`);
-      });
+    // Skip config files to save tokens - they're usually not needed for edits
+    // Only include package.json if it exists and is small
+    const packageJson = context.configFiles['package.json'];
+    if (packageJson && packageJson.length < 1000) {
+      sections.push('\n## package.json (dependencies)\n```\n' + packageJson + '\n```\n');
+      totalChars += sections[sections.length - 1].length;
     }
     
-    // Add relevant files with reasons
+    // Add ONLY the most relevant files (top 3 max), heavily truncated
     if (Object.keys(context.relevantFiles).length > 0) {
-      sections.push('\n## Relevant Files (Semantic Search Results)\n');
-      Object.entries(context.relevantFiles)
+      sections.push('\n## Files to Modify\n');
+      const sortedFiles = Object.entries(context.relevantFiles)
         .sort(([, a], [, b]) => b.relevance - a.relevance)
-        .forEach(([filename, data]) => {
-          sections.push(`### ${filename}\n*${data.reason}*\n\`\`\`\n${data.content}\n\`\`\`\n`);
-        });
+        .slice(0, 3); // Max 3 files
+      
+      for (const [filename, data] of sortedFiles) {
+        if (totalChars > MAX_TOTAL_CHARS) break;
+        
+        const truncatedContent = data.content.length > MAX_FILE_CONTENT
+          ? data.content.substring(0, MAX_FILE_CONTENT) + '\n\n[... truncated for brevity ...]'
+          : data.content;
+        
+        const fileSection = `### ${filename}\n\`\`\`\n${truncatedContent}\n\`\`\`\n`;
+        sections.push(fileSection);
+        totalChars += fileSection.length;
+      }
     }
     
-    // Add dependency files
-    if (Object.keys(context.dependencyFiles).length > 0) {
-      sections.push('\n## Related Dependencies\n');
-      Object.entries(context.dependencyFiles).forEach(([filename, content]) => {
-        sections.push(`### ${filename}\n\`\`\`\n${content}\n\`\`\`\n`);
-      });
-    }
+    // Skip dependency files to save tokens - AI can infer imports
     
     // Add new request
     sections.push('\n## New Request\n');
     sections.push(newPrompt);
     
     return sections.join('\n');
+  }
+  
+  /**
+   * Keyword-based search to replace embedding search
+   * Returns SearchResult[] for compatibility with existing code
+   */
+  private static keywordBasedSearch(
+    prompt: string,
+    allFiles: Record<string, string>,
+    limit: number,
+    includeTests: boolean
+  ): SearchResult[] {
+    const results: SearchResult[] = [];
+    const promptLower = prompt.toLowerCase();
+    const keywords = this.extractKeywords(prompt);
+    
+    // Extract words from prompt for matching
+    const promptWords = promptLower
+      .split(/[\s,.:;!?]+/)
+      .filter(w => w.length > 2);
+    
+    for (const [filePath, content] of Object.entries(allFiles)) {
+      // Skip test files if not included
+      if (!includeTests && (filePath.includes('.test.') || filePath.includes('.spec.'))) {
+        continue;
+      }
+      
+      const pathLower = filePath.toLowerCase();
+      const fileName = filePath.split('/').pop()?.toLowerCase() || '';
+      let similarity = 0;
+      
+      // Check file path matches
+      for (const keyword of keywords) {
+        if (pathLower.includes(keyword)) {
+          similarity += 0.3;
+        }
+      }
+      
+      // Check file name matches prompt words
+      for (const word of promptWords) {
+        if (fileName.includes(word)) {
+          similarity += 0.2;
+        }
+      }
+      
+      // Check content for keyword matches
+      if (typeof content === 'string') {
+        const contentLower = content.toLowerCase();
+        for (const keyword of keywords) {
+          if (contentLower.includes(keyword)) {
+            similarity += 0.1;
+          }
+        }
+      }
+      
+      // Determine file type
+      let fileType = 'utility';
+      if (pathLower.includes('component')) fileType = 'component';
+      else if (pathLower.includes('api') || pathLower.includes('route')) fileType = 'api';
+      else if (pathLower.includes('config')) fileType = 'config';
+      
+      if (similarity > 0) {
+        results.push({
+          filePath,
+          similarity: Math.min(similarity, 1.0),
+          fileType,
+          imports: [],
+        });
+      }
+    }
+    
+    // Sort by similarity and return top N
+    return results
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, limit);
   }
   
   /**
@@ -756,6 +874,146 @@ export class SmartContextBuilder {
     }
     
     return keywords;
+  }
+  
+  /**
+   * 🚨 CRITICAL: Find files that CONTAIN specific UI elements mentioned in the prompt
+   * This searches file CONTENTS, not just filenames
+   * 
+   * Example: "link sign in button to sign in page"
+   * - Extracts: "sign in button", "sign in"
+   * - Searches all files for: <button>Sign In</button>, onClick, "Sign In", etc.
+   * - Returns files that actually contain the button, not just files named "button.tsx"
+   */
+  private static findFilesContainingUIElements(
+    prompt: string,
+    allFiles: Record<string, string>
+  ): string[] {
+    const matches: Array<{ path: string; score: number; reason: string }> = [];
+    const promptLower = prompt.toLowerCase();
+    
+    // Extract UI element phrases from prompt
+    // Look for patterns like "sign in button", "login button", "submit button", "navbar", etc.
+    const uiElementPatterns = [
+      // Button patterns
+      /(?:the\s+)?(\w+(?:\s+\w+)?)\s+button/gi,
+      // Link patterns  
+      /(?:the\s+)?(\w+(?:\s+\w+)?)\s+link/gi,
+      // Generic element patterns
+      /(?:the\s+)?(\w+)\s+(?:in|on|at)\s+(?:the\s+)?(\w+)/gi,
+    ];
+    
+    const extractedElements: string[] = [];
+    
+    // Extract element names from prompt
+    for (const pattern of uiElementPatterns) {
+      let match;
+      while ((match = pattern.exec(prompt)) !== null) {
+        if (match[1]) {
+          extractedElements.push(match[1].toLowerCase());
+        }
+        if (match[2]) {
+          extractedElements.push(match[2].toLowerCase());
+        }
+      }
+    }
+    
+    // Also extract common UI terms directly mentioned
+    const commonUITerms = [
+      'sign in', 'signin', 'sign-in', 'login', 'log in', 'log-in',
+      'sign up', 'signup', 'sign-up', 'register',
+      'logout', 'log out', 'log-out', 'sign out', 'signout',
+      'navbar', 'nav bar', 'navigation', 'header', 'footer',
+      'sidebar', 'menu', 'dropdown', 'modal', 'dialog', 'popup',
+      'form', 'input', 'submit', 'cancel', 'close', 'open',
+      'hero', 'banner', 'card', 'list', 'table', 'grid'
+    ];
+    
+    for (const term of commonUITerms) {
+      if (promptLower.includes(term)) {
+        extractedElements.push(term);
+      }
+    }
+    
+    // Remove duplicates
+    const uniqueElements = [...new Set(extractedElements)];
+    
+    if (uniqueElements.length === 0) {
+      return [];
+    }
+    
+    console.log(`🔍 Searching file contents for UI elements: ${uniqueElements.join(', ')}`);
+    
+    // Search each file's CONTENT for these elements
+    for (const [filePath, content] of Object.entries(allFiles)) {
+      // Only search component/page files
+      if (!filePath.match(/\.(tsx|jsx|ts|js|vue|svelte)$/)) {
+        continue;
+      }
+      
+      if (typeof content !== 'string') continue;
+      
+      const contentLower = content.toLowerCase();
+      let score = 0;
+      const foundElements: string[] = [];
+      
+      for (const element of uniqueElements) {
+        const elementLower = element.toLowerCase();
+        
+        // Check for various patterns in the file content
+        const patterns = [
+          // JSX text content: >Sign In<
+          new RegExp(`>\\s*${this.escapeRegex(element)}\\s*<`, 'i'),
+          // String literals: "Sign In", 'Sign In'
+          new RegExp(`["']${this.escapeRegex(element)}["']`, 'i'),
+          // Variable/prop names: signIn, SignIn, sign_in
+          new RegExp(`\\b${element.replace(/\s+/g, '[-_]?')}\\b`, 'i'),
+          // className or id containing the term
+          new RegExp(`(?:className|id)=["'][^"']*${this.escapeRegex(element)}[^"']*["']`, 'i'),
+          // Button/Link with text
+          new RegExp(`<(?:button|Button|Link|a)[^>]*>\\s*${this.escapeRegex(element)}`, 'i'),
+        ];
+        
+        for (const pattern of patterns) {
+          if (pattern.test(content)) {
+            score += 20;
+            if (!foundElements.includes(element)) {
+              foundElements.push(element);
+            }
+          }
+        }
+        
+        // Also check for simple substring match (lower priority)
+        if (contentLower.includes(elementLower)) {
+          score += 5;
+          if (!foundElements.includes(element)) {
+            foundElements.push(element);
+          }
+        }
+      }
+      
+      if (score > 0) {
+        matches.push({
+          path: filePath,
+          score,
+          reason: `Contains: ${foundElements.join(', ')}`,
+        });
+        console.log(`   ✓ Found "${foundElements.join(', ')}" in ${filePath} (score: ${score})`);
+      }
+    }
+    
+    // Sort by score descending and return top matches
+    return matches
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5) // Top 5 files
+      .map(m => m.path);
+  }
+  
+  /**
+   * Escape special regex characters in a string
+   */
+  private static escapeRegex(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
   
   /**
