@@ -23,6 +23,7 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://smartfogeapi.vercel.app'),
   // Core metadata
   title: {
     default: 'SmartAPIForge - AI-Powered No-Code API Builder',

@@ -101,13 +101,6 @@ export function HeroSectionClient() {
               >
                 <Link href="/ask">Get Started Free</Link>
               </Button>
-              <Button
-                variant="outline"
-                size="lg"
-                className="border-border/50 text-foreground hover:bg-accent px-8 py-3 h-12 rounded-xl font-medium transition-all duration-200 w-full sm:w-auto"
-              >
-                View Documentation
-              </Button>
             </motion.div>
           </div>
         </div>

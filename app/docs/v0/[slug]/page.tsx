@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation"
 
 interface PageProps {
-  params: {
+  params: Promise<{
     slug: string
-  }
+  }>
 }
 
 /**
@@ -22,8 +22,9 @@ const URL_REDIRECTS: Record<string, string> = {
  * Redirect handler for deprecated /docs/v0/ URLs
  * Implements 301 permanent redirects to new URL structure
  */
-export default function V0RedirectPage({ params }: PageProps) {
-  const newUrl = URL_REDIRECTS[params.slug]
+export default async function V0RedirectPage({ params }: PageProps) {
+  const { slug } = await params
+  const newUrl = URL_REDIRECTS[slug]
   
   if (newUrl) {
     // 301 permanent redirect to new URL structure

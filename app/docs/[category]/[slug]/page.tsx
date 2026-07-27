@@ -4,10 +4,10 @@ import { docsContent } from "@/lib/docs/content"
 import { DocsLayout } from "@/components/documentation/docs-layout"
 
 interface PageProps {
-  params: {
+  params: Promise<{
     category: string
     slug: string
-  }
+  }>
 }
 
 /**
@@ -25,9 +25,10 @@ export async function generateStaticParams() {
  * Documentation page component
  * Renders documentation content based on category and slug
  */
-export default function DocPage({ params }: PageProps) {
+export default async function DocPage({ params }: PageProps) {
+  const { category, slug } = await params
   const doc = docsContent.find(
-    (d) => d.category === params.category && d.slug === params.slug
+    (d) => d.category === category && d.slug === slug
   )
 
   if (!doc) {
@@ -41,8 +42,9 @@ export default function DocPage({ params }: PageProps) {
  * Generate SEO-friendly metadata for each documentation page
  */
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { category, slug } = await params
   const doc = docsContent.find(
-    (d) => d.category === params.category && d.slug === params.slug
+    (d) => d.category === category && d.slug === slug
   )
 
   if (!doc) {
@@ -63,7 +65,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const description = firstParagraph || `Learn about ${doc.title.toLowerCase()} in SmartAPIForge`
 
   // Format category for display
-  const categoryDisplay = params.category
+  const categoryDisplay = category
     .split('-')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ')
@@ -75,7 +77,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       title: `${doc.title} - SmartAPIForge Documentation`,
       description,
       type: 'article',
-      url: `/docs/${params.category}/${params.slug}`,
+      url: `/docs/${category}/${slug}`,
     },
     twitter: {
       card: 'summary_large_image',
@@ -83,7 +85,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       description,
     },
     alternates: {
-      canonical: `/docs/${params.category}/${params.slug}`,
+      canonical: `/docs/${category}/${slug}`,
     },
   }
 }

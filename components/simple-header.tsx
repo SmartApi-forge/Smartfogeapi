@@ -1,8 +1,6 @@
 "use client"
-import Link from "next/link"
 import Image from "next/image"
-import { Logo } from "@/components/logo"
-import { Share, Globe, Monitor, HomeIcon, User, Settings, LogOut } from "lucide-react"
+import { Share, HomeIcon, User, LogOut } from "lucide-react"
 import { GitHubSetupDialog } from "@/components/github-setup-dialog"
 import { GitHubBranchSelectorV0 } from "@/components/github-branch-selector-v0"
 import { ShareDialog } from "@/components/share-dialog"
@@ -169,15 +167,6 @@ export function SimpleHeader({ viewMode = 'preview', onViewModeChange, project, 
                   <DropdownMenuSeparator />
                 </>
               )}
-              <DropdownMenuItem onClick={() => router.push('/profile')}>
-                <User className="mr-2 h-4 w-4" />
-                <span>Profile</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.push('/settings')}>
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Settings</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut} variant="destructive">
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>Sign Out</span>

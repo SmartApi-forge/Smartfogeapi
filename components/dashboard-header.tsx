@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -12,9 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { LogOut, Settings, User, Menu, Plus, Search, BookOpen, HelpCircle } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { AnimatePresence, motion } from "framer-motion"
+import { LogOut, Plus } from "lucide-react"
 import {
   Sheet,
   SheetContent,
@@ -46,7 +43,6 @@ export function DashboardHeader({
   const [internalMobileMenuOpen, setInternalMobileMenuOpen] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [searchQuery, setSearchQuery] = useState("")
-  const [isHovering, setIsHovering] = useState(false)
 
   // Use external state if provided, otherwise use internal state
   const sidebarOpen = externalSidebarOpen !== undefined ? externalSidebarOpen : internalSidebarOpen
@@ -119,12 +115,10 @@ export function DashboardHeader({
   }
 
   const handleHamburgerHover = () => {
-    setIsHovering(true)
     setSidebarOpen(true)
   }
 
   const handleHamburgerLeave = () => {
-    setIsHovering(false)
     // Don't close immediately, let the sidebar handle its own hover state
   }
 
@@ -158,18 +152,6 @@ export function DashboardHeader({
               <CustomHamburgerButton onClick={toggleSidebar} />
             </div>
           </div>
-          {/* Center Navigation (Desktop) */}
-          <nav className="hidden md:flex absolute left-1/2 -translate-x-1/2 items-center gap-6">
-            <Link href="/docs/getting-started/introduction" className="text-white hover:text-white/80 text-base transition-colors flex items-center gap-2">
-              <BookOpen className="w-4 h-4" />
-              Documentation
-            </Link>
-            <Link href="/support" className="text-white hover:text-white/80 text-base transition-colors flex items-center gap-2">
-              <HelpCircle className="w-4 h-4" />
-              Support
-            </Link>
-          </nav>
-
         {/* Right side - Navigation */}
         <div className="flex items-center gap-4 md:gap-6">
 
@@ -189,21 +171,6 @@ export function DashboardHeader({
                 <p className="text-sm font-medium text-white font-neue-500">{user?.name || 'User'}</p>
                 <p className="text-xs text-gray-400 font-neue-500">{user?.email || ''}</p>
               </div>
-              <DropdownMenuSeparator className="bg-gray-700" />
-              <DropdownMenuItem 
-                className="text-white hover:bg-gray-700 cursor-pointer font-neue-500"
-                onClick={() => router.push('/profile')}
-              >
-                <User className="mr-2 h-4 w-4" />
-                Profile
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                className="text-white hover:bg-gray-700 cursor-pointer font-neue-500"
-                onClick={() => router.push('/settings')}
-              >
-                <Settings className="mr-2 h-4 w-4" />
-                Settings
-              </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-gray-700" />
               <DropdownMenuItem 
                 className="text-white hover:bg-gray-700 cursor-pointer font-neue-500"
@@ -290,27 +257,6 @@ export function DashboardHeader({
             </ScrollArea>
           </div>
 
-          {/* Navigation Links */}
-          <div className="border-t border-[#2A2D31]/60 bg-[#1A1D21]/50">
-            <nav className="p-2">
-              <Link 
-                href="/docs/getting-started/introduction" 
-                className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800/60 rounded-md transition-colors"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <BookOpen className="w-4 h-4" />
-                Documentation
-              </Link>
-              <Link 
-                href="/support" 
-                className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800/60 rounded-md transition-colors"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <HelpCircle className="w-4 h-4" />
-                Support
-              </Link>
-            </nav>
-          </div>
         </div>
       </SheetContent>
     </Sheet>

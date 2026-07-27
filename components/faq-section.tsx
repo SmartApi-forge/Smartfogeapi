@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import { FAQAccordionClient, type FAQItem } from '@/components/faq-accordion-client'
 
 // FAQ items with SEO-optimized questions and answers
@@ -83,21 +82,6 @@ export default function FAQSection() {
 
         <div className="mx-auto mt-12 max-w-3xl lg:max-w-4xl">
           <FAQAccordionClient items={faqItems} />
-
-          <p className="text-muted-foreground mt-6 px-8 text-center text-sm sm:text-base">
-            Still have questions? Contact our{' '}
-            <Link
-              href="/contact"
-              className="text-primary font-medium hover:underline">
-              support team
-            </Link>{' '}
-            or check out our{' '}
-            <Link
-              href="/docs"
-              className="text-primary font-medium hover:underline">
-              documentation
-            </Link>.
-          </p>
         </div>
       </div>
     </section>

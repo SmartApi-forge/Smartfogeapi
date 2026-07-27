@@ -6,10 +6,8 @@ import { AnimatedSectionWrapper, AnimatedFooterWrapper } from '@/components/anim
 import FeaturesSection from '@/components/features-section';
 import IntegrationsSection from '@/components/integrations-section';
 import ContentSection from '@/components/content-section';
-import PricingSection from '@/components/pricing-section';
 import FAQSection from '@/components/faq-section';
 import Footer from '@/components/footer';
-import NewsletterCTA from '@/components/newsletter-cta';
 import BelowFooterBanner from '@/components/below-footer-banner';
 
 /**
@@ -46,19 +44,9 @@ export default function HomePage() {
           <ContentSection />
         </AnimatedSectionWrapper>
 
-        {/* Pricing section with scroll animation */}
-        <AnimatedSectionWrapper>
-          <PricingSection />
-        </AnimatedSectionWrapper>
-        
         {/* FAQ section with scroll animation */}
         <AnimatedSectionWrapper>
           <FAQSection />
-        </AnimatedSectionWrapper>
-        
-        {/* Newsletter CTA with scroll animation */}
-        <AnimatedSectionWrapper>
-          <NewsletterCTA />
         </AnimatedSectionWrapper>
         
         {/* Footer with smaller animation */}
