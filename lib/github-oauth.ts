@@ -44,7 +44,7 @@ export interface GitHubUser {
 
 export class GitHubOAuthService {
   private config: GitHubOAuthConfig;
-  private encryptionKey: Buffer;
+  private encryptionKey?: Buffer;
 
   constructor() {
     // Validate required GitHub OAuth credentials
@@ -65,25 +65,31 @@ export class GitHubOAuthService {
       scopes: ['repo', 'user:email', 'write:repo_hook'],
     };
 
-    // Validate and load encryption key
     const encryptionKeyHex = process.env.GITHUB_TOKEN_ENCRYPTION_KEY;
-    if (!encryptionKeyHex) {
+    if (encryptionKeyHex) {
+      this.encryptionKey = Buffer.from(encryptionKeyHex, 'hex');
+
+      if (this.encryptionKey.length !== 32) {
+        throw new Error('GITHUB_TOKEN_ENCRYPTION_KEY must be a 32-byte (64 hex characters) AES-256 key');
+      }
+    }
+  }
+
+  private getEncryptionKey(): Buffer {
+    if (!this.encryptionKey) {
       throw new Error('GITHUB_TOKEN_ENCRYPTION_KEY environment variable is required for secure token storage');
     }
-    
-    this.encryptionKey = Buffer.from(encryptionKeyHex, 'hex');
-    
-    if (this.encryptionKey.length !== 32) {
-      throw new Error('GITHUB_TOKEN_ENCRYPTION_KEY must be a 32-byte (64 hex characters) AES-256 key');
-    }
+
+    return this.encryptionKey;
   }
 
   /**
    * Encrypt a token using AES-256-GCM
    */
   private encryptToken(token: string): string {
+    const encryptionKey = this.getEncryptionKey();
     const iv = randomBytes(16);
-    const cipher = createCipheriv('aes-256-gcm', this.encryptionKey, iv);
+    const cipher = createCipheriv('aes-256-gcm', encryptionKey, iv);
     
     let ciphertext = cipher.update(token, 'utf8', 'hex');
     ciphertext += cipher.final('hex');
@@ -112,7 +118,7 @@ export class GitHubOAuthService {
       const iv = Buffer.from(ivHex, 'hex');
       const authTag = Buffer.from(authTagHex, 'hex');
       
-      const decipher = createDecipheriv('aes-256-gcm', this.encryptionKey, iv);
+      const decipher = createDecipheriv('aes-256-gcm', this.getEncryptionKey(), iv);
       decipher.setAuthTag(authTag);
       
       let plaintext = decipher.update(ciphertext, 'hex', 'utf8');
